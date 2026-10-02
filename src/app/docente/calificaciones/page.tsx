@@ -167,7 +167,7 @@ export default function RegistroCalificacionesPage() {
     }
   }
 
-  // Carga de Estudiantes, Insumos y Notas filtrados estrictamente por el año vigente
+  // Carga de Estudiantes, Insumos y Notas filtrados estrictamente por grado, paralelo, jornada y año vigente
   useEffect(() => {
     async function cargarEstructuraYNotas() {
       if (!institucionId || !docenteId || !grado || !paralelo || !asignatura || !anioLectivoVigente) return
@@ -192,6 +192,7 @@ export default function RegistroCalificacionesPage() {
           setEstudiantes(estData)
           const ids = estData.map((e) => e.id)
 
+          // Carga estricta de insumos considerando GRADO, PARALELO y JORNADA
           const { data: insumosData } = await supabase
             .from('configuracion_insumos')
             .select('*')
@@ -200,6 +201,7 @@ export default function RegistroCalificacionesPage() {
             .eq('trimestre', trimestre)
             .eq('grado_curso', grado)
             .eq('paralelo', paralelo)
+            .eq('jornada', jornadaActual)
             .eq('anio_lectivo', anioLectivoVigente)
             .order('numero', { ascending: true })
 
@@ -276,6 +278,7 @@ export default function RegistroCalificacionesPage() {
     }
 
     try {
+      // Guardar el insumo atado rigurosamente a la jornada, grado y paralelo actual
       const { error } = await supabase.from('configuracion_insumos').insert({
         id: nuevoId,
         docente_id: docenteId,
@@ -284,6 +287,7 @@ export default function RegistroCalificacionesPage() {
         trimestre,
         grado_curso: grado,
         paralelo,
+        jornada: jornadaActual,
         categoria: nuevaCat,
         numero: proximoNumero,
         descripcion: nuevaDesc.trim(),
@@ -459,7 +463,7 @@ export default function RegistroCalificacionesPage() {
   // FUNCIÓN PARA IMPRIMIR Y GENERAR EL REPORTE PDF DE NOTAS
   const generarPdfCalificaciones = async () => {
     if (estudiantes.length === 0) {
-      alert('⚠️️ No hay estudiantes para generar el reporte.')
+      alert('⚠ No hay estudiantes para generar el reporte.')
       return
     }
 
