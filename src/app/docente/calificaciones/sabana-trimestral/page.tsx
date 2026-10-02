@@ -64,7 +64,6 @@ export default function SabanaTrimestralPage() {
 
         const inst = doc.instituciones
         if (inst) {
-          // Tomar los años estrictamente de periodos_disponibles de la institución
           periodosList = inst.periodos_disponibles || []
           setPeriodosDisponibles(periodosList)
 
@@ -82,7 +81,6 @@ export default function SabanaTrimestralPage() {
           }
         }
 
-        // Cargar asignaciones del docente estrictamente del año vigente detectado
         if (anioActivo) {
           const { data: asigs } = await supabase
             .from('docente_asignaciones')
@@ -108,7 +106,6 @@ export default function SabanaTrimestralPage() {
     }
   }
 
-  // Manejar cambio dinámico del periodo desde el selector superior
   const handleCambiarPeriodo = async (nuevoAnio: string) => {
     setAnioLectivoVigente(nuevoAnio)
     try {
@@ -139,7 +136,6 @@ export default function SabanaTrimestralPage() {
     try {
       setCargando(true)
 
-      // 1. Obtener todas las asignaturas únicas que el docente imparte para este grado y paralelo en el año vigente
       const materiasDelCurso = Array.from(new Set(
         asignaciones
           .filter(a => a.grado_curso === gradoSeleccionado && a.paralelo === paraleloSeleccionado)
@@ -147,7 +143,6 @@ export default function SabanaTrimestralPage() {
       ))
       setMateriasUnicas(materiasDelCurso)
 
-      // 2. Cargar estudiantes activos del curso y paralelo
       const { data: estData } = await supabase
         .from('estudiantes')
         .select('*')
@@ -162,7 +157,6 @@ export default function SabanaTrimestralPage() {
         setEstudiantes(estData)
         const estIds = estData.map(e => e.id)
 
-        // 3. Cargar todos los registros de calificaciones para este trimestre, año vigente y estudiantes
         const { data: calData } = await supabase
           .from('calificaciones')
           .select('*')
@@ -207,7 +201,6 @@ export default function SabanaTrimestralPage() {
 
   const esAnioCerrado = anosCerrados.includes(anioLectivoVigente)
 
-  // Función de escala cualitativa basada en la fórmula de Sheets para Básica Elemental
   const obtenerEscalaElemental = (nota: number) => {
     if (nota === undefined || nota === null || isNaN(nota) || nota <= 0) return ''
     if (nota >= 9.01) return 'A+'
@@ -224,10 +217,10 @@ export default function SabanaTrimestralPage() {
 
   if (cargando && estudiantes.length === 0) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-slate-600 font-semibold text-sm">Cargando Sábana Trimestral...</p>
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 font-sans">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Sábana Trimestral...</p>
         </div>
       </div>
     )
@@ -235,238 +228,294 @@ export default function SabanaTrimestralPage() {
 
   const gradosUnicos = Array.from(new Set(asignaciones.map(a => a.grado_curso)))
   const paralelosPermitidos = Array.from(new Set(asignaciones.filter(a => a.grado_curso === gradoSeleccionado).map(a => a.paralelo)))
-
-  // Validación de subnivel para Básica Elemental (2do, 3ro y 4to EGB)
   const esBasicaElemental = ['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB'].includes(gradoSeleccionado)
 
-  // Colores distintivos para las cabeceras de las materias en la sábana
-  const coloresMaterias = [
-    'bg-purple-900 text-white',
-    'bg-indigo-900 text-white',
-    'bg-pink-900 text-white',
-    'bg-emerald-900 text-white',
-    'bg-sky-900 text-white',
-    'bg-blue-900 text-white',
-    'bg-amber-900 text-white'
+  // Estilos de color distintivos por trimestre
+  const getTrimestreColorStyle = (tri: string) => {
+    switch (tri) {
+      case 'Trimestre 1':
+        return { backgroundColor: '#4b4c99', color: '#ffffff' }
+      case 'Trimestre 2':
+        return { backgroundColor: '#389186', color: '#ffffff' }
+      case 'Trimestre 3':
+        return { backgroundColor: '#d99b1e', color: '#ffffff' }
+      default:
+        return { backgroundColor: '#4b4c99', color: '#ffffff' }
+    }
+  }
+
+  // Paleta de colores profesionales y corporativos para diferenciar cada materia en la tabla
+  const paletaMaterias = [
+    { headerBg: '#4b4c99', text: '#ffffff', subBg: 'rgba(75, 76, 153, 0.04)' }, // Índigo institucional
+    { headerBg: '#389186', text: '#ffffff', subBg: 'rgba(56, 145, 134, 0.04)' }, // Turquesa educativo
+    { headerBg: '#d99b1e', text: '#ffffff', subBg: 'rgba(217, 155, 30, 0.04)' },  // Ámbar sobrio
+    { headerBg: '#4a5568', text: '#ffffff', subBg: 'rgba(74, 85, 104, 0.04)' },  // Pizarra elegante
+    { headerBg: '#2b6cb0', text: '#ffffff', subBg: 'rgba(43, 108, 176, 0.04)' },  // Azul corporativo
+    { headerBg: '#7b341e', text: '#ffffff', subBg: 'rgba(123, 52, 30, 0.04)' },   // Terracota
+    { headerBg: '#553c9a', text: '#ffffff', subBg: 'rgba(85, 60, 154, 0.04)' }    // Morado oscuro
   ]
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
-      <div className="max-w-[95%] mx-auto space-y-6">
+    <div className="space-y-6 pb-12 selection:bg-[#4b4c99]/20 selection:text-[#4b4c99] font-sans">
 
-        {/* ENCABEZADO */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-[10px] font-black uppercase">
-              Módulo Académico • Sábana Consolidada Trimestral ({anioLectivoVigente || 'Sin año activo'})
-            </span>
-            <h1 className="text-xl font-black text-slate-900 mt-1">
-              Consolidado General por Asignaturas ({trimestreSeleccionado}) {esBasicaElemental && '• [Básica Elemental - Cualitativa]'}
-            </h1>
-            <p className="text-xs text-slate-500 font-medium">
-              {nombreInstitucion} • Curso: {gradoSeleccionado} "{paraleloSeleccionado}"
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => router.push('/docente/calificaciones')}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border transition"
-            >
-              ← Volver a Calificaciones
-            </button>
-          </div>
+      {/* ENCABEZADO INSTITUCIONAL */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block"
+          >
+            Año Lectivo Vigente: {anioLectivoVigente || 'Sin año activo'}
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 mt-2 tracking-tight">
+            Sábana Consolidada Trimestral ({trimestreSeleccionado})
+          </h1>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+            {nombreInstitucion} • Curso: {gradoSeleccionado} "{paraleloSeleccionado}" {esBasicaElemental && '• [Básica Elemental - Cualitativa]'}
+          </p>
         </div>
 
-        {/* AVISO SI NO HAY AÑO ACTIVO */}
-        {!anioLectivoVigente && !cargando && (
-          <div className="bg-amber-50 border border-amber-300 p-4 rounded-2xl text-amber-900 text-xs font-bold">
-            ⚠️ La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
-          </div>
-        )}
-
-        {/* AVISO SI EL PERIODO VIGENTE ESTÁ CERRADO */}
-        {esAnioCerrado && anioLectivoVigente && (
-          <div className="bg-red-50 border border-red-200 p-4 rounded-2xl text-red-900 text-xs font-bold flex items-center justify-between">
-            <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. La sábana trimestral está en modo de solo lectura.</span>
-            <span className="bg-red-200 px-2.5 py-1 rounded">Periodo Cerrado</span>
-          </div>
-        )}
-
-        {/* SELECTORES DE FILTRO */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Grado / Curso:</label>
-            <select
-              value={gradoSeleccionado}
-              onChange={(e) => {
-                const nuevoGrado = e.target.value
-                setGradoSeleccionado(nuevoGrado)
-                const par = asignaciones.find(a => a.grado_curso === nuevoGrado)?.paralelo || 'A'
-                setParaleloSeleccionado(par)
-              }}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
-            >
-              {gradosUnicos.length === 0 ? (
-                <option value="">Sin carga asignada</option>
-              ) : (
-                gradosUnicos.map(g => (
-                  <option key={g} value={g}>{g}</option>
-                ))
-              )}
-            </select>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* SELECTOR DE PERIODO */}
+          <div className="bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-300 flex items-center gap-2 shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-500 uppercase">📅 Periodo:</span>
+            {periodosDisponibles.length === 0 ? (
+              <span className="text-xs font-bold text-amber-700 italic">Sin años creados</span>
+            ) : (
+              <select
+                value={anioLectivoVigente}
+                onChange={(e) => handleCambiarPeriodo(e.target.value)}
+                style={{ color: '#4b4c99' }}
+                className="bg-transparent text-xs font-bold outline-none cursor-pointer"
+              >
+                {periodosDisponibles.map(p => (
+                  <option key={p} value={p}>{p} {anosCerrados.includes(p) ? '🔒 (Cerrado)' : ''}</option>
+                ))}
+              </select>
+            )}
           </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Paralelo:</label>
-            <select
-              value={paraleloSeleccionado}
-              onChange={(e) => setParaleloSeleccionado(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
-            >
-              {paralelosPermitidos.map(p => (
-                <option key={p} value={p}>Paralelo {p}</option>
-              ))}
-            </select>
-          </div>
+          <button
+            onClick={() => router.push('/docente/calificaciones')}
+            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 shadow-2xs transition cursor-pointer"
+          >
+            ← Volver a Calificaciones
+          </button>
+        </div>
+      </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-indigo-700 uppercase mb-1">Trimestre:</label>
-            <select
-              value={trimestreSeleccionado}
-              onChange={(e) => setTrimestreSeleccionado(e.target.value)}
-              className="w-full p-2.5 border-2 border-indigo-500 rounded-xl text-xs font-black text-indigo-900 bg-indigo-50 outline-none"
-            >
-              <option value="Trimestre 1">Trimestre 1</option>
-              <option value="Trimestre 2">Trimestre 2</option>
-              <option value="Trimestre 3">Trimestre 3</option>
-            </select>
-          </div>
+      {/* AVISO SI NO HAY AÑO ACTIVO */}
+      {!anioLectivoVigente && !cargando && (
+        <div 
+          style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
+          className="border p-4 rounded-2xl text-xs font-bold shadow-2xs"
+        >
+          ⚠️ La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
+        </div>
+      )}
+
+      {/* AVISO SI EL PERIODO VIGENTE ESTÁ CERRADO */}
+      {esAnioCerrado && anioLectivoVigente && (
+        <div 
+          style={{ backgroundColor: 'rgba(222, 88, 96, 0.08)', borderColor: 'rgba(222, 88, 96, 0.3)', color: '#9b2c2c' }}
+          className="border p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-2xs"
+        >
+          <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. La sábana trimestral está en modo de solo lectura.</span>
+          <span className="bg-rose-200/80 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-900">Periodo Cerrado</span>
+        </div>
+      )}
+
+      {/* SELECTORES DE FILTRO */}
+      <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Grado / Curso</label>
+          <select
+            value={gradoSeleccionado}
+            onChange={(e) => {
+              const nuevoGrado = e.target.value
+              setGradoSeleccionado(nuevoGrado)
+              const par = asignaciones.find(a => a.grado_curso === nuevoGrado)?.paralelo || 'A'
+              setParaleloSeleccionado(par)
+            }}
+            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
+          >
+            {gradosUnicos.length === 0 ? (
+              <option value="">Sin carga asignada</option>
+            ) : (
+              gradosUnicos.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))
+            )}
+          </select>
         </div>
 
-        {/* TABLA SÁBANA GENERAL */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
-          <div className="p-4 bg-[#1E3A8A] text-white flex justify-between items-center">
-            <h2 className="text-xs font-black uppercase tracking-wider">
-              MATRIZ GENERAL DE RENDIMIENTO • {gradoSeleccionado || 'Curso'} "{paraleloSeleccionado}" ({trimestreSeleccionado} - {anioLectivoVigente || 'Sin periodo'})
-            </h2>
-            <span className="text-xs font-bold bg-white/10 px-3 py-1 rounded-lg">
-              {estudiantes.length} Estudiantes • {materiasUnicas.length} Asignaturas
-            </span>
-          </div>
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Paralelo</label>
+          <select
+            value={paraleloSeleccionado}
+            onChange={(e) => setParaleloSeleccionado(e.target.value)}
+            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
+          >
+            {paralelosPermitidos.map(p => (
+              <option key={p} value={p}>Paralelo {p}</option>
+            ))}
+          </select>
+        </div>
 
-          <div className="overflow-x-auto p-4">
-            <table className="w-full text-xs text-left border-collapse border border-slate-300">
-              <thead className="bg-slate-200 text-slate-900 font-bold uppercase text-[10px]">
-                <tr>
-                  <th className="p-3 border border-slate-300 text-center w-12" rowSpan={2}>Nro</th>
-                  <th className="p-3 border border-slate-300 w-32" rowSpan={2}>Cédula</th>
-                  <th className="p-3 border border-slate-300 min-w-[220px]" rowSpan={2}>Apellidos y Nombres</th>
-                  
-                  {/* Cabeceras dinámicas por Materia */}
-                  {materiasUnicas.map((materia, idx) => (
-                    <th key={materia} className={`p-2 border border-slate-300 text-center font-black ${coloresMaterias[idx % coloresMaterias.length]}`} colSpan={esBasicaElemental ? 2 : 5}>
+        <div>
+          <label className="block text-[10px] font-bold uppercase mb-1.5" style={{ color: getTrimestreColorStyle(trimestreSeleccionado).backgroundColor }}>Trimestre Activo</label>
+          <select
+            value={trimestreSeleccionado}
+            onChange={(e) => setTrimestreSeleccionado(e.target.value)}
+            style={{ 
+              backgroundColor: `${getTrimestreColorStyle(trimestreSeleccionado).backgroundColor}15`, 
+              color: getTrimestreColorStyle(trimestreSeleccionado).backgroundColor, 
+              borderColor: `${getTrimestreColorStyle(trimestreSeleccionado).backgroundColor}50` 
+            }}
+            className="w-full p-2.5 border-2 rounded-xl text-xs font-bold outline-none shadow-2xs cursor-pointer"
+          >
+            <option value="Trimestre 1" style={{ color: '#000' }}>Trimestre 1</option>
+            <option value="Trimestre 2" style={{ color: '#000' }}>Trimestre 2</option>
+            <option value="Trimestre 3" style={{ color: '#000' }}>Trimestre 3</option>
+          </select>
+        </div>
+      </div>
+
+      {/* TABLA SÁBANA GENERAL */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
+        <div 
+          style={getTrimestreColorStyle(trimestreSeleccionado)}
+          className="p-4 px-6 flex justify-between items-center"
+        >
+          <h2 className="text-xs font-bold uppercase tracking-wider">
+            MATRIZ GENERAL DE RENDIMIENTO • {gradoSeleccionado || 'Curso'} "{paraleloSeleccionado}" ({trimestreSeleccionado} - {anioLectivoVigente || 'Sin periodo'})
+          </h2>
+          <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-xl">
+            {estudiantes.length} Estudiantes • {materiasUnicas.length} Asignaturas
+          </span>
+        </div>
+
+        <div className="overflow-x-auto p-4">
+          <table className="w-full text-xs text-left border-collapse border border-slate-200">
+            <thead className="bg-slate-50 text-slate-900 font-bold uppercase text-[10px]">
+              <tr>
+                <th className="p-3 border border-slate-200 text-center w-12" rowSpan={2}>Nro</th>
+                <th className="p-3 border border-slate-200 w-32" rowSpan={2}>Cédula</th>
+                <th className="p-3 border border-slate-200 min-w-[220px]" rowSpan={2}>Apellidos y Nombres</th>
+                
+                {/* Cabeceras dinámicas por Materia con colores distintivos */}
+                {materiasUnicas.map((materia, idx) => {
+                  const colorMat = paletaMaterias[idx % paletaMaterias.length]
+                  return (
+                    <th 
+                      key={materia} 
+                      style={{ backgroundColor: colorMat.headerBg, color: colorMat.text }}
+                      className="p-2.5 border border-slate-200 text-center font-bold tracking-tight shadow-2xs" 
+                      colSpan={esBasicaElemental ? 2 : 5}
+                    >
                       {materia}
                     </th>
-                  ))}
+                  )
+                })}
+              </tr>
+
+              <tr className="bg-slate-100 text-[9px] text-center font-semibold text-slate-700">
+                {materiasUnicas.map((materia, idx) => {
+                  const colorMat = paletaMaterias[idx % paletaMaterias.length]
+                  return esBasicaElemental ? (
+                    <Fragment key={`${materia}-elemental`}>
+                      <th className="border border-slate-200 p-1.5" style={{ backgroundColor: colorMat.subBg }}>PROMEDIO</th>
+                      <th className="border border-slate-200 p-1.5 font-bold" style={{ backgroundColor: colorMat.subBg, color: colorMat.headerBg }}>CALF. CUALI.</th>
+                    </Fragment>
+                  ) : (
+                    <Fragment key={`${materia}-normal`}>
+                      <th className="border border-slate-200 p-1.5" style={{ backgroundColor: colorMat.subBg }} title="Evaluación Formativa">EVA. FORM.</th>
+                      <th className="border border-slate-200 p-1.5 font-bold" style={{ backgroundColor: colorMat.subBg }}>70%</th>
+                      <th className="border border-slate-200 p-1.5" style={{ backgroundColor: colorMat.subBg }} title="Evaluación Sumativa">EVA. SUM.</th>
+                      <th className="border border-slate-200 p-1.5 font-bold" style={{ backgroundColor: colorMat.subBg }}>30%</th>
+                      <th className="border border-slate-200 p-1.5 font-black shadow-inner" style={{ backgroundColor: colorMat.headerBg, color: colorMat.text }}>PROM.</th>
+                    </Fragment>
+                  )
+                })}
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-200">
+              {!anioLectivoVigente ? (
+                <tr>
+                  <td colSpan={3 + (materiasUnicas.length * (esBasicaElemental ? 2 : 5))} className="p-8 text-center text-amber-800 font-bold bg-amber-50">
+                    ⚠️ No hay un año lectivo activo configurado en la institución.
+                  </td>
                 </tr>
-
-                <tr className="bg-slate-100 text-[9px] text-center">
-                  {materiasUnicas.map(materia => (
-                    esBasicaElemental ? (
-                      <Fragment key={`${materia}-elemental`}>
-                        <th className="border border-slate-300 p-1 bg-slate-50 font-semibold">PROMEDIO</th>
-                        <th className="border border-slate-300 p-1 bg-slate-100 font-bold">CALF. CUALI.</th>
-                      </Fragment>
-                    ) : (
-                      <Fragment key={`${materia}-normal`}>
-                        <th className="border border-slate-300 p-1 bg-slate-50 font-semibold" title="Evaluación Formativa">EVA. FORM.</th>
-                        <th className="border border-slate-300 p-1 bg-slate-100 font-bold">70%</th>
-                        <th className="border border-slate-300 p-1 bg-slate-50 font-semibold" title="Evaluación Sumativa">EVA. SUM.</th>
-                        <th className="border border-slate-300 p-1 bg-slate-100 font-bold">30%</th>
-                        <th className="border border-slate-300 p-1 bg-blue-100 text-blue-900 font-black">PROM.</th>
-                      </Fragment>
-                    )
-                  ))}
+              ) : asignaciones.length === 0 ? (
+                <tr>
+                  <td colSpan={3 + (materiasUnicas.length * (esBasicaElemental ? 2 : 5))} className="p-8 text-center text-amber-800 font-bold bg-amber-50">
+                    ⚠️ No tienes carga horaria asignada para el periodo vigente ({anioLectivoVigente}).
+                  </td>
                 </tr>
-              </thead>
+              ) : estudiantes.length === 0 ? (
+                <tr>
+                  <td colSpan={3 + (materiasUnicas.length * (esBasicaElemental ? 2 : 5))} className="p-8 text-center text-slate-500 font-medium">
+                    No hay estudiantes registrados o asignaturas disponibles para este curso en el periodo {anioLectivoVigente}.
+                  </td>
+                </tr>
+              ) : (
+                estudiantes.map((est, idx) => {
+                  const notasEstudiante = matrizCalificaciones[est.id] || {}
 
-              <tbody className="divide-y divide-slate-200">
-                {!anioLectivoVigente ? (
-                  <tr>
-                    <td colSpan={3 + (materiasUnicas.length * (esBasicaElemental ? 2 : 5))} className="p-8 text-center text-amber-800 font-bold bg-amber-50">
-                      ⚠️ No hay un año lectivo activo configurado en la institución.
-                    </td>
-                  </tr>
-                ) : asignaciones.length === 0 ? (
-                  <tr>
-                    <td colSpan={3 + (materiasUnicas.length * (esBasicaElemental ? 2 : 5))} className="p-8 text-center text-amber-800 font-bold bg-amber-50">
-                      ⚠️ No tienes carga horaria asignada para el periodo vigente ({anioLectivoVigente}).
-                    </td>
-                  </tr>
-                ) : estudiantes.length === 0 ? (
-                  <tr>
-                    <td colSpan={3 + (materiasUnicas.length * (esBasicaElemental ? 2 : 5))} className="p-8 text-center text-slate-500 font-medium">
-                      No hay estudiantes registrados o asignaturas disponibles para este curso en el periodo {anioLectivoVigente}.
-                    </td>
-                  </tr>
-                ) : (
-                  estudiantes.map((est, idx) => {
-                    const notasEstudiante = matrizCalificaciones[est.id] || {}
+                  return (
+                    <tr key={est.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-2 border border-slate-200 text-center font-bold text-slate-400">{idx + 1}</td>
+                      <td className="p-2 border border-slate-200 text-slate-600 font-mono">{est.cedula || 'S/N'}</td>
+                      <td className="p-2 border border-slate-200 font-bold text-slate-800 uppercase whitespace-nowrap">
+                        {est.apellidos} {est.nombres}
+                      </td>
 
-                    return (
-                      <tr key={est.id} className="hover:bg-slate-50">
-                        <td className="p-2 border border-slate-300 text-center font-bold text-slate-400">{idx + 1}</td>
-                        <td className="p-2 border border-slate-300 text-slate-600 font-mono">{est.cedula || 'S/N'}</td>
-                        <td className="p-2 border border-slate-300 font-bold text-slate-800 uppercase whitespace-nowrap">
-                          {est.apellidos} {est.nombres}
-                        </td>
+                      {materiasUnicas.map((materia, idxMat) => {
+                        const valMateria = notasEstudiante[materia] || { formativo: 0, formativo70: 0, sumativo: 0, sumativo30: 0, promedio: 0 }
+                        const escalaCuali = obtenerEscalaElemental(valMateria.promedio)
+                        const colorMat = paletaMaterias[idxMat % paletaMaterias.length]
 
-                        {materiasUnicas.map(materia => {
-                          const valMateria = notasEstudiante[materia] || { formativo: 0, formativo70: 0, sumativo: 0, sumativo30: 0, promedio: 0 }
-                          const escalaCuali = obtenerEscalaElemental(valMateria.promedio)
-
-                          return (
-                            esBasicaElemental ? (
-                              <Fragment key={`${est.id}-${materia}-elem-val`}>
-                                <td className="p-2 border border-slate-300 text-center font-semibold text-slate-800 bg-slate-50/50">
-                                  {valMateria.promedio > 0 ? valMateria.promedio.toFixed(2) : '0.00'}
-                                </td>
-                                <td className="p-2 border border-slate-300 text-center font-black text-indigo-900 bg-indigo-50/50">
-                                  {escalaCuali || '0.00'}
-                                </td>
-                              </Fragment>
-                            ) : (
-                              <Fragment key={`${est.id}-${materia}-norm-val`}>
-                                <td className="p-2 border border-slate-300 text-center font-semibold text-slate-700 bg-slate-50/50">
-                                  {valMateria.formativo > 0 ? valMateria.formativo.toFixed(2) : '0.00'}
-                                </td>
-                                <td className="p-2 border border-slate-300 text-center font-bold text-slate-800 bg-slate-100/50">
-                                  {valMateria.formativo70 > 0 ? valMateria.formativo70.toFixed(2) : '0.00'}
-                                </td>
-                                <td className="p-2 border border-slate-300 text-center font-semibold text-slate-700 bg-slate-50/50">
-                                  {valMateria.sumativo > 0 ? valMateria.sumativo.toFixed(2) : '0.00'}
-                                </td>
-                                <td className="p-2 border border-slate-300 text-center font-bold text-slate-800 bg-slate-100/50">
-                                  {valMateria.sumativo30 > 0 ? valMateria.sumativo30.toFixed(2) : '0.00'}
-                                </td>
-                                <td className="p-2 border border-slate-300 text-center font-black text-blue-900 bg-blue-50/70">
-                                  {valMateria.promedio > 0 ? valMateria.promedio.toFixed(2) : '0.00'}
-                                </td>
-                              </Fragment>
-                            )
+                        return (
+                          esBasicaElemental ? (
+                            <Fragment key={`${est.id}-${materia}-elem-val`}>
+                              <td className="p-2 border border-slate-200 text-center font-semibold text-slate-800" style={{ backgroundColor: colorMat.subBg }}>
+                                {valMateria.promedio > 0 ? valMateria.promedio.toFixed(2) : '0.00'}
+                              </td>
+                              <td className="p-2 border border-slate-200 text-center font-bold shadow-2xs" style={{ backgroundColor: colorMat.subBg, color: colorMat.headerBg }}>
+                                {escalaCuali || '0.00'}
+                              </td>
+                            </Fragment>
+                          ) : (
+                            <Fragment key={`${est.id}-${materia}-norm-val`}>
+                              <td className="p-2 border border-slate-200 text-center font-medium text-slate-700" style={{ backgroundColor: colorMat.subBg }}>
+                                {valMateria.formativo > 0 ? valMateria.formativo.toFixed(2) : '0.00'}
+                              </td>
+                              <td className="p-2 border border-slate-200 text-center font-semibold text-slate-800" style={{ backgroundColor: colorMat.subBg }}>
+                                {valMateria.formativo70 > 0 ? valMateria.formativo70.toFixed(2) : '0.00'}
+                              </td>
+                              <td className="p-2 border border-slate-200 text-center font-medium text-slate-700" style={{ backgroundColor: colorMat.subBg }}>
+                                {valMateria.sumativo > 0 ? valMateria.sumativo.toFixed(2) : '0.00'}
+                              </td>
+                              <td className="p-2 border border-slate-200 text-center font-semibold text-slate-800" style={{ backgroundColor: colorMat.subBg }}>
+                                {valMateria.sumativo30 > 0 ? valMateria.sumativo30.toFixed(2) : '0.00'}
+                              </td>
+                              <td className="p-2 border border-slate-200 text-center font-bold shadow-2xs" style={{ backgroundColor: `${colorMat.headerBg}15`, color: colorMat.headerBg }}>
+                                {valMateria.promedio > 0 ? valMateria.promedio.toFixed(2) : '0.00'}
+                              </td>
+                            </Fragment>
                           )
-                        })}
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                        )
+                      })}
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-
       </div>
+
     </div>
   )
 }

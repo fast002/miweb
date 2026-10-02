@@ -58,14 +58,12 @@ export default function HistoricoAcademicoPage() {
     }
   }, [institucionId, autorizado, anioSeleccionado, jornadaSeleccionada, gradoSeleccionado, paraleloSeleccionado])
 
-  // Cargar calificaciones específicas cuando cambia el estudiante seleccionado o el periodo
   useEffect(() => {
     if (estudianteSeleccionadoId && autorizado && anioSeleccionado) {
       cargarNotasEstudianteEspecifico()
     }
   }, [estudianteSeleccionadoId, tipoTrimestreReporte, anioSeleccionado, autorizado])
 
-  // CAPA DE SEGURIDAD SILENCIOSA
   const verificarSeguridadYCargarDatos = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -100,7 +98,6 @@ export default function HistoricoAcademicoPage() {
         setInstitucionLogo(doc.instituciones?.logo_url || '')
         setNombreAutoridad(`${doc.nombres || ''} ${doc.apellidos || ''}`.trim().toUpperCase())
 
-        // Carga estricta de los periodos propios creados por la institución
         const periodosInst = doc.instituciones?.periodos_disponibles || []
         setAniosDisponibles(periodosInst)
 
@@ -113,7 +110,6 @@ export default function HistoricoAcademicoPage() {
 
         setAnioSeleccionado(anioInicial)
 
-        // Cargar las asignaturas directamente desde la tabla "asignaturas" oficial
         const { data: mats } = await supabase
           .from('asignaturas')
           .select('*')
@@ -129,7 +125,6 @@ export default function HistoricoAcademicoPage() {
     }
   }
 
-  // Filtrar asignaturas estrictamente según el curso/grado seleccionado (coincidiendo con curso_nivel o de forma global)
   const asignaturasDisponiblesCurso = materiasInstitucion
     .filter(m => !m.curso_nivel || m.curso_nivel?.trim().toLowerCase() === gradoSeleccionado.trim().toLowerCase())
     .map(m => m.nombre)
@@ -150,7 +145,6 @@ export default function HistoricoAcademicoPage() {
 
   const cargarRegistrosYEstudiantes = async () => {
     try {
-      // 1. Cargar la nómina oficial de estudiantes activos
       const { data: estData, error: estError } = await supabase
         .from('estudiantes')
         .select('*')
@@ -178,7 +172,6 @@ export default function HistoricoAcademicoPage() {
         }
       }
 
-      // 2. Cargar registros históricos de calificaciones
       const { data: histData } = await supabase
         .from('historico_academico')
         .select('*, estudiantes(id, nombres, apellidos, cedula)')
@@ -249,7 +242,6 @@ export default function HistoricoAcademicoPage() {
     }
   }
 
-  // Procesamiento para Consolidado General
   let totalAprobados = 0
   let totalSupletorios = 0
 
@@ -293,350 +285,345 @@ export default function HistoricoAcademicoPage() {
 
   if (cargando || !autorizado) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-300 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-slate-400 font-medium text-xs">Cargando módulo...</p>
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans selection:bg-[#4b4c99] selection:text-white">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Módulo...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-
-        {/* ENCABEZADO */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-[10px] font-black uppercase">
-              Módulo Directivo • Archivo Histórico 📂
-            </span>
-            <h1 className="text-xl font-black text-slate-900 mt-1">
-              Consulta de Calificaciones y Promociones de Años Anteriores
-            </h1>
-            <p className="text-xs text-slate-500 font-medium">
-              {nombreInstitucion}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setModalImpresionHistorico(true)}
-              disabled={estudiantesCurso.length === 0 || !anioSeleccionado}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <span>🖨️</span> Vista Previa / Imprimir Reporte
-            </button>
-            <button
-              onClick={() => router.push('/rector')}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border transition"
-            >
-              ← Volver al Panel Rectoral
-            </button>
-          </div>
+    <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans">
+      
+      {/* ENCABEZADO */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
+          >
+            Archivo Histórico
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            Consulta de Calificaciones y Promociones de Años Anteriores
+          </h1>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+            {nombreInstitucion}
+          </p>
         </div>
 
-        {/* AVISO SI NO HAY PERIODOS CREADOS */}
-        {aniosDisponibles.length === 0 && (
-          <div className="bg-red-50 border border-red-200 p-4 rounded-2xl text-red-900 text-xs font-bold">
-            ⚠️ No se han encontrado años lectivos configurados para esta institución. Por favor, créelos primero desde el Panel Principal.
-          </div>
-        )}
-
-        {/* SELECTOR DE TIPO DE REPORTE DIRECTIVO */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4 flex-wrap">
-          <span className="text-xs font-bold uppercase text-slate-600">Tipo de Documento:</span>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setTipoReporteDirectivo('consolidado')}
-              className={`px-4 py-2 rounded-xl text-xs font-black transition ${
-                tipoReporteDirectivo === 'consolidado' ? 'bg-blue-700 text-white shadow' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Consolidado General por Materia
-            </button>
-            <button
-              onClick={() => setTipoReporteDirectivo('reporte_final')}
-              className={`px-4 py-2 rounded-xl text-xs font-black transition ${
-                tipoReporteDirectivo === 'reporte_final' ? 'bg-indigo-700 text-white shadow' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              📑 Reporte Final / Libreta por Estudiante
-            </button>
-          </div>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => setModalImpresionHistorico(true)}
+            disabled={estudiantesCurso.length === 0 || !anioSeleccionado}
+            style={{ backgroundColor: '#4b4c99' }}
+            className="px-4 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+          >
+            <span>Vista Previa / Imprimir Reporte</span>
+          </button>
+          <button
+            onClick={() => router.push('/rector')}
+            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition shadow-2xs cursor-pointer"
+          >
+            ← Volver al Panel Rectoral
+          </button>
         </div>
+      </div>
 
-        {/* FILTROS DE BÚSQUEDA */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div>
-            <label className="block text-[11px] font-bold text-indigo-900 uppercase mb-1">Año Lectivo:</label>
-            {aniosDisponibles.length === 0 ? (
-              <span className="text-xs font-bold text-amber-600 italic">Sin años creados</span>
-            ) : (
-              <select
-                value={anioSeleccionado}
-                onChange={(e) => setAnioSeleccionado(e.target.value)}
-                className="w-full p-2.5 border rounded-xl text-xs font-bold text-indigo-900 bg-indigo-50 outline-none cursor-pointer"
-              >
-                {aniosDisponibles.map(anio => <option key={anio} value={anio}>{anio}</option>)}
-              </select>
-            )}
-          </div>
+      {aniosDisponibles.length === 0 && (
+        <div 
+          style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
+          className="border p-4 rounded-2xl text-xs font-bold shadow-2xs"
+        >
+          No se han encontrado años lectivos configurados para esta institución. Por favor, créelos primero desde el Panel Principal.
+        </div>
+      )}
 
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Jornada:</label>
-            <select
-              value={jornadaSeleccionada}
-              onChange={(e) => setJornadaSeleccionada(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
-            >
-              {jornadas.map(j => <option key={j} value={j}>{j}</option>)}
-            </select>
-          </div>
+      {/* SELECTOR DE TIPO DE REPORTE DIRECTIVO */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4 flex-wrap">
+        <span className="text-xs font-bold uppercase text-slate-700">Tipo de Documento:</span>
+        <div className="flex gap-2.5 flex-wrap">
+          <button
+            onClick={() => setTipoReporteDirectivo('consolidado')}
+            style={tipoReporteDirectivo === 'consolidado' ? { backgroundColor: '#4b4c99' } : {}}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
+              tipoReporteDirectivo === 'consolidado' ? 'text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            Consolidado General por Materia
+          </button>
+          <button
+            onClick={() => setTipoReporteDirectivo('reporte_final')}
+            style={tipoReporteDirectivo === 'reporte_final' ? { backgroundColor: '#4b4c99' } : {}}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
+              tipoReporteDirectivo === 'reporte_final' ? 'text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            Reporte Final / Libreta por Estudiante
+          </button>
+        </div>
+      </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Grado / Curso:</label>
-            <select
-              value={gradoSeleccionado}
-              onChange={(e) => setGradoSeleccionado(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
-            >
-              {gradosEGB.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Paralelo:</label>
-            <select
-              value={paraleloSeleccionado}
-              onChange={(e) => setParaleloSeleccionado(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
-            >
-              {paralelos.map(p => <option key={p} value={p}>Paralelo {p}</option>)}
-            </select>
-          </div>
-
-          {/* ASIGNATURA (CARGADA DESDE LA TABLA "asignaturas") */}
-          {tipoReporteDirectivo === 'consolidado' ? (
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Asignatura:</label>
-              <select
-                value={asignaturaSeleccionada}
-                onChange={(e) => setAsignaturaSeleccionada(e.target.value)}
-                className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
-              >
-                {listaAsignaturasOficiales.length === 0 ? (
-                  <option value="">No hay materias registradas</option>
-                ) : (
-                  listaAsignaturasOficiales.map(mat => <option key={mat} value={mat}>{mat}</option>)
-                )}
-              </select>
-            </div>
+      {/* FILTROS DE BÚSQUEDA */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-5 gap-3.5 text-xs">
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Año Lectivo:</label>
+          {aniosDisponibles.length === 0 ? (
+            <span className="text-xs font-bold text-amber-700 italic">Sin años creados</span>
           ) : (
-            <div>
-              <label className="block text-[11px] font-bold text-indigo-700 uppercase mb-1">Nómina del Estudiante:</label>
-              <select
-                value={estudianteSeleccionadoId}
-                onChange={(e) => setEstudianteSeleccionadoId(e.target.value)}
-                className="w-full p-2.5 border-2 border-indigo-400 rounded-xl text-xs font-black text-indigo-950 bg-indigo-50 outline-none"
-              >
-                {estudiantesCurso.length === 0 ? (
-                  <option value="">Sin estudiantes en este curso</option>
-                ) : (
-                  estudiantesCurso.map(est => <option key={est.id} value={est.id}>{est.apellidos} {est.nombres}</option>)
-                )}
-              </select>
-            </div>
+            <select
+              value={anioSeleccionado}
+              onChange={(e) => setAnioSeleccionado(e.target.value)}
+              style={{ color: '#4b4c99' }}
+              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold bg-slate-50 outline-none cursor-pointer shadow-2xs"
+            >
+              {aniosDisponibles.map(anio => <option key={anio} value={anio} className="text-slate-900 font-bold bg-white">{anio}</option>)}
+            </select>
           )}
         </div>
 
-        {/* CONTROLES EXTRA SI ES REPORTE FINAL */}
-        {tipoReporteDirectivo === 'reporte_final' && (
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-            <span className="text-xs font-bold uppercase text-slate-600">Periodo del Reporte:</span>
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Jornada:</label>
+          <select
+            value={jornadaSeleccionada}
+            onChange={(e) => setJornadaSeleccionada(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
+          >
+            {jornadas.map(j => <option key={j} value={j} className="text-slate-900 font-bold bg-white">{j}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Grado / Curso:</label>
+          <select
+            value={gradoSeleccionado}
+            onChange={(e) => setGradoSeleccionado(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
+          >
+            {gradosEGB.map(g => <option key={g} value={g} className="text-slate-900 font-bold bg-white">{g}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Paralelo:</label>
+          <select
+            value={paraleloSeleccionado}
+            onChange={(e) => setParaleloSeleccionado(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
+          >
+            {paralelos.map(p => <option key={p} value={p} className="text-slate-900 font-bold bg-white">Paralelo {p}</option>)}
+          </select>
+        </div>
+
+        {tipoReporteDirectivo === 'consolidado' ? (
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Asignatura:</label>
             <select
-              value={tipoTrimestreReporte}
-              onChange={(e: any) => setTipoTrimestreReporte(e.target.value)}
-              className="p-2 border-2 border-indigo-400 rounded-xl text-xs font-black text-indigo-950 bg-indigo-50 outline-none"
+              value={asignaturaSeleccionada}
+              onChange={(e) => setAsignaturaSeleccionada(e.target.value)}
+              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
             >
-              <option value="Trimestre 1">1er Trimestre</option>
-              <option value="Trimestre 2">2do Trimestre</option>
-              <option value="Trimestre 3">3er Trimestre</option>
-              <option value="Anual">Reporte Final (Anual)</option>
+              {listaAsignaturasOficiales.length === 0 ? (
+                <option value="" className="text-slate-900 font-bold bg-white">No hay materias registradas</option>
+              ) : (
+                listaAsignaturasOficiales.map(mat => <option key={mat} value={mat} className="text-slate-900 font-bold bg-white">{mat}</option>)
+              )}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-[10px] font-bold text-[#4b4c99] uppercase mb-1.5">Nómina del Estudiante:</label>
+            <select
+              value={estudianteSeleccionadoId}
+              onChange={(e) => setEstudianteSeleccionadoId(e.target.value)}
+              className="w-full p-3 border-2 border-indigo-300 rounded-xl text-xs font-black text-indigo-950 bg-indigo-50 outline-none shadow-2xs"
+            >
+              {estudiantesCurso.length === 0 ? (
+                <option value="" className="text-slate-900 font-bold bg-white">Sin estudiantes en este curso</option>
+              ) : (
+                estudiantesCurso.map(est => <option key={est.id} value={est.id} className="text-slate-900 font-bold bg-white">{est.apellidos} {est.nombres}</option>)
+              )}
             </select>
           </div>
         )}
+      </div>
 
-        {/* TABLA DE VISUALIZACIÓN EN PANTALLA */}
-        {aniosDisponibles.length > 0 && anioSeleccionado ? (
-          tipoReporteDirectivo === 'consolidado' ? (
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
-              <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
-                <h2 className="text-xs font-black uppercase tracking-wider">
-                  CONSOLIDADO GENERAL • {anioSeleccionado} • {asignaturaSeleccionada || 'Materia'} ({gradoSeleccionado} "{paraleloSeleccionado}" - {jornadaSeleccionada})
-                </h2>
-                <span className="text-xs font-bold bg-white/10 px-3 py-1 rounded-lg">
-                  {estudiantesCurso.length} Alumnos Registrados
-                </span>
-              </div>
+      {tipoReporteDirectivo === 'reporte_final' && (
+        <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <span className="text-xs font-bold uppercase text-slate-700">Periodo del Reporte:</span>
+          <select
+            value={tipoTrimestreReporte}
+            onChange={(e: any) => setTipoTrimestreReporte(e.target.value)}
+            className="p-2.5 border-2 border-indigo-300 rounded-xl text-xs font-black text-indigo-950 bg-indigo-50 outline-none shadow-2xs"
+          >
+            <option value="Trimestre 1" className="text-slate-900 font-bold bg-white">1er Trimestre</option>
+            <option value="Trimestre 2" className="text-slate-900 font-bold bg-white">2do Trimestre</option>
+            <option value="Trimestre 3" className="text-slate-900 font-bold bg-white">3er Trimestre</option>
+            <option value="Anual" className="text-slate-900 font-bold bg-white">Reporte Final (Anual)</option>
+          </select>
+        </div>
+      )}
 
-              <div className="overflow-x-auto p-4">
-                <table className="w-full text-xs text-left border-collapse border border-slate-300">
-                  <thead className="bg-slate-200 text-slate-900 font-bold uppercase text-[10px]">
+      {/* TABLA DE VISUALIZACIÓN EN PANTALLA */}
+      {aniosDisponibles.length > 0 && anioSeleccionado ? (
+        tipoReporteDirectivo === 'consolidado' ? (
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs font-bold uppercase text-slate-900">
+              <span>Consolidado General • {anioSeleccionado} • {asignaturaSeleccionada || 'Materia'} ({gradoSeleccionado} "{paraleloSeleccionado}" - {jornadaSeleccionada})</span>
+              <span className="text-[10px] text-slate-500">{estudiantesCurso.length} Alumnos Registrados</span>
+            </div>
+
+            <div className="overflow-x-auto p-4">
+              <table className="w-full text-xs text-left border-collapse border border-slate-200">
+                <thead className="bg-slate-50 text-slate-900 font-bold uppercase text-[10px]">
+                  <tr>
+                    <th className="p-3 border border-slate-200 text-center w-12">Nro</th>
+                    <th className="p-3 border border-slate-200 w-32">Cédula</th>
+                    <th className="p-3 border border-slate-200">Apellidos y Nombres</th>
+                    <th className="p-3 border border-slate-200 text-center w-28">Promedio Anual</th>
+                    <th className="p-3 border border-slate-200 text-center w-24">Escala</th>
+                    <th className="p-3 border border-slate-200 text-center w-36">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {filasHistoricasProcesadas.length === 0 ? (
                     <tr>
-                      <th className="p-3 border border-slate-300 text-center w-12">Nro</th>
-                      <th className="p-3 border border-slate-300 w-32">Cédula</th>
-                      <th className="p-3 border border-slate-300">Apellidos y Nombres</th>
-                      <th className="p-3 border border-slate-300 text-center w-28">Promedio Anual</th>
-                      <th className="p-3 border border-slate-300 text-center w-24">Escala</th>
-                      <th className="p-3 border border-slate-300 text-center w-36">Estado</th>
+                      <td colSpan={6} className="p-12 text-center text-slate-500 font-medium">
+                        No hay estudiantes registrados en este curso, paralelo y jornada para el año {anioSeleccionado}.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {filasHistoricasProcesadas.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-500 font-medium">
-                          No hay estudiantes registrados en este curso, paralelo y jornada para el año {anioSeleccionado}.
+                  ) : (
+                    filasHistoricasProcesadas.map(({ estudiante, promedio, cualitativa, esAprobado }, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3 border border-slate-200 text-center font-bold text-slate-400">{idx + 1}</td>
+                        <td className="p-3 border border-slate-200 text-slate-600 font-mono">{estudiante?.cedula || 'S/N'}</td>
+                        <td className="p-3 border border-slate-200 font-bold text-slate-800 uppercase">
+                          {estudiante?.apellidos} {estudiante?.nombres}
+                        </td>
+                        <td className="p-3 border border-slate-200 text-center font-bold text-slate-900 bg-slate-50">
+                          {promedio > 0 ? promedio.toFixed(2) : '0.00'}
+                        </td>
+                        <td className="p-3 border border-slate-200 text-center font-semibold text-slate-700">
+                          {promedio > 0 ? cualitativa : '-'}
+                        </td>
+                        <td className={`p-3 border border-slate-200 text-center font-bold text-[10px] uppercase ${
+                          promedio === 0 ? 'bg-slate-50 text-slate-400' :
+                          esAprobado ? 'bg-indigo-50 text-indigo-800' : 'bg-amber-50 text-amber-800'
+                        }`}>
+                          {promedio === 0 ? 'Sin calificación' : esAprobado ? 'Aprobado' : 'Supletorio'}
                         </td>
                       </tr>
-                    ) : (
-                      filasHistoricasProcesadas.map(({ estudiante, promedio, cualitativa, esAprobado }, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50">
-                          <td className="p-3 border border-slate-300 text-center font-bold text-slate-400">{idx + 1}</td>
-                          <td className="p-3 border border-slate-300 text-slate-600 font-mono">{estudiante?.cedula || 'S/N'}</td>
-                          <td className="p-3 border border-slate-300 font-bold text-slate-800 uppercase">
-                            {estudiante?.apellidos} {estudiante?.nombres}
-                          </td>
-                          <td className="p-3 border border-slate-300 text-center font-black text-slate-900 bg-slate-100">
-                            {promedio > 0 ? promedio.toFixed(2) : '0.00'}
-                          </td>
-                          <td className="p-3 border border-slate-300 text-center font-bold text-slate-700">
-                            {promedio > 0 ? cualitativa : '-'}
-                          </td>
-                          <td className={`p-3 border border-slate-300 text-center font-black text-[10px] ${
-                            promedio === 0 ? 'bg-slate-50 text-slate-400' :
-                            esAprobado ? 'bg-blue-100 text-blue-800' : 'bg-amber-500 text-white'
-                          }`}>
-                            {promedio === 0 ? 'SIN CALIFICACIÓN' : esAprobado ? 'APROBADO' : 'SUPLETORIO'}
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs font-bold uppercase text-slate-900">
+              <span>Reporte Final Individual • {anioSeleccionado} • {estudianteActualObj ? `${estudianteActualObj.apellidos} ${estudianteActualObj.nombres}` : 'Estudiante'}</span>
+              <span className="text-[10px] text-slate-500">Vista Preliminar</span>
+            </div>
+
+            <div className="overflow-x-auto p-4">
+              <table className="w-full text-xs text-left border-collapse border border-slate-200">
+                <thead className="bg-slate-50 text-slate-900 font-bold uppercase text-[10px]">
+                  <tr>
+                    <th className="p-3 border border-slate-200 text-center w-12">Nro</th>
+                    <th className="p-3 border border-slate-200">Asignatura / Módulo</th>
+                    <th className="p-3 border border-slate-200 text-center w-28">Promedio Anual</th>
+                    <th className="p-3 border border-slate-200 text-center w-24">Escala</th>
+                    <th className="p-3 border border-slate-200 text-center w-36">Observación</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {listaAsignaturasOficiales.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-12 text-center text-slate-500 font-medium italic">
+                        No hay asignaturas configuradas en el sistema.
+                      </td>
+                    </tr>
+                  ) : (
+                    listaAsignaturasOficiales.map((asig, idx) => {
+                      const regMat = calificacionesEstudianteActual.find((c: any) => c.asignatura && c.asignatura.trim().toUpperCase() === asig.trim().toUpperCase())
+                      const prom = regMat?.promedio_parcial !== undefined && regMat?.promedio_parcial !== null ? Number(regMat.promedio_parcial) : 0
+                      const cual = prom >= 9 ? 'DAR' : prom >= 7 ? 'AAR' : prom >= 5 ? 'PA' : 'NAAR'
+                      const aprobado = prom >= 7
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-3 border border-slate-200 text-center font-bold text-slate-400">{idx + 1}</td>
+                          <td className="p-3 border border-slate-200 font-bold text-slate-800 uppercase">{asig}</td>
+                          <td className="p-3 border border-slate-200 text-center font-bold text-slate-900 bg-slate-50">{prom > 0 ? prom.toFixed(2) : '0.00'}</td>
+                          <td className="p-3 border border-slate-200 text-center font-semibold text-slate-700">{prom > 0 ? cual : '-'}</td>
+                          <td className={`p-3 border border-slate-200 text-center font-bold text-[10px] uppercase ${prom === 0 ? 'text-slate-400' : aprobado ? 'text-indigo-800 bg-indigo-50' : 'text-amber-800 bg-amber-50'}`}>
+                            {prom === 0 ? 'Sin notas' : aprobado ? 'Aprobado' : 'Supletorio'}
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
-              <div className="p-4 bg-indigo-900 text-white flex justify-between items-center">
-                <h2 className="text-xs font-black uppercase tracking-wider">
-                  REPORTE FINAL INDIVIDUAL • {anioSeleccionado} • {estudianteActualObj ? `${estudianteActualObj.apellidos} ${estudianteActualObj.nombres}` : 'Estudiante'}
-                </h2>
-                <span className="text-xs font-bold bg-white/10 px-3 py-1 rounded-lg">
-                  Vista Preliminar
-                </span>
-              </div>
-
-              <div className="overflow-x-auto p-4">
-                <table className="w-full text-xs text-left border-collapse border border-slate-300">
-                  <thead className="bg-slate-200 text-slate-900 font-bold uppercase text-[10px]">
-                    <tr>
-                      <th className="p-3 border border-slate-300 text-center w-12">Nro</th>
-                      <th className="p-3 border border-slate-300">Asignatura / Módulo</th>
-                      <th className="p-3 border border-slate-300 text-center w-28">Promedio Anual</th>
-                      <th className="p-3 border border-slate-300 text-center w-24">Escala</th>
-                      <th className="p-3 border border-slate-300 text-center w-36">Observación</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {listaAsignaturasOficiales.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="p-8 text-center text-slate-400 font-semibold italic">
-                          No hay asignaturas configuradas en el sistema.
-                        </td>
-                      </tr>
-                    ) : (
-                      listaAsignaturasOficiales.map((asig, idx) => {
-                        const regMat = calificacionesEstudianteActual.find((c: any) => c.asignatura && c.asignatura.trim().toUpperCase() === asig.trim().toUpperCase())
-                        const prom = regMat?.promedio_parcial !== undefined && regMat?.promedio_parcial !== null ? Number(regMat.promedio_parcial) : 0
-                        const cual = prom >= 9 ? 'DAR' : prom >= 7 ? 'AAR' : prom >= 5 ? 'PA' : 'NAAR'
-                        const aprobado = prom >= 7
-                        return (
-                          <tr key={idx} className="hover:bg-slate-50">
-                            <td className="p-3 border border-slate-300 text-center font-bold text-slate-400">{idx + 1}</td>
-                            <td className="p-3 border border-slate-300 font-bold text-slate-800 uppercase">{asig}</td>
-                            <td className="p-3 border border-slate-300 text-center font-black text-slate-900 bg-slate-100">{prom > 0 ? prom.toFixed(2) : '0.00'}</td>
-                            <td className="p-3 border border-slate-300 text-center font-bold text-slate-700">{prom > 0 ? cual : '-'}</td>
-                            <td className={`p-3 border border-slate-300 text-center font-black text-[10px] ${prom === 0 ? 'text-slate-400' : aprobado ? 'text-blue-900 bg-blue-50' : 'text-amber-800 bg-amber-50'}`}>
-                              {prom === 0 ? 'SIN NOTAS' : aprobado ? 'APROBADO' : 'SUPLETORIO'}
-                            </td>
-                          </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )
-        ) : null}
-
-      </div>
+          </div>
+        )
+      ) : null}
 
       {/* MODAL / VENTANA FLOTANTE DE VISTA PREVIA E IMPRESIÓN OFICIAL */}
       {modalImpresionHistorico && anioSeleccionado && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static print:inset-auto">
-          <div className="bg-white rounded-3xl max-w-5xl w-full p-8 space-y-6 shadow-2xl relative print:shadow-none print:p-2 print:max-w-none">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static print:inset-auto">
+          <div className="bg-white rounded-3xl max-w-5xl w-full p-8 space-y-6 shadow-xl border border-slate-200 relative print:shadow-none print:p-2 print:max-w-none font-sans">
             
-            {/* BOTONES SUPERIORES (OCULTOS AL IMPRIMIR) */}
-            <div className="flex justify-between items-center border-b pb-4 print:hidden">
+            {/* BOTONES SUPERIORES */}
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4 print:hidden">
               <div>
-                <h2 className="text-base font-black text-slate-900 uppercase">
+                <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
                   {tipoReporteDirectivo === 'consolidado' ? 'Consolidado General' : 'Reporte Final por Estudiante'} - {anioSeleccionado}
                 </h2>
-                <p className="text-xs text-slate-500">Documento listo para imprimir o guardar como PDF ({nombrePdfDinamico}).</p>
+                <p className="text-xs text-slate-500 font-medium">Documento listo para imprimir o guardar como PDF ({nombrePdfDinamico}).</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <button
                   onClick={handlePrintConTitulo}
-                  className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-black text-xs rounded-xl shadow transition flex items-center gap-1.5"
+                  style={{ backgroundColor: '#4b4c99' }}
+                  className="px-5 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
                 >
-                  <span>🖨️</span> Imprimir / Guardar PDF
+                  <span>Imprimir / Guardar PDF</span>
                 </button>
                 <button
                   onClick={() => setModalImpresionHistorico(false)}
-                  className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition"
+                  className="px-4 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-200 transition cursor-pointer"
                 >
-                  ✕ Cerrar
+                  Cerrar
                 </button>
               </div>
             </div>
 
-            {/* CONTENIDO IMPRIMIBLE CON ESTILO EXACTO DE LIBRETA/REPORTE DOCENTE */}
+            {/* CONTENIDO IMPRIMIBLE */}
             <div className="space-y-4 print:space-y-2">
               
-              {/* ENCABEZADO INSTITUCIONAL */}
               <div className="border-b-2 border-slate-900 pb-3 flex justify-between items-center">
                 <div className="flex items-center gap-4 text-left">
                   {institucionLogo ? (
-                    <img src={institucionLogo} alt="Logo Institución" className="w-20 h-20 object-contain" />
+                    <img src={institucionLogo} alt="Logo Institución" className="w-16 h-16 object-contain" />
                   ) : null}
                   <div>
-                    <h2 className="text-sm font-black uppercase text-slate-900">{nombreInstitucion}</h2>
-                    <p className="text-[11px] font-black text-slate-800">CÓDIGO AMIE: 03H00278 • Azogues - Ecuador</p>
+                    <h2 className="text-xs font-bold uppercase text-slate-900">{nombreInstitucion}</h2>
+                    <p className="text-[10px] font-bold text-slate-600">CÓDIGO AMIE • Azogues - Ecuador</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-black uppercase bg-slate-200 px-3 py-1 border border-slate-800 rounded text-slate-900 block">
-                    {tipoReporteDirectivo === 'consolidado' ? `CONSOLIDADO ANUAL • ${anioSeleccionado}` : `RENDIMIENTO ACADÉMICO - ${tipoTrimestreReporte.toUpperCase()} (${anioSeleccionado})`}
+                  <span className="text-[10px] font-bold uppercase bg-slate-100 px-3 py-1 border border-slate-300 rounded-xl text-slate-900 block">
+                    {tipoReporteDirectivo === 'consolidado' ? `Consolidado Anual • ${anioSeleccionado}` : `Rendimiento Académico - ${tipoTrimestreReporte.toUpperCase()} (${anioSeleccionado})`}
                   </span>
                 </div>
               </div>
 
-              {/* DATOS INFORMATIVOS */}
               {tipoReporteDirectivo === 'consolidado' ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-1 text-xs border border-slate-800 p-3 bg-slate-50 rounded-lg font-bold text-slate-900">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-1 text-xs border border-slate-300 p-3.5 bg-slate-50 rounded-2xl font-bold text-slate-900">
                   <div><strong>ASIGNATURA:</strong> {asignaturaSeleccionada}</div>
                   <div><strong>PARALELO:</strong> {paraleloSeleccionado}</div>
                   <div><strong>GRADO/CURSO:</strong> {gradoSeleccionado}</div>
@@ -645,58 +632,57 @@ export default function HistoricoAcademicoPage() {
                   <div className="col-span-2"><strong>AÑO LECTIVO:</strong> {anioSeleccionado}</div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs border border-slate-800 p-3 bg-slate-50 rounded-lg font-bold text-slate-900">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs border border-slate-300 p-3.5 bg-slate-50 rounded-2xl font-bold text-slate-900">
                   <div><strong>REFERENCIA:</strong> OFICIAL</div>
                   <div><strong>PARALELO:</strong> {paraleloSeleccionado}</div>
                   <div><strong>GRADO/CURSO:</strong> {gradoSeleccionado}</div>
                   <div><strong>JORNADA:</strong> {jornadaSeleccionada}</div>
                   <div><strong>AÑO LECTIVO:</strong> {anioSeleccionado}</div>
                   <div><strong>CÉDULA:</strong> {estudianteActualObj?.cedula || 'S/N'}</div>
-                  <div className="col-span-2 uppercase font-black text-slate-950 pt-1 border-t border-slate-300 mt-1">
+                  <div className="col-span-2 uppercase font-bold text-slate-950 pt-1 border-t border-slate-200 mt-1">
                     <strong>ESTUDIANTE:</strong> {estudianteActualObj?.apellidos} {estudianteActualObj?.nombres}
                   </div>
                 </div>
               )}
 
-              {/* TABLA PRINCIPAL DE ASIGNATURAS */}
               {tipoReporteDirectivo === 'consolidado' ? (
-                <table className="w-full text-xs border-collapse border border-slate-800 text-slate-900 font-semibold">
+                <table className="w-full text-xs border-collapse border border-slate-300 text-slate-900 font-medium">
                   <thead>
-                    <tr className="bg-slate-300 text-slate-950 font-black uppercase text-[10px] text-center">
-                      <th className="p-2 border border-slate-800 w-12">Nro</th>
-                      <th className="p-2 border border-slate-800 w-28">Cédula</th>
-                      <th className="p-2 border border-slate-800 text-left">Apellidos y Nombres</th>
-                      <th className="p-2 border border-slate-800 w-24">PROM. ANUAL</th>
-                      <th className="p-2 border border-slate-800 w-20">ESCALA</th>
-                      <th className="p-2 border border-slate-800 w-32">OBSERVACIÓN</th>
+                    <tr className="bg-slate-100 text-slate-900 font-bold uppercase text-[10px] text-center">
+                      <th className="p-2 border border-slate-300 w-12">Nro</th>
+                      <th className="p-2 border border-slate-300 w-28">Cédula</th>
+                      <th className="p-2 border border-slate-300 text-left">Apellidos y Nombres</th>
+                      <th className="p-2 border border-slate-300 w-24">PROM. ANUAL</th>
+                      <th className="p-2 border border-slate-300 w-20">ESCALA</th>
+                      <th className="p-2 border border-slate-300 w-32">OBSERVACIÓN</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-slate-300">
                     {filasHistoricasProcesadas.map(({ estudiante, promedio, cualitativa, esAprobado }, idx) => (
                       <tr key={idx} className="text-center font-bold">
-                        <td className="p-2 border border-slate-800 text-slate-600">{idx + 1}</td>
-                        <td className="p-2 border border-slate-800 font-mono text-[11px]">{estudiante?.cedula || 'S/N'}</td>
-                        <td className="p-2 border border-slate-800 text-left font-black uppercase">{estudiante?.apellidos} {estudiante?.nombres}</td>
-                        <td className="p-2 border border-slate-800 font-black">{promedio > 0 ? promedio.toFixed(2) : '0.00'}</td>
-                        <td className="p-2 border border-slate-800">{promedio > 0 ? cualitativa : '-'}</td>
-                        <td className={`p-2 border border-slate-800 font-black text-[10px] uppercase ${esAprobado ? 'text-blue-900 bg-blue-50' : 'text-amber-800 bg-amber-50'}`}>
-                          {promedio === 0 ? 'SIN NOTAS' : esAprobado ? 'APROBADO' : 'SUPLETORIO'}
+                        <td className="p-2 border border-slate-300 text-slate-500">{idx + 1}</td>
+                        <td className="p-2 border border-slate-300 font-mono text-[11px]">{estudiante?.cedula || 'S/N'}</td>
+                        <td className="p-2 border border-slate-300 text-left font-bold uppercase">{estudiante?.apellidos} {estudiante?.nombres}</td>
+                        <td className="p-2 border border-slate-300 font-bold">{promedio > 0 ? promedio.toFixed(2) : '0.00'}</td>
+                        <td className="p-2 border border-slate-300">{promedio > 0 ? cualitativa : '-'}</td>
+                        <td className={`p-2 border border-slate-300 font-bold text-[10px] uppercase ${esAprobado ? 'text-indigo-900 bg-indigo-50' : 'text-amber-800 bg-amber-50'}`}>
+                          {promedio === 0 ? 'Sin notas' : esAprobado ? 'Aprobado' : 'Supletorio'}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <table className="w-full text-xs border-collapse border border-slate-800 text-slate-900 font-semibold">
+                <table className="w-full text-xs border-collapse border border-slate-300 text-slate-900 font-medium">
                   <thead>
-                    <tr className="bg-slate-300 text-slate-950 font-black uppercase text-[10px] text-center">
-                      <th className="p-2 border border-slate-800 w-1/3">ASIGNATURAS</th>
-                      <th className="p-2 border border-slate-800">PROM. PERIODO</th>
-                      <th className="p-2 border border-slate-800">CALIFICACIÓN CUALITATIVA</th>
-                      <th className="p-2 border border-slate-800">OBSERVACIÓN</th>
+                    <tr className="bg-slate-100 text-slate-900 font-bold uppercase text-[10px] text-center">
+                      <th className="p-2 border border-slate-300 w-1/3">ASIGNATURAS</th>
+                      <th className="p-2 border border-slate-300">PROM. PERIODO</th>
+                      <th className="p-2 border border-slate-300">CALIFICACIÓN CUALITATIVA</th>
+                      <th className="p-2 border border-slate-300">OBSERVACIÓN</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-slate-300">
                     {listaAsignaturasOficiales.map((asig) => {
                       const regMat = calificacionesEstudianteActual.find((c: any) => c.asignatura && c.asignatura.trim().toUpperCase() === asig.trim().toUpperCase())
                       const promMat = regMat?.promedio_parcial !== undefined && regMat?.promedio_parcial !== null ? Number(regMat.promedio_parcial) : 0
@@ -705,11 +691,11 @@ export default function HistoricoAcademicoPage() {
 
                       return (
                         <tr key={asig} className="text-center font-bold text-slate-900">
-                          <td className="p-2 border border-slate-800 text-left font-black">{asig}</td>
-                          <td className="p-2 border border-slate-800 font-black">{promMat > 0 ? promMat.toFixed(2) : '0.00'}</td>
-                          <td className="p-2 border border-slate-800 font-black text-indigo-950">{cualiMat}</td>
-                          <td className={`p-2 border border-slate-800 font-black text-[10px] ${promMat === 0 ? 'text-slate-400' : aprobado ? 'text-blue-900 bg-blue-50' : 'text-amber-800 bg-amber-50'}`}>
-                            {promMat === 0 ? 'SIN NOTAS' : aprobado ? 'APROBADO' : 'SUPLETORIO'}
+                          <td className="p-2 border border-slate-300 text-left font-bold">{asig}</td>
+                          <td className="p-2 border border-slate-300 font-bold">{promMat > 0 ? promMat.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-300 font-bold text-[#4b4c99]">{cualiMat}</td>
+                          <td className={`p-2 border border-slate-300 font-bold text-[10px] ${promMat === 0 ? 'text-slate-400' : aprobado ? 'text-indigo-900 bg-indigo-50' : 'text-amber-800 bg-amber-50'}`}>
+                            {promMat === 0 ? 'Sin notas' : aprobado ? 'Aprobado' : 'Supletorio'}
                           </td>
                         </tr>
                       )
@@ -718,38 +704,37 @@ export default function HistoricoAcademicoPage() {
                 </table>
               )}
 
-              {/* ESTADÍSTICAS Y GRÁFICO FINAL (SOLO EN CONSOLIDADO) */}
               {tipoReporteDirectivo === 'consolidado' && (
-                <div className="pt-4 border-t-2 border-slate-300 space-y-3">
+                <div className="pt-4 border-t border-slate-200 space-y-3">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider">Resumen Estadístico Anual</h3>
+                    <h3 className="text-xs font-bold uppercase text-slate-900 tracking-wide">Resumen Estadístico Anual</h3>
                     <span className="text-[11px] font-bold text-slate-600">Total Evaluados: {totalEvaluados} estudiantes</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl flex justify-between items-center">
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 bg-indigo-50/50 border border-indigo-200 rounded-2xl flex justify-between items-center shadow-2xs">
                       <div>
-                        <span className="block font-bold text-blue-900 uppercase">Aprobados Directos</span>
-                        <span className="text-lg font-black text-blue-950">{totalAprobados} alumnos</span>
+                        <span className="block font-bold text-indigo-900 uppercase">Aprobados Directos</span>
+                        <span className="text-base font-bold text-indigo-950">{totalAprobados} alumnos</span>
                       </div>
-                      <span className="text-xs font-black bg-blue-200 text-blue-900 px-2 py-0.5 rounded-lg">{porcentajeAprobados}%</span>
+                      <span className="text-xs font-bold bg-indigo-100 text-indigo-900 px-2.5 py-1 rounded-xl">{porcentajeAprobados}%</span>
                     </div>
 
-                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex justify-between items-center">
+                    <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-2xl flex justify-between items-center shadow-2xs">
                       <div>
                         <span className="block font-bold text-amber-900 uppercase">Supletorios</span>
-                        <span className="text-lg font-black text-amber-950">{totalSupletorios} alumnos</span>
+                        <span className="text-base font-bold text-amber-950">{totalSupletorios} alumnos</span>
                       </div>
-                      <span className="text-xs font-black bg-amber-200 text-amber-900 px-2 py-0.5 rounded-lg">{porcentajeSupletorios}%</span>
+                      <span className="text-xs font-bold bg-amber-100 text-amber-900 px-2.5 py-1 rounded-xl">{porcentajeSupletorios}%</span>
                     </div>
                   </div>
 
                   <div className="space-y-1 pt-1">
-                    <div className="flex h-4 w-full rounded-full overflow-hidden border border-slate-300 bg-slate-100">
-                      <div style={{ width: `${porcentajeAprobados}%` }} className="bg-blue-600 h-full flex items-center justify-center text-[8px] font-black text-white">
+                    <div className="flex h-3.5 w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                      <div style={{ width: `${porcentajeAprobados}%` }} className="bg-[#4b4c99] h-full flex items-center justify-center text-[8px] font-bold text-white">
                         {porcentajeAprobados > 0 && `${porcentajeAprobados}%`}
                       </div>
-                      <div style={{ width: `${porcentajeSupletorios}%` }} className="bg-amber-500 h-full flex items-center justify-center text-[8px] font-black text-white">
+                      <div style={{ width: `${porcentajeSupletorios}%` }} className="bg-amber-500 h-full flex items-center justify-center text-[8px] font-bold text-white">
                         {porcentajeSupletorios > 0 && `${porcentajeSupletorios}%`}
                       </div>
                     </div>
@@ -757,15 +742,14 @@ export default function HistoricoAcademicoPage() {
                 </div>
               )}
 
-              {/* FIRMAS DE RESPONSABILIDAD */}
               <div className="grid grid-cols-2 pt-12 text-center text-xs text-slate-900 font-bold">
                 <div className="space-y-1">
-                  <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-black uppercase">SECRETARÍA GENERAL</div>
-                  <div className="font-black text-[11px]">SECRETARIO(A)</div>
+                  <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-bold uppercase">SECRETARÍA GENERAL</div>
+                  <div className="font-bold text-[11px]">SECRETARIO(A)</div>
                 </div>
                 <div className="space-y-1">
-                  <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-black uppercase">{nombreAutoridad || 'RECTOR / VICERRECTOR'}</div>
-                  <div className="font-black text-[11px]">RECTOR(A) / VICERRECTOR(A)</div>
+                  <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-bold uppercase">{nombreAutoridad || 'RECTOR / VICERRECTOR'}</div>
+                  <div className="font-bold text-[11px]">RECTOR(A) / VICERRECTOR(A)</div>
                 </div>
               </div>
 

@@ -179,7 +179,6 @@ export default function SupletoriosPage() {
 
         const estIds = estData.map(e => e.id)
         
-        // Consultar todas las calificaciones de estos estudiantes para esta materia y año
         const { data: calData } = await supabase
           .from('calificaciones')
           .select('*')
@@ -237,7 +236,7 @@ export default function SupletoriosPage() {
 
   const handleGuardarSupletorios = async () => {
     if (esAnioCerrado) {
-      alert('🔒 Este año lectivo está cerrado. No se pueden guardar notas supletorias.')
+      alert('Este año lectivo está cerrado. No se pueden guardar notas supletorias.')
       return
     }
 
@@ -278,10 +277,10 @@ export default function SupletoriosPage() {
 
   if (cargando) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-slate-600 font-semibold text-sm">Cargando Módulo de Supletorios...</p>
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans selection:bg-[#4b4c99] selection:text-white">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Módulo de Supletorios...</p>
         </div>
       </div>
     )
@@ -291,23 +290,23 @@ export default function SupletoriosPage() {
 
   if (asignacionesValidas.length === 0) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs max-w-md text-center space-y-4">
-          <div className="text-3xl">⚠️</div>
-          <h2 className="text-base font-black text-slate-900">Módulo No Disponible para su Nivel</h2>
-          <p className="text-xs text-slate-500 leading-relaxed">
+      <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans max-w-md mx-auto mt-12">
+        <div className="bg-white p-8 rounded-3xl border border-slate-200/80 shadow-xs text-center space-y-4">
+          <div className="text-xl font-bold text-slate-800">Módulo No Disponible para su Nivel</div>
+          <p className="text-xs text-slate-500 font-medium leading-relaxed">
             Los exámenes supletorios aplican únicamente desde 8vo de EGB en adelante (Básica Superior y Bachillerato) para el periodo vigente ({anioLectivoVigente || 'Sin año activo'}).
           </p>
-          <div className="flex gap-2 justify-center">
+          <div className="flex gap-2 justify-center pt-2">
             <button
               onClick={() => router.push('/docente')}
-              className="px-4 py-2.5 bg-slate-800 text-white text-xs font-bold rounded-xl hover:bg-slate-900 transition"
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
             >
-              ← Menú Docente
+              Menú Docente
             </button>
             <button
               onClick={() => router.push('/calificaciones')}
-              className="px-4 py-2.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-300 transition"
+              style={{ backgroundColor: '#4b4c99' }}
+              className="px-4 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer"
             >
               Volver a Calificaciones
             </button>
@@ -322,9 +321,9 @@ export default function SupletoriosPage() {
   const asignaturasPermitidas = Array.from(new Set(asignacionesValidas.filter(a => a.grado_curso === gradoSeleccionado && a.paralelo === paraleloSeleccionado).map(a => a.asignatura)))
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 print:p-0 print:bg-white">
+    <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans print:p-0 print:bg-white">
       
-      {/* REGLA CSS GLOBAL DE IMPRESIÓN CON MARCOS EXTERIORES TIPO MATRIZ INSTITUCIONAL */}
+      {/* REGLA CSS GLOBAL DE IMPRESIÓN */}
       <style jsx global>{`
         @media print {
           @page {
@@ -359,61 +358,68 @@ export default function SupletoriosPage() {
       <div className="max-w-6xl mx-auto space-y-6 print:space-y-1 print:max-w-none">
 
         {/* ENCABEZADO Y CONTROLES SUPERIORES */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
+        <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
           <div>
-            <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-[10px] font-black uppercase">
-              Módulo Académico • Exámenes Supletorios 📝 ({anioLectivoVigente || 'Sin año activo'})
+            <span 
+              style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+              className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
+            >
+              Exámenes Supletorios • {anioLectivoVigente || 'Sin año activo'}
             </span>
-            <h1 className="text-xl font-black text-slate-900 mt-1">
+            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
               Registro y Cálculo de Supletorios
             </h1>
-            <p className="text-xs text-slate-500 font-medium">
+            <p className="text-xs text-slate-500 font-semibold mt-0.5">
               {nombreInstitucion} • Exclusivo Básica Superior y Bachillerato
             </p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 bg-slate-50 border px-3 py-1.5 rounded-xl">
-              <label className="text-[10px] font-black text-slate-700 uppercase">Firma:</label>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-300 flex items-center gap-2 shadow-2xs">
+              <span className="text-[10px] font-bold text-slate-500 uppercase">Firma:</span>
               <select
                 value={autoridadSeleccionadaIndex}
                 onChange={(e) => setAutoridadSeleccionadaIndex(Number(e.target.value))}
-                className="text-xs font-bold text-slate-900 bg-transparent outline-none cursor-pointer"
+                style={{ color: '#4b4c99' }}
+                className="bg-transparent text-xs font-bold outline-none cursor-pointer"
               >
                 {autoridadesDisponibles.map((aut, idx) => (
-                  <option key={idx} value={idx}>{aut.nombre} ({aut.cargo})</option>
+                  <option key={idx} value={idx} className="text-slate-900 font-bold bg-white">{aut.nombre} ({aut.cargo})</option>
                 ))}
               </select>
             </div>
 
             <button
               onClick={() => window.print()}
-              className="px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer"
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition shadow-2xs cursor-pointer"
             >
-              🖨️ Imprimir Reporte
+              Imprimir Reporte
             </button>
           </div>
         </div>
 
         {esAnioCerrado && anioLectivoVigente && (
-          <div className="bg-red-50 border border-red-200 p-4 rounded-2xl text-red-900 text-xs font-bold flex items-center justify-between print:hidden">
-            El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. El módulo de supletorios está en modo de solo lectura.
-            <span className="bg-red-200 px-2.5 py-1 rounded">Periodo Cerrado</span>
+          <div 
+            style={{ backgroundColor: 'rgba(222, 88, 96, 0.08)', borderColor: 'rgba(222, 88, 96, 0.3)', color: '#9b2c2c' }}
+            className="border p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-2xs print:hidden"
+          >
+            <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. El módulo de supletorios está en modo de solo lectura.</span>
+            <span className="bg-rose-200/80 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-900">Modo Archivo</span>
           </div>
         )}
 
         {mensaje && (
-          <div className={`p-4 rounded-xl text-sm font-bold border print:hidden ${
-            mensaje.tipo === 'exito' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-red-50 text-red-900 border-red-200'
+          <div className={`p-4 rounded-2xl text-xs font-bold border shadow-2xs print:hidden ${
+            mensaje.tipo === 'exito' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-rose-50 text-rose-900 border-rose-200'
           }`}>
             {mensaje.texto}
           </div>
         )}
 
         {/* SELECTORES DE FILTRO */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs print:hidden">
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Grado / Curso:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Grado / Curso:</label>
             <select
               value={gradoSeleccionado}
               onChange={(e) => {
@@ -422,67 +428,65 @@ export default function SupletoriosPage() {
                 const par = asignacionesValidas.find(a => a.grado_curso === nuevoGrado)?.paralelo || 'A'
                 setParaleloSeleccionado(par)
               }}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
+              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
             >
               {gradosUnicos.map(g => (
-                <option key={g} value={g}>{g}</option>
+                <option key={g} value={g} className="text-slate-900 font-bold bg-white">{g}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Paralelo:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Paralelo:</label>
             <select
               value={paraleloSeleccionado}
               onChange={(e) => setParaleloSeleccionado(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
+              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
             >
               {paralelosPermitidos.map(p => (
-                <option key={p} value={p}>Paralelo {p}</option>
+                <option key={p} value={p} className="text-slate-900 font-bold bg-white">Paralelo {p}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Asignatura:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Asignatura:</label>
             <select
               value={asignaturaSeleccionada}
               onChange={(e) => setAsignaturaSeleccionada(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
+              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
             >
               {asignaturasPermitidas.map(mat => (
-                <option key={mat} value={mat}>{mat}</option>
+                <option key={mat} value={mat} className="text-slate-900 font-bold bg-white">{mat}</option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* TABLA DE SUPLEMENTORIOS CON MARCOS EXTERIORES E INTERIORES DEFINIDOS */}
-        <div id="printable-supletorios-area" className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4 print:border-2 print:border-slate-900 print:rounded-none print:shadow-none print:p-4">
+        {/* TABLA DE SUPLEMENTORIOS */}
+        <div id="printable-supletorios-area" className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4 print:border-2 print:border-slate-900 print:rounded-none print:shadow-none print:p-4">
           
-          {/* ENCABEZADO MINISTERIAL (SOLO APARECE AL IMPRIMIR) */}
+          {/* ENCABEZADO MINISTERIAL (IMPRESIÓN) */}
           <div className="hidden print:flex border-b-2 border-slate-900 pb-2 justify-between items-center mb-2">
             <div className="flex items-center gap-3 text-left">
               {institucionLogo ? (
                 <img src={institucionLogo} alt="Logo Institución" className="w-12 h-12 object-contain" />
-              ) : (
-                <img src="https://upload.wikimedia.org/wikipedia/commons/e/e8/Escudo_del_Ecuador_%28oficial%29.svg" alt="Escudo Ecuador" className="w-10 h-10 object-contain" />
-              )}
+              ) : null}
               <div>
-                <h2 className="text-xs font-black uppercase text-slate-900">{nombreInstitucion || 'UNIDAD EDUCATIVA GUAPAN'}</h2>
-                <p className="text-[9px] font-black text-slate-800">CÓDIGO AMIE: 03H00278 • Azogues - Ecuador</p>
-                <p className="text-[9px] font-black text-indigo-900 uppercase mt-0.5">CONSOLIDADO GENERAL DE RENDIMIENTO ACADÉMICO</p>
+                <h2 className="text-xs font-black uppercase text-slate-900">{nombreInstitucion || 'UNIDAD EDUCATIVA'}</h2>
+                <p className="text-[9px] font-bold text-slate-700">CÓDIGO AMIE • Azogues - Ecuador</p>
+                <p className="text-[9px] font-bold text-[#4b4c99] uppercase mt-0.5">CONSOLIDADO GENERAL DE RENDIMIENTO ACADÉMICO</p>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-[9px] font-black uppercase bg-slate-200 px-2 py-0.5 border border-slate-800 rounded text-slate-900">
+              <span className="text-[9px] font-bold uppercase bg-slate-100 px-2.5 py-1 border border-slate-300 rounded text-slate-900">
                 PERIODO {anioLectivoVigente || 'S/N'}
               </span>
             </div>
           </div>
 
-          {/* DATOS INFORMATIVOS (SOLO APARECE AL IMPRIMIR) */}
-          <div className="hidden print:grid grid-cols-2 gap-x-6 gap-y-0.5 text-[10px] border border-slate-800 p-2 bg-slate-50 rounded font-bold text-slate-900 mb-2">
+          {/* DATOS INFORMATIVOS (IMPRESIÓN) */}
+          <div className="hidden print:grid grid-cols-2 gap-x-6 gap-y-0.5 text-[10px] border border-slate-300 p-2.5 bg-slate-50 rounded font-bold text-slate-900 mb-2">
             <div><strong>ASIGNATURA:</strong> {asignaturaSeleccionada || 'N/A'}</div>
             <div><strong>PARALELO:</strong> {paraleloSeleccionado || 'N/A'}</div>
             <div><strong>GRADO / CURSO:</strong> {gradoSeleccionado || 'N/A'}</div>
@@ -491,45 +495,46 @@ export default function SupletoriosPage() {
             <div><strong>AUTORIDAD:</strong> {autoridadActual.nombre} ({autoridadActual.cargo})</div>
           </div>
 
-          <div className="p-4 bg-slate-900 text-white flex justify-between items-center print:hidden">
-            <h2 className="text-xs font-black uppercase tracking-wider">
+          <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs font-bold uppercase text-slate-900 print:hidden">
+            <span>
               Materia: {asignaturaSeleccionada || 'Seleccione materia'} • {gradoSeleccionado} "{paraleloSeleccionado}" ({anioLectivoVigente || 'Sin año activo'})
-            </h2>
+            </span>
             {!esAnioCerrado && anioLectivoVigente && (
               <button
                 onClick={handleGuardarSupletorios}
                 disabled={guardando}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition disabled:opacity-50 cursor-pointer"
+                style={{ backgroundColor: '#4b4c99' }}
+                className="px-4 py-2 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
               >
-                {guardando ? 'Guardando...' : '💾 Guardar Notas Supletorias'}
+                {guardando ? 'Guardando...' : 'Guardar Notas Supletorias'}
               </button>
             )}
           </div>
 
           <div className="overflow-x-auto p-4 print:p-0">
             <table className="w-full text-xs text-left border-collapse border border-slate-200 print:border-2 print:border-slate-900">
-              <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] print:bg-slate-200 print:text-slate-950">
+              <thead className="bg-slate-50 text-slate-900 font-bold uppercase text-[10px] border-b border-slate-200 print:bg-slate-200 print:text-slate-950">
                 <tr>
-                  <th className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center w-10">Nro</th>
-                  <th className="p-2 border border-slate-200 print:border-2 print:border-slate-900 w-28">Cédula</th>
-                  <th className="p-2 border border-slate-200 print:border-2 print:border-slate-900">Apellidos y Nombres</th>
-                  <th className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center w-24 bg-amber-50">Calif. Final</th>
-                  <th className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center w-28 bg-amber-100 text-slate-900">Exa. Supletorio</th>
-                  <th className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center w-24 bg-indigo-50">Promedio Final</th>
-                  <th className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center w-20">Cualit.</th>
-                  <th className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center w-32">Observación</th>
+                  <th className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center w-12">Nro</th>
+                  <th className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 w-28">Cédula</th>
+                  <th className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900">Apellidos y Nombres</th>
+                  <th className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center w-28 bg-amber-50/50">Calif. Final</th>
+                  <th className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center w-32 bg-amber-100/50 text-slate-900">Exa. Supletorio</th>
+                  <th className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center w-28 bg-indigo-50/50">Promedio Final</th>
+                  <th className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center w-24">Cualit.</th>
+                  <th className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center w-32">Observación</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 print:divide-slate-900">
+              <tbody className="divide-y divide-slate-200 print:divide-slate-900">
                 {!anioLectivoVigente ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-amber-800 font-bold bg-amber-50">
-                      ⚠️ No hay un año lectivo activo configurado en la institución.
+                    <td colSpan={8} className="p-12 text-center text-amber-800 font-bold bg-amber-50/50 text-xs">
+                      No hay un año lectivo activo configurado en la institución.
                     </td>
                   </tr>
                 ) : estudiantes.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-500 font-medium">
+                    <td colSpan={8} className="p-12 text-center text-slate-500 font-medium text-xs">
                       No hay estudiantes matriculados en este curso y paralelo para el periodo {anioLectivoVigente}.
                     </td>
                   </tr>
@@ -546,16 +551,16 @@ export default function SupletoriosPage() {
                     const cualitativaVisual = promedioVisual >= 9 ? 'DAR' : promedioVisual >= 7 ? 'AAR' : promedioVisual >= 5 ? 'PA' : 'NA'
 
                     return (
-                      <tr key={est.id} className="hover:bg-slate-50/80">
-                        <td className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center font-bold text-slate-400 print:text-slate-800">{idx + 1}</td>
-                        <td className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-slate-600 print:text-slate-800 font-mono">{est.cedula || 'S/N'}</td>
-                        <td className="p-2 border border-slate-200 print:border-2 print:border-slate-900 font-bold text-slate-800 print:text-slate-900 uppercase">
+                      <tr key={est.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center font-bold text-slate-400 print:text-slate-800">{idx + 1}</td>
+                        <td className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-slate-600 print:text-slate-800 font-mono">{est.cedula || 'S/N'}</td>
+                        <td className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 font-bold text-slate-800 print:text-slate-900 uppercase">
                           {est.apellidos} {est.nombres}
                         </td>
-                        <td className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center font-bold text-slate-800 print:text-slate-900 bg-amber-50/50 print:bg-transparent">
+                        <td className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center font-bold text-slate-800 print:text-slate-900 bg-amber-50/30 print:bg-transparent">
                           {datos.califFinal.toFixed(2)}
                         </td>
-                        <td className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center bg-amber-100/30 print:bg-transparent">
+                        <td className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center bg-amber-100/30 print:bg-transparent">
                           <input
                             type="number"
                             step="0.01"
@@ -565,19 +570,19 @@ export default function SupletoriosPage() {
                             value={datos.exaSupletorio}
                             onChange={(e) => handleCambioSupletorio(est.id, e.target.value)}
                             placeholder="0.00"
-                            className="w-16 p-1 text-center font-bold border border-amber-300 rounded-lg bg-white text-slate-900 outline-none text-xs shadow-2xs focus:ring-2 focus:ring-amber-500 disabled:bg-slate-100 print:border-none print:bg-transparent print:w-full"
+                            className="w-16 p-1.5 text-center font-bold border border-amber-300 rounded-xl bg-white text-slate-900 outline-none text-xs shadow-2xs focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] disabled:bg-slate-100 print:border-none print:bg-transparent print:w-full"
                           />
                         </td>
-                        <td className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center font-black text-indigo-900 print:text-indigo-950 bg-indigo-50/50 print:bg-transparent">
+                        <td className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center font-bold text-[#4b4c99] print:text-indigo-950 bg-indigo-50/30 print:bg-transparent">
                           {promedioVisual.toFixed(2)}
                         </td>
-                        <td className="p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center font-bold text-slate-700 print:text-slate-900">
+                        <td className="p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center font-semibold text-slate-700 print:text-slate-900">
                           {cualitativaVisual}
                         </td>
-                        <td className={`p-2 border border-slate-200 print:border-2 print:border-slate-900 text-center font-black text-[10px] print:text-xs ${
-                          esPromovido ? 'bg-blue-100 print:bg-transparent text-blue-800 print:text-blue-700' : 'bg-red-100 print:bg-transparent text-red-800 print:text-amber-700'
+                        <td className={`p-2.5 border border-slate-200 print:border-2 print:border-slate-900 text-center font-bold text-[10px] print:text-xs uppercase ${
+                          esPromovido ? 'bg-indigo-50 print:bg-transparent text-indigo-800 print:text-indigo-700' : 'bg-rose-50 print:bg-transparent text-rose-700 print:text-amber-700'
                         }`}>
-                          {esPromovido ? 'PROMOVIDO' : 'NO PROMOVIDO'}
+                          {esPromovido ? 'Promovido' : 'No promovido'}
                         </td>
                       </tr>
                     )
@@ -587,15 +592,15 @@ export default function SupletoriosPage() {
             </table>
           </div>
 
-          {/* FIRMAS DE RESPONSABILIDAD (SOLO APARECEN AL IMPRIMIR) */}
-          <div className="hidden print:grid grid-cols-2 pt-10 pb-2 text-center text-xs text-slate-900 font-bold px-4">
+          {/* FIRMAS DE RESPONSABILIDAD (IMPRESIÓN) */}
+          <div className="hidden print:grid grid-cols-2 pt-12 pb-4 text-center text-xs text-slate-900 font-bold px-4">
             <div className="space-y-1">
-              <div className="border-t-2 border-slate-900 w-56 mx-auto pt-1 font-black">{nombreDocente}</div>
-              <div className="font-black">DOCENTE DE LA ASIGNATURA</div>
+              <div className="border-t-2 border-slate-900 w-56 mx-auto pt-1 font-bold uppercase">{nombreDocente}</div>
+              <div className="font-bold text-[11px]">DOCENTE DE LA ASIGNATURA</div>
             </div>
             <div className="space-y-1">
-              <div className="border-t-2 border-slate-900 w-56 mx-auto pt-1 font-black">{autoridadActual.nombre}</div>
-              <div className="font-black">{autoridadActual.cargo}</div>
+              <div className="border-t-2 border-slate-900 w-56 mx-auto pt-1 font-bold uppercase">{autoridadActual.nombre}</div>
+              <div className="font-bold text-[11px]">{autoridadActual.cargo}</div>
             </div>
           </div>
 

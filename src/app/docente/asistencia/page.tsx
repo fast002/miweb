@@ -23,7 +23,8 @@ export default function RegistroAsistenciaPage() {
   // Asignaciones del docente estrictamente del año vigente
   const [misAsignaciones, setMisAsignaciones] = useState<any[]>([])
 
-  // Filtros principales
+  // Filtros principales (Incluyendo Jornada)
+  const [jornadaFiltro, setJornadaFiltro] = useState('MATUTINA')
   const [grado, setGrado] = useState('')
   const [paralelo, setParalelo] = useState('')
   const [asignatura, setAsignatura] = useState('')
@@ -37,13 +38,6 @@ export default function RegistroAsistenciaPage() {
 
   const esDocenteDeAula = ['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB', '5to Grado EGB', '6to Grado EGB', '7mo Grado EGB'].includes(grado)
 
-  // Función para cerrar sesión
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
-  }
-
-  // 1. Cargar perfil docente / institución con identificación clara y año dinámico desde periodos_disponibles
   useEffect(() => {
     async function init() {
       try {
@@ -83,7 +77,6 @@ export default function RegistroAsistenciaPage() {
           }
         }
 
-        // Cargar carga horaria asignada estrictamente del año lectivo vigente detectado
         if (anioActivo) {
           const { data: asigs } = await supabase
             .from('docente_asignaciones')
@@ -93,14 +86,18 @@ export default function RegistroAsistenciaPage() {
 
           if (asigs && asigs.length > 0) {
             setMisAsignaciones(asigs)
-            setGrado(asigs[0].grado_curso)
-            setParalelo(asigs[0].paralelo)
-            setAsignatura(asigs[0].asignatura)
+            const primeraJornada = asigs[0].jornada || 'MATUTINA'
+            setJornadaFiltro(primeraJornada)
+            
+            const gradosDeJornada = asigs.filter(a => (a.jornada || 'MATUTINA') === primeraJornada)
+            if (gradosDeJornada.length > 0) {
+              setGrado(gradosDeJornada[0].grado_curso)
+              setParalelo(gradosDeJornada[0].paralelo)
+              setAsignatura(gradosDeJornada[0].asignatura)
+            }
           } else {
             setMisAsignaciones([])
           }
-        } else {
-          setMisAsignaciones([])
         }
       } catch (err) {
         console.error(err)
@@ -111,7 +108,6 @@ export default function RegistroAsistenciaPage() {
     init()
   }, [router])
 
-  // Manejar cambio dinámico del periodo desde la lógica interna
   const handleCambiarPeriodo = async (nuevoAnio: string) => {
     setAnioLectivoVigente(nuevoAnio)
     if (docenteId && nuevoAnio) {
@@ -123,6 +119,8 @@ export default function RegistroAsistenciaPage() {
 
       if (asigs && asigs.length > 0) {
         setMisAsignaciones(asigs)
+        const primeraJornada = asigs[0].jornada || 'MATUTINA'
+        setJornadaFiltro(primeraJornada)
         setGrado(asigs[0].grado_curso)
         setParalelo(asigs[0].paralelo)
         setAsignatura(asigs[0].asignatura)
@@ -135,7 +133,20 @@ export default function RegistroAsistenciaPage() {
     }
   }
 
-  // 2. Cargar asignaturas según el subnivel y carga horaria del año vigente
+  const handleJornadaChange = (nuevaJornada: string) => {
+    setJornadaFiltro(nuevaJornada)
+    const asigsDeJornada = misAsignaciones.filter(a => (a.jornada || 'MATUTINA') === nuevaJornada)
+    if (asigsDeJornada.length > 0) {
+      setGrado(asigsDeJornada[0].grado_curso)
+      setParalelo(asigsDeJornada[0].paralelo)
+      setAsignatura(asigsDeJornada[0].asignatura)
+    } else {
+      setGrado('')
+      setParalelo('')
+      setAsignatura('')
+    }
+  }
+
   useEffect(() => {
     async function cargarAsignaturasConfiguradas() {
       if (!institucionId || !grado) return
@@ -146,10 +157,9 @@ export default function RegistroAsistenciaPage() {
         return
       }
 
-      // Filtrar materias asignadas al docente para este grado específico en el año vigente
       const materiasDelGrado = Array.from(new Set(
         misAsignaciones
-          .filter(a => a.grado_curso === grado && a.paralelo === paralelo)
+          .filter(a => (a.jornada || 'MATUTINA') === jornadaFiltro && a.grado_curso === grado && a.paralelo === paralelo)
           .map(a => a.asignatura)
       ))
 
@@ -160,11 +170,10 @@ export default function RegistroAsistenciaPage() {
       }
     }
     cargarAsignaturasConfiguradas()
-  }, [grado, paralelo, institucionId, esDocenteDeAula, misAsignaciones, asignatura])
+  }, [grado, paralelo, institucionId, esDocenteDeAula, misAsignaciones, asignatura, jornadaFiltro])
 
   const esAnioCerrado = anosCerrados.includes(anioLectivoVigente)
 
-  // 3. Cargar estudiantes y asistencias estrictamente del año vigente
   const cargarDatos = useCallback(async () => {
     if (!institucionId || !asignatura || !grado || !anioLectivoVigente) return
     
@@ -172,6 +181,7 @@ export default function RegistroAsistenciaPage() {
       .from('estudiantes')
       .select('*')
       .eq('institucion_id', institucionId)
+      .eq('jornada', jornadaFiltro)
       .eq('grado_curso', grado)
       .eq('paralelo', paralelo)
       .eq('anio_lectivo', anioLectivoVigente)
@@ -193,14 +203,13 @@ export default function RegistroAsistenciaPage() {
       asists?.forEach(a => mapa[a.estudiante_id] = a.estado)
       setAsistenciaMap(mapa)
     }
-  }, [institucionId, grado, paralelo, asignatura, fecha, anioLectivoVigente])
+  }, [institucionId, jornadaFiltro, grado, paralelo, asignatura, fecha, anioLectivoVigente])
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
 
-  // 4. Guardar asistencia con el año vigente
   const guardarAsistencia = async (estId: string, estado: string) => {
     if (esAnioCerrado) {
-      alert('🔒 Este año lectivo está cerrado. No se puede modificar la asistencia.')
+      alert('Este año lectivo está cerrado. No se puede modificar la asistencia.')
       return
     }
 
@@ -219,225 +228,267 @@ export default function RegistroAsistenciaPage() {
     setGuardandoId(null)
   }
 
-  // Estilos limpios y profesionales para los botones de asistencia
   const getBotonEstilo = (estadoActual: string, estadoBoton: string) => {
     const s = estadoActual === estadoBoton
-    const base = "px-3 py-1.5 rounded-xl text-xs transition border font-bold shadow-xs "
-    if (estadoBoton === 'Presente') return s ? base + "bg-emerald-700 text-white border-emerald-900 shadow-sm" : base + "bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100"
-    if (estadoBoton === 'Atraso') return s ? base + "bg-amber-600 text-white border-amber-800 shadow-sm" : base + "bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"
-    if (estadoBoton === 'Falta Justificada') return s ? base + "bg-blue-700 text-white border-blue-900 shadow-sm" : base + "bg-blue-50 text-blue-900 border-blue-300 hover:bg-blue-100"
-    return s ? base + "bg-red-700 text-white border-red-900 shadow-sm" : base + "bg-red-50 text-red-900 border-red-300 hover:bg-red-100"
+    const base = "px-3 py-1.5 rounded-xl text-xs transition border font-bold shadow-2xs cursor-pointer "
+    if (estadoBoton === 'Presente') return s ? base + "bg-emerald-700 text-white border-emerald-800 shadow-xs" : base + "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+    if (estadoBoton === 'Atraso') return s ? base + "bg-amber-600 text-white border-amber-700 shadow-xs" : base + "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+    if (estadoBoton === 'Falta Justificada') return s ? base + "bg-indigo-700 text-white border-indigo-800 shadow-xs" : base + "bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100"
+    return s ? base + "bg-rose-700 text-white border-rose-800 shadow-xs" : base + "bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100"
   }
 
   if (cargando) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center font-bold text-slate-600 text-sm">
-        Cargando módulo de asistencia...
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans selection:bg-[#4b4c99] selection:text-white">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Módulo de Asistencia...</p>
+        </div>
       </div>
     )
   }
 
-  const gradosUnicos = Array.from(new Set(misAsignaciones.map(a => a.grado_curso)))
-  const paralelosPermitidos = Array.from(new Set(misAsignaciones.filter(a => a.grado_curso === grado).map(a => a.paralelo)))
+  const jornadasUnicas = Array.from(new Set(misAsignaciones.map(a => a.jornada || 'MATUTINA')))
+  const gradosUnicos = Array.from(new Set(misAsignaciones.filter(a => (a.jornada || 'MATUTINA') === jornadaFiltro).map(a => a.grado_curso)))
+  const paralelosPermitidos = Array.from(new Set(misAsignaciones.filter(a => (a.jornada || 'MATUTINA') === jornadaFiltro && a.grado_curso === grado).map(a => a.paralelo)))
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-
-        {/* ENCABEZADO INSTITUCIONAL Y TÍTULO DE UBICACIÓN */}
-        <div className="bg-white p-6 rounded-2xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <div className="text-[10px] font-black text-indigo-700 uppercase tracking-widest mb-1">
-              PANEL DOCENTE • MÓDULO DE ASISTENCIA ACADÉMICA ({anioLectivoVigente || 'Sin año activo'})
-            </div>
-            <h1 className="text-2xl font-black text-slate-900">
-              Control y Registro de Asistencia Diaria
-            </h1>
-            <p className="text-xs text-slate-600 font-bold mt-1">
-              {nombreInstitucion} • Docente: <span className="text-slate-900">{nombreDocente}</span> ({rolUsuario.toUpperCase()})
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 items-center">
-            <button
-              onClick={() => router.push('/docente/asistencia/reportes')}
-              className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-black text-xs rounded-xl border border-indigo-200 transition shadow-sm"
-            >
-              Ver Consolidado y Reportes
-            </button>
-          </div>
+    <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans">
+      
+      {/* ENCABEZADO INSTITUCIONAL */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
+          >
+            Control Académico
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            Control y Registro de Asistencia Diaria
+          </h1>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+            {nombreInstitucion} • Docente: <span className="text-slate-700">{nombreDocente}</span> ({rolUsuario.toUpperCase()})
+          </p>
         </div>
 
-        {/* AVISO SI NO HAY AÑO ACTIVO */}
-        {!anioLectivoVigente && !cargando && (
-          <div className="bg-amber-50 border border-amber-300 p-4 rounded-2xl text-amber-900 text-xs font-bold">
-            ⚠️ La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
-          </div>
-        )}
-
-        {/* AVISO SI EL PERIODO VIGENTE ESTÁ CERRADO */}
-        {esAnioCerrado && anioLectivoVigente && (
-          <div className="bg-red-50 border border-red-200 p-4 rounded-2xl text-red-900 text-xs font-bold flex items-center justify-between">
-            <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. El registro de asistencia está en modo de solo lectura.</span>
-            <span className="bg-red-200 px-2.5 py-1 rounded">Periodo Cerrado</span>
-          </div>
-        )}
-
-        {/* FILTROS PRINCIPALES */}
-        <div className="bg-white p-4 rounded-2xl border shadow-sm grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-          <div>
-            <label className="block text-[10px] font-black text-slate-700 uppercase mb-1">Fecha de Clase</label>
-            <input 
-              type="date" 
-              value={fecha} 
-              onChange={(e) => setFecha(e.target.value)}
-              className="w-full p-2.5 border-2 rounded-xl text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black text-slate-700 uppercase mb-1">Grado / Curso</label>
-            <select
-              value={grado}
-              onChange={(e) => {
-                const nuevoGrado = e.target.value
-                setGrado(nuevoGrado)
-                const par = misAsignaciones.find(a => a.grado_curso === nuevoGrado)?.paralelo || 'A'
-                setParalelo(par)
-              }}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-            >
-              {gradosUnicos.length === 0 ? (
-                <option value="">Sin carga asignada</option>
-              ) : (
-                gradosUnicos.map(g => <option key={g} value={g}>{g}</option>)
-              )}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black text-slate-700 uppercase mb-1">Paralelo</label>
-            <select
-              value={paralelo}
-              onChange={(e) => setParalelo(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-            >
-              {paralelosPermitidos.map(p => (
-                <option key={p} value={p}>Paralelo {p}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black text-slate-700 uppercase mb-1">Asignatura</label>
-            {esDocenteDeAula ? (
-              <input
-                type="text"
-                disabled
-                value="Asistencia General (Aula)"
-                className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-500 bg-slate-200 cursor-not-allowed"
-              />
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-300 flex items-center gap-2 shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-500 uppercase">Periodo:</span>
+            {periodosDisponibles.length === 0 ? (
+              <span className="text-xs font-bold text-amber-700 italic">Sin años creados</span>
             ) : (
               <select
-                value={asignatura}
-                onChange={(e) => setAsignatura(e.target.value)}
-                className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50 outline-none"
+                value={anioLectivoVigente}
+                onChange={(e) => handleCambiarPeriodo(e.target.value)}
+                style={{ color: '#4b4c99' }}
+                className="bg-transparent text-xs font-bold outline-none cursor-pointer"
               >
-                {listaAsignaturas.map(mat => (
-                  <option key={mat} value={mat}>{mat}</option>
+                {periodosDisponibles.map(p => (
+                  <option key={p} value={p} className="text-slate-900 font-bold bg-white">{p} {anosCerrados.includes(p) ? ' (Cerrado)' : ''}</option>
                 ))}
               </select>
             )}
           </div>
 
-          <div>
-            <label className="block text-[10px] font-black text-indigo-700 uppercase mb-1">Trimestre</label>
-            <select
-              value={trimestre}
-              onChange={(e) => setTrimestre(e.target.value)}
-              className="w-full p-2.5 border-2 border-indigo-400 rounded-xl text-xs font-black text-indigo-900 bg-indigo-50 outline-none"
-            >
-              <option value="Trimestre 1">Trimestre 1</option>
-              <option value="Trimestre 2">Trimestre 2</option>
-              <option value="Trimestre 3">Trimestre 3</option>
-            </select>
-          </div>
+          <button
+            onClick={() => router.push('/docente/asistencia/reportes')}
+            style={{ backgroundColor: '#4b4c99' }}
+            className="px-4 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer"
+          >
+            Ver Consolidado y Reportes
+          </button>
+        </div>
+      </div>
+
+      {/* AVISO SI NO HAY AÑO ACTIVO */}
+      {!anioLectivoVigente && !cargando && (
+        <div 
+          style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
+          className="border p-4 rounded-2xl text-xs font-bold shadow-2xs"
+        >
+          La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
+        </div>
+      )}
+
+      {/* AVISO SI EL PERIODO VIGENTE ESTÁ CERRADO */}
+      {esAnioCerrado && anioLectivoVigente && (
+        <div 
+          style={{ backgroundColor: 'rgba(222, 88, 96, 0.08)', borderColor: 'rgba(222, 88, 96, 0.3)', color: '#9b2c2c' }}
+          className="border p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-2xs"
+        >
+          <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. El registro de asistencia está en modo de solo lectura.</span>
+          <span className="bg-rose-200/80 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-900">Modo Archivo</span>
+        </div>
+      )}
+
+      {/* FILTROS PRINCIPALES */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3.5 text-xs">
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Fecha de Clase</label>
+          <input 
+            type="date" 
+            value={fecha} 
+            onChange={(e) => setFecha(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs"
+          />
         </div>
 
-        {/* TABLA DE ASISTENCIA */}
-        <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-          <div className="p-4 bg-slate-100 border-b flex justify-between items-center">
-            <span className="text-xs font-black uppercase text-slate-700">
-              Nómina Estudiantil: {grado} "{paralelo}" — {esDocenteDeAula ? 'Registro General' : asignatura} ({anioLectivoVigente || 'Sin periodo'})
-            </span>
-            <span className="text-[10px] font-bold text-slate-500">
-              Total Estudiantes: {estudiantes.length}
-            </span>
-          </div>
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Jornada</label>
+          <select
+            value={jornadaFiltro}
+            onChange={(e) => handleJornadaChange(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs"
+          >
+            {jornadasUnicas.map(j => (
+              <option key={j} value={j} className="text-slate-900 font-bold bg-white">{j}</option>
+            ))}
+          </select>
+        </div>
 
-          {!anioLectivoVigente ? (
-            <div className="p-12 text-center text-amber-800 font-bold text-xs bg-amber-50">
-              ⚠️ No hay un año lectivo activo configurado en la institución.
-            </div>
-          ) : misAsignaciones.length === 0 ? (
-            <div className="p-12 text-center text-amber-800 font-bold text-xs bg-amber-50">
-              ⚠️ No tienes carga horaria asignada para el periodo vigente ({anioLectivoVigente}).
-            </div>
-          ) : estudiantes.length === 0 ? (
-            <div className="p-12 text-center text-slate-500 font-bold text-xs">
-              No hay estudiantes activos registrados en este curso y paralelo para el periodo {anioLectivoVigente}.
-            </div>
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Grado / Curso</label>
+          <select
+            value={grado}
+            onChange={(e) => {
+              const nuevoGrado = e.target.value
+              setGrado(nuevoGrado)
+              const par = misAsignaciones.find(a => (a.jornada || 'MATUTINA') === jornadaFiltro && a.grado_curso === nuevoGrado)?.paralelo || 'A'
+              setParalelo(par)
+            }}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs"
+          >
+            {gradosUnicos.length === 0 ? (
+              <option value="" className="text-slate-900 font-bold bg-white">Sin carga asignada</option>
+            ) : (
+              gradosUnicos.map(g => <option key={g} value={g} className="text-slate-900 font-bold bg-white">{g}</option>)
+            )}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Paralelo</label>
+          <select
+            value={paralelo}
+            onChange={(e) => setParalelo(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs"
+          >
+            {paralelosPermitidos.map(p => (
+              <option key={p} value={p} className="text-slate-900 font-bold bg-white">Paralelo {p}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Asignatura</label>
+          {esDocenteDeAula ? (
+            <input
+              type="text"
+              disabled
+              value="Asistencia General (Aula)"
+              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-500 bg-slate-100 cursor-not-allowed shadow-2xs"
+            />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead className="bg-slate-200 text-slate-900 font-black uppercase text-[10px]">
-                  <tr>
-                    <th className="p-3 w-12 text-center">#</th>
-                    <th className="p-3 min-w-[250px]">Estudiante</th>
-                    <th className="p-3 text-center">Control de Asistencia (Clic para marcar)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {estudiantes.map((est, idx) => {
-                    const estadoActual = asistenciaMap[est.id] || 'Presente'
-                    const estaGuardando = guardandoId === est.id
-
-                    return (
-                      <tr key={est.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-bold text-slate-600 text-center">{idx + 1}</td>
-                        <td className="p-3 font-black text-slate-900 text-sm whitespace-nowrap">
-                          {est.apellidos} {est.nombres}
-                        </td>
-                        <td className="p-3 text-center">
-                          <div className="flex justify-center gap-2 flex-wrap">
-                            {['Presente', 'Atraso', 'Falta Justificada', 'Falta Injustificada'].map((estado) => (
-                              <button
-                                key={estado}
-                                disabled={estaGuardando || esAnioCerrado}
-                                onClick={() => guardarAsistencia(est.id, estado)}
-                                className={`px-3 py-1.5 rounded-xl text-xs transition ${getBotonEstilo(asistenciaMap[est.id], estado)} disabled:opacity-50`}
-                              >
-                                {estado === 'Presente' && '✔ Presente'}
-                                {estado === 'Atraso' && '⏱ Atraso'}
-                                {estado === 'Falta Justificada' && '📄 Falta Just.'}
-                                {estado === 'Falta Injustificada' && '❌ Falta Injust.'}
-                              </button>
-                            ))}
-                          </div>
-                          {estaGuardando && (
-                            <span className="block text-[10px] text-indigo-700 font-bold mt-1">Guardando...</span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <select
+              value={asignatura}
+              onChange={(e) => setAsignatura(e.target.value)}
+              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs"
+            >
+              {listaAsignaturas.map(mat => (
+                <option key={mat} value={mat} className="text-slate-900 font-bold bg-white">{mat}</option>
+              ))}
+            </select>
           )}
         </div>
 
+        <div>
+          <label className="block text-[10px] font-bold text-[#4b4c99] uppercase mb-1.5">Trimestre</label>
+          <select
+            value={trimestre}
+            onChange={(e) => setTrimestre(e.target.value)}
+            className="w-full p-3 border-2 border-indigo-300 rounded-xl text-xs font-black text-indigo-900 bg-indigo-50 outline-none shadow-2xs"
+          >
+            <option value="Trimestre 1" className="text-slate-900 font-bold bg-white">Trimestre 1</option>
+            <option value="Trimestre 2" className="text-slate-900 font-bold bg-white">Trimestre 2</option>
+            <option value="Trimestre 3" className="text-slate-900 font-bold bg-white">Trimestre 3</option>
+          </select>
+        </div>
       </div>
+
+      {/* TABLA DE ASISTENCIA */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs font-bold uppercase text-slate-900">
+          <span>
+            Nómina Estudiantil [{jornadaFiltro}]: {grado} "{paralelo}" — {esDocenteDeAula ? 'Registro General' : asignatura} ({anioLectivoVigente || 'Sin periodo'})
+          </span>
+          <span className="text-[10px] text-slate-500">
+            Total Estudiantes: {estudiantes.length}
+          </span>
+        </div>
+
+        {!anioLectivoVigente ? (
+          <div className="p-12 text-center text-amber-800 font-bold text-xs bg-amber-50/50">
+            No hay un año lectivo activo configurado en la institución.
+          </div>
+        ) : misAsignaciones.length === 0 ? (
+          <div className="p-12 text-center text-amber-800 font-bold text-xs bg-amber-50/50">
+            No tienes carga horaria asignada para el periodo vigente ({anioLectivoVigente}).
+          </div>
+        ) : estudiantes.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 font-medium text-xs">
+            No hay estudiantes activos registrados en esta jornada, curso y paralelo para el periodo {anioLectivoVigente}.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-slate-50 text-slate-900 font-bold uppercase text-[10px] border-b border-slate-200">
+                <tr>
+                  <th className="p-3 w-12 text-center">#</th>
+                  <th className="p-3 min-w-[250px]">Estudiante</th>
+                  <th className="p-3 text-center">Control de Asistencia (Clic para marcar)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {estudiantes.map((est, idx) => {
+                  const estadoActual = asistenciaMap[est.id] || 'Presente'
+                  const estaGuardando = guardandoId === est.id
+
+                  return (
+                    <tr key={est.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-bold text-slate-400 text-center">{idx + 1}</td>
+                      <td className="p-3 font-bold text-slate-800 whitespace-nowrap">
+                        {est.apellidos} {est.nombres}
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="flex justify-center gap-2 flex-wrap">
+                          {['Presente', 'Atraso', 'Falta Justificada', 'Falta Injustificada'].map((estado) => (
+                            <button
+                              key={estado}
+                              disabled={estaGuardando || esAnioCerrado}
+                              onClick={() => guardarAsistencia(est.id, estado)}
+                              className={getBotonEstilo(asistenciaMap[est.id], estado) + " disabled:opacity-50"}
+                            >
+                              {estado === 'Presente' && 'Presente'}
+                              {estado === 'Atraso' && 'Atraso'}
+                              {estado === 'Falta Justificada' && 'Falta Just.'}
+                              {estado === 'Falta Injustificada' && 'Falta Injust.'}
+                            </button>
+                          ))}
+                        </div>
+                        {estaGuardando && (
+                          <span className="block text-[10px] text-[#4b4c99] font-bold mt-1">Guardando...</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
     </div>
   )
 }

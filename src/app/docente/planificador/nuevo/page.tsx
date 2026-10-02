@@ -575,7 +575,7 @@ Debes responder exclusivamente en un formato JSON limpio (sin bloques de código
                     disabled={generandoIa || esAnioCerrado || !anioLectivoActivo}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 rounded-lg whitespace-nowrap transition disabled:opacity-50 text-xs shadow flex items-center gap-1"
                   >
-                    ✨ {generandoIa ? 'Redactando...' : 'Generar con IA'}
+                    {generandoIa ? 'Redactando...' : 'Generar con IA'}
                   </button>
                 </div>
               </div>
@@ -968,7 +968,7 @@ Debes responder exclusivamente en un formato JSON limpio (sin bloques de código
                 disabled={guardando} 
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow transition disabled:opacity-50 text-xs"
               >
-                {guardando ? 'Guardando...' : planIdEditar ? '💾 Guardar Cambios Correctivos' : '💾 Guardar Planificación'}
+                {guardando ? 'Guardando...' : planIdEditar ? 'Guardar Cambios Correctivos' : 'Guardar Planificación'}
               </button>
             </div>
           )}

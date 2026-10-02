@@ -123,117 +123,125 @@ export default function InspectorPadresPage() {
 
   if (cargando) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-slate-600 font-medium">Cargando Módulo de Representantes...</p>
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans selection:bg-[#4b4c99] selection:text-white">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Módulo de Representantes...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans">
 
-        {/* Encabezado Principal */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-[10px] font-black uppercase">
-              Panel de Inspección • {nombreInstitucion}
-            </span>
-            <h1 className="text-xl font-black text-slate-900 mt-1">
-              Visualización y Control de Cuentas de Representantes
-            </h1>
+      {/* ENCABEZADO PRINCIPAL */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
+          >
+            Panel de Inspección • {nombreInstitucion}
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            Visualización y Control de Cuentas de Representantes
+          </h1>
+        </div>
+      </div>
+
+      {mensaje && (
+        <div className="p-4 bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-2xl text-xs font-bold shadow-2xs flex justify-between items-center">
+          <span>{mensaje}</span>
+          <button onClick={() => setMensaje('')} className="text-indigo-900 font-bold ml-4 cursor-pointer">✕</button>
+        </div>
+      )}
+
+      {/* TABLA: Representantes Registrados en el Plantel */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div 
+          style={{ backgroundColor: '#4b4c99' }}
+          className="p-4 text-xs font-bold uppercase text-white tracking-wider shadow-2xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
+        >
+          <span>Representantes Registrados en el Plantel</span>
+          <div className="w-full sm:w-72">
+            <input
+              type="text"
+              value={filtroTexto}
+              onChange={(e) => setFiltroTexto(e.target.value)}
+              placeholder="Buscar por nombre, cédula o hijo..."
+              className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs placeholder:text-slate-400 placeholder:font-normal"
+            />
           </div>
         </div>
 
-        {mensaje && (
-          <div className="p-4 bg-blue-50 text-blue-900 rounded-xl text-sm font-medium border border-blue-200 shadow-xs flex justify-between items-center">
-            <span>{mensaje}</span>
-            <button onClick={() => setMensaje('')} className="text-blue-900 font-bold ml-4">✕</button>
-          </div>
-        )}
-
-        {/* TABLA: Representantes Registrados en el Plantel */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Representantes Registrados en el Plantel</h3>
-            <div className="w-full sm:w-72">
-              <input
-                type="text"
-                value={filtroTexto}
-                onChange={(e) => setFiltroTexto(e.target.value)}
-                placeholder="🔍 Buscar por nombre, cédula o hijo..."
-                className="w-full px-3 py-2 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left border-collapse border border-slate-200">
-              <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px]">
-                <tr>
-                  <th className="p-3 border">Representante (Datos)</th>
-                  <th className="p-3 border">Cédula / Teléfono</th>
-                  <th className="p-3 border">Estudiantes Vinculados (Hijos)</th>
-                  <th className="p-3 border text-center">Estado / Bloqueo</th>
-                  <th className="p-3 border text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {padresFiltrados.map((p) => {
-                  const nombreCompletoRep = `${p.apellidos || ''} ${p.nombres || ''}`.trim() || 'Representante'
-                  return (
-                    <tr key={p.id} className="hover:bg-slate-50">
-                      <td className="p-3 border">
-                        <span className="block font-bold text-slate-900">{nombreCompletoRep}</span>
-                        <span className="block text-[10px] text-slate-500">{p.email}</span>
-                      </td>
-                      <td className="p-3 border">
-                        <span className="block font-semibold text-slate-800">Cédula: {p.cedula}</span>
-                        <span className="block text-slate-600">Telf: {p.telefono}</span>
-                      </td>
-                      <td className="p-3 border">
-                        <ul className="space-y-1">
-                          {p.hijos.map((h: any) => (
-                            <li key={h.vinculo_id} className="bg-slate-50 px-2 py-1.5 rounded border border-slate-200">
-                              <span className="font-bold text-slate-800">{h.nombreCompleto} <span className="text-[10px] text-slate-500">({h.cursoParalelo})</span></span>
-                              <span className="block text-[9px] text-blue-600 font-black uppercase">Parentesco: {h.parentesco}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </td>
-                      <td className="p-3 border text-center">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${p.activo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                          {p.activo !== false ? 'ACTIVO' : 'INACTIVO / BLOQUEADO'}
-                        </span>
-                      </td>
-                      <td className="p-3 border text-center space-x-1 whitespace-nowrap">
-                        <button
-                          onClick={() => handleToggleActivo(p.user_id, p.activo !== false)}
-                          className={`px-3 py-1 font-bold rounded text-[10px] ${p.activo !== false ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'}`}
-                          title="Activar o bloquear cuenta"
-                        >
-                          {p.activo !== false ? 'Inactivar' : 'Activar'}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-                {padresFiltrados.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-400 font-medium">
-                      No hay representantes registrados en este plantel.
+        <div className="overflow-x-auto p-4">
+          <table className="w-full text-xs text-left border-collapse border border-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th style={{ color: '#4b4c99' }} className="p-3.5 font-extrabold uppercase text-[10px] border border-slate-200">Representante (Datos)</th>
+                <th style={{ color: '#4b4c99' }} className="p-3.5 font-extrabold uppercase text-[10px] border border-slate-200">Cédula / Teléfono</th>
+                <th style={{ color: '#4b4c99' }} className="p-3.5 font-extrabold uppercase text-[10px] border border-slate-200">Estudiantes Vinculados (Hijos)</th>
+                <th style={{ color: '#4b4c99' }} className="p-3.5 font-extrabold uppercase text-[10px] border border-slate-200 text-center">Estado / Bloqueo</th>
+                <th style={{ color: '#4b4c99' }} className="p-3.5 font-extrabold uppercase text-[10px] border border-slate-200 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {padresFiltrados.map((p) => {
+                const nombreCompletoRep = `${p.apellidos || ''} ${p.nombres || ''}`.trim() || 'Representante'
+                return (
+                  <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="p-3.5 border border-slate-200">
+                      <span className="block font-bold text-slate-800">{nombreCompletoRep}</span>
+                      <span className="block text-[10px] text-slate-500">{p.email}</span>
+                    </td>
+                    <td className="p-3.5 border border-slate-200">
+                      <span className="block font-bold text-slate-800">Cédula: {p.cedula}</span>
+                      <span className="block text-slate-600 font-medium">Telf: {p.telefono}</span>
+                    </td>
+                    <td className="p-3.5 border border-slate-200">
+                      <ul className="space-y-1.5">
+                        {p.hijos.map((h: any) => (
+                          <li key={h.vinculo_id} className="bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+                            <span className="font-bold text-slate-800">{h.nombreCompleto} <span className="text-[10px] text-slate-500 font-normal">({h.cursoParalelo})</span></span>
+                            <span className="block text-[9px] text-[#4b4c99] font-black uppercase mt-0.5">Parentesco: {h.parentesco}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                    <td className="p-3.5 border border-slate-200 text-center">
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase shadow-2xs ${p.activo !== false ? 'bg-indigo-50 text-indigo-800 border border-indigo-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+                        {p.activo !== false ? 'Activo' : 'Inactivo / Bloqueado'}
+                      </span>
+                    </td>
+                    <td className="p-3.5 border border-slate-200 text-center whitespace-nowrap">
+                      <button
+                        onClick={() => handleToggleActivo(p.user_id, p.activo !== false)}
+                        className={`px-3.5 py-2 font-bold rounded-xl text-xs transition shadow-2xs cursor-pointer ${
+                          p.activo !== false 
+                            ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200' 
+                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'
+                        }`}
+                        title="Activar o bloquear cuenta"
+                      >
+                        {p.activo !== false ? 'Inactivar' : 'Activar'}
+                      </button>
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                )
+              })}
+              {padresFiltrados.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-12 text-center text-slate-500 font-medium text-xs">
+                    No hay representantes registrados en este plantel.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-
       </div>
+
     </div>
   )
 }

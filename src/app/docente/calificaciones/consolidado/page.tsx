@@ -14,28 +14,22 @@ export default function ConsolidadoAnualPage() {
   const [docenteId, setDocenteId] = useState('')
   const [nombreDocente, setNombreDocente] = useState('')
 
-  // Control Dinámico de Autoridades (Rector / Vicerrector) de la misma Institución
   const [autoridadesDisponibles, setAutoridadesDisponibles] = useState<{ nombre: string; cargo: string }[]>([])
   const [autoridadSeleccionadaIndex, setAutoridadSeleccionadaIndex] = useState(0)
 
-  // Control Dinámico de Años Lectivos Propios de la Institución
   const [anioLectivoVigente, setAnioLectivoVigente] = useState('')
   const [anosCerrados, setAnosCerrados] = useState<string[]>([])
 
-  // Asignaciones permitidas por el Rector para el año vigente
   const [asignaciones, setAsignaciones] = useState<any[]>([])
   
-  // Filtros
   const [jornadaSeleccionada, setJornadaSeleccionada] = useState('MATUTINA')
   const [gradoSeleccionado, setGradoSeleccionado] = useState('')
   const [paraleloSeleccionado, setParaleloSeleccionado] = useState('')
   const [asignaturaSeleccionada, setAsignaturaSeleccionada] = useState('')
 
-  // Datos de la tabla
   const [estudiantes, setEstudiantes] = useState<any[]>([])
   const [consolidadoMap, setConsolidadoMap] = useState<{ [estudianteId: string]: { t1: number | null; t2: number | null; t3: number | null } }>({})
 
-  // Modal de impresión elegante / Dashboard
   const [mostrarModalImpresion, setMostrarModalImpresion] = useState(false)
 
   useEffect(() => {
@@ -89,7 +83,6 @@ export default function ConsolidadoAnualPage() {
           }
         }
 
-        // Cargar autoridades (Rector o Vicerrector) pertenecientes a la misma institución con su rol real
         const { data: autoridadesData } = await supabase
           .from('docentes')
           .select('nombres, apellidos, rol')
@@ -115,7 +108,6 @@ export default function ConsolidadoAnualPage() {
           }
         }
 
-        // Cargar asignaciones estrictamente del año lectivo vigente detectado
         if (anioActivo) {
           const { data: asigs } = await supabase
             .from('docente_asignaciones')
@@ -167,7 +159,6 @@ export default function ConsolidadoAnualPage() {
         setEstudiantes(estData)
         const estIds = estData.map(e => e.id)
 
-        // Cargar calificaciones filtradas estrictamente por el año vigente
         const { data: calData } = await supabase
           .from('calificaciones')
           .select('*')
@@ -214,13 +205,13 @@ export default function ConsolidadoAnualPage() {
     }
   }
 
+  // ESTADO DE CARGA LIMPIO E INSTITUCIONAL (SIN DESTELLOS OSCUROS)
   if (cargando) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 relative overflow-hidden">
-        <div className="absolute w-96 h-96 bg-[#4b4c99]/20 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
-        <div className="text-center relative z-10 bg-white/10 backdrop-blur-2xl p-8 rounded-3xl border border-white/20 shadow-2xl">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#f6c358] border-t-transparent mx-auto mb-4"></div>
-          <p className="text-white font-bold text-xs uppercase tracking-wider">Cargando Consolidado Anual...</p>
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Consolidado Anual...</p>
         </div>
       </div>
     )
@@ -283,19 +274,21 @@ export default function ConsolidadoAnualPage() {
     window.print()
   }
 
-  // Autoridad activa seleccionada
   const autoridadActual = autoridadesDisponibles[autoridadSeleccionadaIndex] || { nombre: 'RAUL PINOS', cargo: 'VICERRECTOR' }
 
   return (
-    <div className="space-y-6 pb-12 selection:bg-[#f6c358] selection:text-slate-950">
+    <div className="space-y-6 pb-12 selection:bg-[#4b4c99]/20 selection:text-[#4b4c99] font-sans">
 
-      {/* ENCABEZADO PRINCIPAL LIQUID GLASS */}
-      <div className="bg-white/80 backdrop-blur-2xl p-6 md:p-8 rounded-[32px] border border-white/80 shadow-[0_8px_30px_0_rgba(75,76,153,0.08)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* ENCABEZADO INSTITUCIONAL */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <span className="bg-[#4b4c99]/10 text-[#4b4c99] font-bold text-[10px] px-3.5 py-1.5 rounded-full uppercase tracking-wider border border-[#4b4c99]/20">
-            {anioLectivoVigente ? `Periodo Lectivo: ${anioLectivoVigente}` : 'Sin periodo activo'}
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block"
+          >
+            {anioLectivoVigente ? `Año Lectivo Vigente: ${anioLectivoVigente}` : 'Sin periodo activo'}
           </span>
-          <h1 className="text-xl md:text-2xl font-black text-slate-800 mt-2.5 uppercase tracking-tight">
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 mt-2 tracking-tight">
             Consolidado Anual de Calificaciones
           </h1>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
@@ -303,15 +296,13 @@ export default function ConsolidadoAnualPage() {
           </p>
         </div>
 
-        {/* 🎨 BOTONES CON LA PALETA DE MARCA OFICIAL */}
-        <div className="flex gap-2.5 flex-wrap items-center">
-          {/* SELECTOR DE AUTORIDAD / FIRMANTE */}
-          <div className="flex items-center gap-1.5 bg-white/80 border border-slate-200 px-3 py-2 rounded-2xl shadow-2xs">
-            <label className="text-[10px] font-black text-slate-600 uppercase">Firma:</label>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-300 flex items-center gap-2 shadow-2xs">
+            <label className="text-[10px] font-bold text-slate-700 uppercase">Firma:</label>
             <select
               value={autoridadSeleccionadaIndex}
               onChange={(e) => setAutoridadSeleccionadaIndex(Number(e.target.value))}
-              className="text-xs font-bold text-slate-800 bg-transparent outline-none cursor-pointer"
+              className="text-xs font-bold text-slate-900 bg-transparent outline-none cursor-pointer"
             >
               {autoridadesDisponibles.length === 0 ? (
                 <option value={0}>RAUL PINOS (VICERRECTOR)</option>
@@ -326,15 +317,15 @@ export default function ConsolidadoAnualPage() {
           <button
             onClick={() => setMostrarModalImpresion(true)}
             disabled={!anioLectivoVigente}
-            className="px-5 py-2.5 text-white font-bold text-xs rounded-2xl shadow-md transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
             style={{ backgroundColor: '#4b4c99' }}
+            className="px-5 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
           >
             Vista Previa / Imprimir Reporte
           </button>
           
           <button
             onClick={() => router.push('/docente/calificaciones')}
-            className="px-4 py-2.5 bg-white/90 hover:bg-white text-slate-700 font-bold text-xs rounded-2xl border border-slate-200 shadow-2xs transition cursor-pointer"
+            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 shadow-2xs transition cursor-pointer"
           >
             Volver a Calificaciones
           </button>
@@ -342,28 +333,34 @@ export default function ConsolidadoAnualPage() {
       </div>
 
       {/* AVISOS */}
-      {!anioLectivoVigente && !cargando && (
-        <div className="bg-amber-50/90 backdrop-blur-xl border border-amber-300/80 p-4 rounded-2xl text-amber-900 text-xs font-bold shadow-xs">
-          La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
+      {!anioLectivoVigente && (
+        <div 
+          style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
+          className="border p-4 rounded-2xl text-xs font-bold shadow-2xs"
+        >
+          ⚠️ La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
         </div>
       )}
 
       {esAnioCerrado && anioLectivoVigente && (
-        <div className="bg-red-50/90 backdrop-blur-xl border border-red-200 p-4 rounded-2xl text-red-900 text-xs font-bold flex items-center justify-between shadow-xs">
+        <div 
+          style={{ backgroundColor: 'rgba(222, 88, 96, 0.08)', borderColor: 'rgba(222, 88, 96, 0.3)', color: '#9b2c2c' }}
+          className="border p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-2xs"
+        >
           <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. El consolidado está en modo de solo lectura.</span>
-          <span className="bg-red-200 px-2.5 py-1 rounded-full text-[10px]">Periodo Cerrado</span>
+          <span className="bg-rose-200/80 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-900">Periodo Cerrado</span>
         </div>
       )}
 
-      {/* FILTROS DINÁMICOS INTELIGENTES CON JORNADA */}
-      <div className="bg-white/70 backdrop-blur-2xl p-5 rounded-[28px] border border-white/80 shadow-[0_8px_30px_0_rgba(75,76,153,0.06)] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      {/* FILTROS DINÁMICOS */}
+      <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
         <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Jornada:</label>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Jornada</label>
           <select
             value={jornadaSeleccionada}
             onChange={(e) => handleJornadaChange(e.target.value)}
             disabled={jornadasDisponibles.length <= 1}
-            className="w-full p-2.5 border border-white/80 rounded-xl text-xs font-bold text-slate-800 bg-white/80 backdrop-blur-md outline-none disabled:bg-slate-100 disabled:cursor-not-allowed shadow-2xs"
+            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none disabled:bg-slate-100 disabled:cursor-not-allowed shadow-2xs"
           >
             {jornadasDisponibles.map(j => (
               <option key={j} value={j}>{j}</option>
@@ -372,7 +369,7 @@ export default function ConsolidadoAnualPage() {
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Grado / Curso:</label>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Grado / Curso</label>
           <select
             value={gradoSeleccionado}
             onChange={(e) => {
@@ -381,7 +378,7 @@ export default function ConsolidadoAnualPage() {
               const par = asignaciones.find(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada && a.grado_curso === nuevoGrado)?.paralelo || 'A'
               setParaleloSeleccionado(par)
             }}
-            className="w-full p-2.5 border border-white/80 rounded-xl text-xs font-bold text-slate-800 bg-white/80 backdrop-blur-md outline-none shadow-2xs"
+            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
           >
             {gradosUnicos.map(g => (
               <option key={g} value={g}>{g}</option>
@@ -390,11 +387,11 @@ export default function ConsolidadoAnualPage() {
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Paralelo:</label>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Paralelo</label>
           <select
             value={paraleloSeleccionado}
             onChange={(e) => setParaleloSeleccionado(e.target.value)}
-            className="w-full p-2.5 border border-white/80 rounded-xl text-xs font-bold text-slate-800 bg-white/80 backdrop-blur-md outline-none shadow-2xs"
+            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
           >
             {paralelosPermitidos.map(p => (
               <option key={p} value={p}>Paralelo {p}</option>
@@ -403,11 +400,11 @@ export default function ConsolidadoAnualPage() {
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Asignatura:</label>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Asignatura</label>
           <select
             value={asignaturaSeleccionada}
             onChange={(e) => setAsignaturaSeleccionada(e.target.value)}
-            className="w-full p-2.5 border border-white/80 rounded-xl text-xs font-bold text-slate-800 bg-white/80 backdrop-blur-md outline-none shadow-2xs"
+            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
           >
             {asignaturasPermitidas.map(mat => (
               <option key={mat} value={mat}>{mat}</option>
@@ -416,41 +413,41 @@ export default function ConsolidadoAnualPage() {
         </div>
       </div>
 
-      {/* TABLA ESTILO GOOGLE SHEETS DE CONSOLIDADO ANUAL */}
-      <div className="bg-white/75 backdrop-blur-2xl rounded-[32px] border border-white/80 shadow-[0_8px_30px_0_rgba(75,76,153,0.08)] overflow-hidden space-y-4">
-        <div className="p-4 bg-[#4b4c99] text-white flex justify-between items-center rounded-t-[32px]">
-          <h2 className="text-xs font-black uppercase tracking-wider">
+      {/* TABLA DE CONSOLIDADO ANUAL */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 bg-[#4b4c99] text-white flex justify-between items-center">
+          <h2 className="text-xs font-bold uppercase tracking-wider">
             CONSOLIDADO ANUAL • {asignaturaSeleccionada || 'Materia'} ({gradoSeleccionado} "{paraleloSeleccionado}" - {jornadaSeleccionada})
           </h2>
-          <span className="text-xs font-bold bg-white/10 px-3 py-1 rounded-xl">
+          <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-xl">
             {estudiantes.length} Estudiantes Matriculados
           </span>
         </div>
 
         <div className="overflow-x-auto p-4">
           <table className="w-full text-xs text-left border-collapse border border-slate-200">
-            <thead className="bg-slate-100 text-slate-800 font-bold uppercase text-[10px]">
+            <thead className="bg-slate-50 text-slate-900 font-bold uppercase text-[10px]">
               <tr>
                 <th className="p-3 border border-slate-200 text-center w-12" rowSpan={2}>Nro</th>
                 <th className="p-3 border border-slate-200 w-32" rowSpan={2}>Cédula</th>
                 <th className="p-3 border border-slate-200" rowSpan={2}>Apellidos y Nombres</th>
-                <th className="p-3 border border-slate-200 text-center w-24 bg-[#4b4c99]/10 text-[#4b4c99]">1ER</th>
-                <th className="p-3 border border-slate-200 text-center w-24 bg-[#45b3a5]/10 text-[#45b3a5]">2DO</th>
-                <th className="p-3 border border-slate-200 text-center w-24 bg-purple-50 text-purple-800">3ER</th>
-                <th className="p-3 border border-slate-200 text-center w-28 bg-[#4b4c99] text-white" rowSpan={2}>PROMEDIO FINAL</th>
-                <th className="p-3 border border-slate-200 text-center w-24" rowSpan= {2}>CALF. CUALIT.</th>
+                <th className="p-3 border border-slate-200 text-center w-24 text-white" style={{ backgroundColor: '#4b4c99' }}>1ER</th>
+                <th className="p-3 border border-slate-200 text-center w-24 text-white" style={{ backgroundColor: '#389186' }}>2DO</th>
+                <th className="p-3 border border-slate-200 text-center w-24 text-white" style={{ backgroundColor: '#d99b1e' }}>3ER</th>
+                <th className="p-3 border border-slate-200 text-center w-28 bg-slate-900 text-white" rowSpan={2}>PROMEDIO FINAL</th>
+                <th className="p-3 border border-slate-200 text-center w-24" rowSpan={2}>CALF. CUALIT.</th>
                 <th className="p-3 border border-slate-200 text-center w-36" rowSpan={2}>OBSERVACIÓN</th>
               </tr>
-              <tr className="bg-white/60 text-[9px] text-center">
+              <tr className="bg-slate-100 text-[9px] text-center font-semibold text-slate-700">
                 <th className="border border-slate-200 p-1">Trimestre</th>
                 <th className="border border-slate-200 p-1">Trimestre</th>
                 <th className="border border-slate-200 p-1">Trimestre</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200/60">
+            <tbody className="divide-y divide-slate-200">
               {!anioLectivoVigente ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-amber-800 font-bold bg-amber-50/50">
+                  <td colSpan={9} className="p-8 text-center text-amber-800 font-bold bg-amber-50">
                     No hay un año lectivo activo configurado en la institución.
                   </td>
                 </tr>
@@ -462,19 +459,19 @@ export default function ConsolidadoAnualPage() {
                 </tr>
               ) : (
                 filasProcesadas.map(({ est, notas, valoresValidos, promedioFinal, cualitativa, esAprobado }, idx) => (
-                  <tr key={est.id} className="hover:bg-white/50 transition-colors">
+                  <tr key={est.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="p-3 border border-slate-200 text-center font-bold text-slate-400">{idx + 1}</td>
                     <td className="p-3 border border-slate-200 text-slate-600 font-mono">{est.cedula || 'S/N'}</td>
                     <td className="p-3 border border-slate-200 font-bold text-slate-800 uppercase">
                       {est.apellidos} {est.nombres}
                     </td>
-                    <td className="p-3 border border-slate-200 text-center font-semibold text-slate-800 bg-[#4b4c99]/5">
+                    <td className="p-3 border border-slate-200 text-center font-semibold text-slate-800 bg-indigo-50/20">
                       {notas.t1 !== null ? notas.t1.toFixed(2) : ''}
                     </td>
-                    <td className="p-3 border border-slate-200 text-center font-semibold text-slate-800 bg-[#45b3a5]/5">
+                    <td className="p-3 border border-slate-200 text-center font-semibold text-slate-800 bg-teal-50/20">
                       {notas.t2 !== null ? notas.t2.toFixed(2) : ''}
                     </td>
-                    <td className="p-3 border border-slate-200 text-center font-semibold text-slate-800 bg-purple-50/40">
+                    <td className="p-3 border border-slate-200 text-center font-semibold text-slate-800 bg-amber-50/20">
                       {notas.t3 !== null ? notas.t3.toFixed(2) : ''}
                     </td>
                     <td className="p-3 border border-slate-200 text-center font-black text-slate-900 bg-slate-50">
@@ -483,9 +480,9 @@ export default function ConsolidadoAnualPage() {
                     <td className="p-3 border border-slate-200 text-center font-bold text-slate-700">
                       {valoresValidos.length > 0 ? cualitativa : ''}
                     </td>
-                    <td className={`p-3 border border-slate-200 text-center font-black text-[10px] ${
+                    <td className={`p-3 border border-slate-200 text-center font-bold text-[10px] uppercase ${
                       valoresValidos.length === 0 ? 'bg-slate-50 text-slate-400' :
-                      esAprobado ? 'bg-blue-100/80 text-blue-800' : 'bg-amber-500 text-white'
+                      esAprobado ? 'bg-indigo-50 text-[#4b4c99]' : 'bg-rose-50 text-rose-700'
                     }`}>
                       {valoresValidos.length === 0 ? '' : esAprobado ? 'APROBADO' : 'SUPLETORIO'}
                     </td>
@@ -497,57 +494,54 @@ export default function ConsolidadoAnualPage() {
         </div>
       </div>
 
-      {/* VENTANA FLOTANTE / MODAL DE VISTA PREVIA E IMPRESIÓN */}
+      {/* MODAL DE VISTA PREVIA E IMPRESIÓN */}
       {mostrarModalImpresion && anioLectivoVigente && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static print:inset-auto">
-          <div className="bg-white rounded-[36px] max-w-5xl w-full p-8 space-y-6 shadow-2xl relative print:shadow-none print:p-2 print:max-w-none border border-white">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static print:inset-auto">
+          <div className="bg-white rounded-3xl max-w-5xl w-full p-8 space-y-6 shadow-xl relative print:shadow-none print:p-2 print:max-w-none border border-slate-200">
             
-            {/* BOTONES SUPERIORES DEL MODAL (OCULTOS AL IMPRIMIR) */}
             <div className="flex justify-between items-center border-b border-slate-100 pb-4 print:hidden">
               <div>
-                <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">Vista Previa de Impresión Oficial</h2>
-                <p className="text-xs text-slate-500">El documento está listo para guardarse como PDF ({nombrePdfDinamico}) o imprimirse.</p>
+                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-tight">Vista Previa de Impresión Oficial</h2>
+                <p className="text-xs text-slate-500 font-medium">El documento está listo para guardarse como PDF ({nombrePdfDinamico}) o imprimirse.</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePrintConTitulo}
-                  className="px-5 py-2.5 text-white font-black text-xs rounded-2xl shadow-lg transition cursor-pointer"
                   style={{ backgroundColor: '#4b4c99' }}
+                  className="px-5 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer"
                 >
                   Imprimir / Guardar PDF
                 </button>
                 <button
                   onClick={() => setMostrarModalImpresion(false)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition cursor-pointer"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   Cerrar
                 </button>
               </div>
             </div>
 
-            {/* CONTENIDO DEL REPORTE OFICIAL PARA IMPRESIÓN */}
+            {/* CONTENIDO DEL REPORTE OFICIAL */}
             <div className="space-y-6 print:space-y-4">
               
-              {/* ENCABEZADO INSTITUCIONAL ELEGANTE Y MINIMALISTA */}
               <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-center">
                 <div className="flex items-center gap-4 text-left">
                   {institucionLogo ? (
                     <img src={institucionLogo} alt="Logo Institución" className="w-20 h-20 object-contain" />
                   ) : null}
                   <div>
-                    <h2 className="text-base font-black uppercase text-slate-900">{nombreInstitucion}</h2>
-                    <p className="text-xs font-bold text-slate-700">CÓDIGO AMIE: 03H00278 • Azogues - Ecuador</p>
-                    <p className="text-xs font-black text-indigo-900 mt-0.5">CONSOLIDADO GENERAL DE RENDIMIENTO ACADÉMICO</p>
+                    <h2 className="text-sm font-black uppercase text-slate-900">{nombreInstitucion}</h2>
+                    <p className="text-[11px] font-bold text-slate-700">CÓDIGO AMIE: 03H00278 • Azogues - Ecuador</p>
+                    <p className="text-xs font-bold text-[#4b4c99] mt-0.5">CONSOLIDADO GENERAL DE RENDIMIENTO ACADÉMICO</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-black uppercase bg-slate-100 px-3 py-1.5 border border-slate-300 rounded-xl text-slate-900 block">
+                  <span className="text-[10px] font-bold uppercase bg-slate-100 px-3 py-1.5 border border-slate-300 rounded-xl text-slate-900 block shadow-2xs">
                     PERIODO LECTIVO {anioLectivoVigente}
                   </span>
                 </div>
               </div>
 
-              {/* DATOS INFORMATIVOS */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs border border-slate-300 p-3.5 bg-slate-50 rounded-2xl font-bold text-slate-800">
                 <div><strong>ASIGNATURA:</strong> <span className="font-semibold text-slate-900">{asignaturaSeleccionada}</span></div>
                 <div><strong>GRADO / CURSO:</strong> <span className="font-semibold text-slate-900">{gradoSeleccionado}</span></div>
@@ -557,7 +551,6 @@ export default function ConsolidadoAnualPage() {
                 <div className="col-span-2"><strong>AUTORIDAD INSTITUCIONAL:</strong> <span className="font-semibold text-slate-900 uppercase">{autoridadActual.nombre} ({autoridadActual.cargo})</span></div>
               </div>
 
-              {/* TABLA DE CALIFICACIONES OFICIAL */}
               <table className="w-full text-xs text-left border-collapse border border-slate-800 text-slate-900 font-semibold">
                 <thead>
                   <tr className="bg-slate-200 text-slate-950 font-black uppercase text-[10px] text-center">
@@ -590,7 +583,7 @@ export default function ConsolidadoAnualPage() {
                       <td className="p-1.5 border border-slate-800 font-bold">{valoresValidos.length > 0 ? cualitativa : '-'}</td>
                       <td className={`p-1.5 border border-slate-800 font-black text-[10px] uppercase ${
                         valoresValidos.length === 0 ? 'text-slate-400' :
-                        esAprobado ? 'text-blue-900 bg-blue-50' : 'text-amber-800 bg-amber-50'
+                        esAprobado ? 'text-indigo-900 bg-indigo-50' : 'text-rose-800 bg-rose-50'
                       }`}>
                         {valoresValidos.length === 0 ? 'SIN NOTAS' : esAprobado ? 'APROBADO' : 'SUPLETORIO'}
                       </td>
@@ -599,66 +592,64 @@ export default function ConsolidadoAnualPage() {
                 </tbody>
               </table>
 
-              {/* DASHBOARD INFORMATIVO ESTADÍSTICO Y GRÁFICO AL FINAL DE LA IMPRESIÓN */}
-              <div className="pt-6 border-t-2 border-slate-300 space-y-4">
+              {/* DASHBOARD ESTADÍSTICO */}
+              <div className="pt-6 border-t border-slate-200 space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider">Resumen Estadístico y Conteo Académico</h3>
-                  <span className="text-[11px] font-bold text-slate-600">Total Evaluados: {totalEvaluados} estudiantes</span>
+                  <h3 className="text-xs font-bold uppercase text-slate-900 tracking-wide">Resumen Estadístico y Conteo Académico</h3>
+                  <span className="text-[11px] font-bold text-slate-500">Total Evaluados: {totalEvaluados} estudiantes</span>
                 </div>
 
-                {/* TARJETAS DE CONTEO */}
                 <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl flex justify-between items-center">
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center shadow-2xs">
                     <div>
-                      <span className="block font-bold text-blue-900 uppercase">Estudiantes Aprobados Directos</span>
-                      <span className="text-xl font-black text-blue-950">{totalAprobados} alumnos</span>
+                      <span className="block font-bold text-slate-600 uppercase text-[10px]">Estudiantes Aprobados Directos</span>
+                      <span className="text-base font-bold text-slate-900">{totalAprobados} alumnos</span>
                     </div>
-                    <span className="text-sm font-black bg-blue-200 text-blue-900 px-2.5 py-1 rounded-xl">{porcentajeAprobados}%</span>
+                    <span className="text-xs font-bold bg-indigo-50 text-[#4b4c99] border border-indigo-100 px-2.5 py-1 rounded-xl">{porcentajeAprobados}%</span>
                   </div>
 
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex justify-between items-center">
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center shadow-2xs">
                     <div>
-                      <span className="block font-bold text-amber-900 uppercase">Estudiantes a Supletorio</span>
-                      <span className="text-xl font-black text-amber-950">{totalSupletorios} alumnos</span>
+                      <span className="block font-bold text-slate-600 uppercase text-[10px]">Estudiantes a Supletorio</span>
+                      <span className="text-base font-bold text-slate-900">{totalSupletorios} alumnos</span>
                     </div>
-                    <span className="text-sm font-black bg-amber-200 text-amber-900 px-2.5 py-1 rounded-xl">{porcentajeSupletorios}%</span>
+                    <span className="text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-xl">{porcentajeSupletorios}%</span>
                   </div>
                 </div>
 
-                {/* GRÁFICO DE BARRAS ELEGANTE Y MINIMALISTA */}
                 <div className="space-y-2 pt-2">
-                  <div className="flex h-5 w-full rounded-full overflow-hidden border border-slate-300 shadow-2xs bg-slate-100">
+                  <div className="flex h-4 w-full rounded-full overflow-hidden border border-slate-200 bg-slate-100 shadow-inner">
                     <div 
-                      style={{ width: `${porcentajeAprobados}%` }} 
-                      className="bg-blue-600 h-full transition-all duration-500 flex items-center justify-center text-[9px] font-black text-white"
+                      style={{ width: `${porcentajeAprobados}%`, backgroundColor: '#4b4c99' }} 
+                      className="h-full transition-all duration-500 flex items-center justify-center text-[9px] font-bold text-white"
                       title={`Aprobados: ${porcentajeAprobados}%`}
                     >
                       {porcentajeAprobados > 0 && `${porcentajeAprobados}%`}
                     </div>
                     <div 
-                      style={{ width: `${porcentajeSupletorios}%` }} 
-                      className="bg-amber-500 h-full transition-all duration-500 flex items-center justify-center text-[9px] font-black text-white"
+                      style={{ width: `${porcentajeSupletorios}%`, backgroundColor: '#f6c358' }} 
+                      className="h-full transition-all duration-500 flex items-center justify-center text-[9px] font-bold text-slate-950"
                       title={`Supletorios: ${porcentajeSupletorios}%`}
                     >
                       {porcentajeSupletorios > 0 && `${porcentajeSupletorios}%`}
                     </div>
                   </div>
-                  <div className="flex justify-between text-[10px] font-bold text-slate-600 px-1">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block"></span> Aprobados Directos ({totalAprobados})</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Supletorios ({totalSupletorios})</span>
+                  <div className="flex justify-between text-[10px] font-bold text-slate-500 px-1">
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: '#4b4c99' }}></span> Aprobados Directos ({totalAprobados})</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: '#f6c358' }}></span> Supletorios ({totalSupletorios})</span>
                   </div>
                 </div>
               </div>
 
-              {/* FIRMAS DE RESPONSABILIDAD CON CARGO DINÁMICO */}
+              {/* FIRMAS DE RESPONSABILIDAD */}
               <div className="grid grid-cols-2 pt-16 text-center text-xs text-slate-900 font-bold">
                 <div className="space-y-1">
-                  <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-black uppercase">{nombreDocente || 'DOCENTE RESPONSABLE'}</div>
-                  <div className="font-black text-[11px]">DOCENTE DE LA ASIGNATURA</div>
+                  <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-bold uppercase">{nombreDocente || 'DOCENTE RESPONSABLE'}</div>
+                  <div className="font-bold text-[10px] text-slate-600">DOCENTE DE LA ASIGNATURA</div>
                 </div>
                 <div className="space-y-1">
-                  <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-black uppercase">{autoridadActual.nombre}</div>
-                  <div className="font-black text-[11px] uppercase">{autoridadActual.cargo}</div>
+                  <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-bold uppercase">{autoridadActual.nombre}</div>
+                  <div className="font-bold text-[10px] text-slate-600 uppercase">{autoridadActual.cargo}</div>
                 </div>
               </div>
 

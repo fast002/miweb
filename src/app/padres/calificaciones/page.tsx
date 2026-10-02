@@ -40,7 +40,6 @@ export default function CalificacionesRepresentantePage() {
     evaluacion_estructurada: 0
   })
 
-  // 1. Cargar el usuario padre logueado y sus hijos vinculados
   useEffect(() => {
     async function initRepresentante() {
       try {
@@ -51,7 +50,6 @@ export default function CalificacionesRepresentantePage() {
           return
         }
 
-        // Buscar los vínculos del representante en la tabla estudiante_representantes
         const { data: vinculosData, error: vinculosError } = await supabase
           .from('estudiante_representantes')
           .select(`
@@ -69,7 +67,6 @@ export default function CalificacionesRepresentantePage() {
           return
         }
 
-        // Extraer la lista de hijos
         const hijosList = vinculosData.map(v => v.estudiantes).filter(Boolean)
         setHijosVinculados(hijosList)
 
@@ -90,10 +87,8 @@ export default function CalificacionesRepresentantePage() {
     initRepresentante()
   }, [router])
 
-  // Obtener el objeto del estudiante actual seleccionado
   const estudianteActual = hijosVinculados.find(h => h.id === estudianteSeleccionadoId)
 
-  // Detectar subnivel según el grado del estudiante
   useEffect(() => {
     if (!estudianteActual) return
     const gradoStr = estudianteActual.grado_curso || ''
@@ -107,7 +102,6 @@ export default function CalificacionesRepresentantePage() {
       setSubnivel('Bachillerato')
     }
 
-    // Cargar asignaturas disponibles para este grado/paralelo/jornada
     async function cargarAsignaturasHijo() {
       const { data: asigData } = await supabase
         .from('docente_asignaciones')
@@ -128,13 +122,11 @@ export default function CalificacionesRepresentantePage() {
     cargarAsignaturasHijo()
   }, [estudianteSeleccionadoId, anioLectivoVigente])
 
-  // 2. Cargar las calificaciones e insumos del hijo para la asignatura y trimestre seleccionados
   useEffect(() => {
     async function cargarCalificacionesHijo() {
       if (!estudianteActual || !asignaturaSeleccionada || !anioLectivoVigente) return
 
       try {
-        // Encontrar qué docente imparte esta asignatura a este curso
         const { data: asignacionDoc } = await supabase
           .from('docente_asignaciones')
           .select('docente_id')
@@ -153,7 +145,6 @@ export default function CalificacionesRepresentantePage() {
 
         const docenteId = asignacionDoc.docente_id
 
-        // Cargar estructura de insumos del docente
         const { data: insumosData } = await supabase
           .from('configuracion_insumos')
           .select('*')
@@ -170,7 +161,6 @@ export default function CalificacionesRepresentantePage() {
         }))
         setColumnasInsumos(colsCargadas)
 
-        // Cargar la nota específica del estudiante
         const { data: calData } = await supabase
           .from('calificaciones')
           .select('*')
@@ -214,7 +204,6 @@ export default function CalificacionesRepresentantePage() {
     return { categoria: cat, count: cols.length, cols }
   }).filter((g) => g.count > 0)
 
-  // Cálculo del promedio final idéntico al del docente
   const calcularNotaFinal = () => {
     const notasInsumosDinamicos: number[] = []
     columnasInsumos.forEach((col) => {
@@ -252,18 +241,18 @@ export default function CalificacionesRepresentantePage() {
   }
 
   const obtenerEscalaCualitativa = (prom: number) => {
-    if (prom >= 9.00) return { label: 'DAR', color: 'bg-emerald-100 text-emerald-800' }
-    if (prom >= 7.00) return { label: 'AAR', color: 'bg-blue-100 text-blue-800' }
-    if (prom >= 4.01) return { label: 'PA', color: 'bg-amber-100 text-amber-800' }
-    return { label: 'NA', color: 'bg-red-100 text-red-800' }
+    if (prom >= 9.00) return { label: 'DAR', color: 'bg-emerald-100 text-emerald-800 border border-emerald-200' }
+    if (prom >= 7.00) return { label: 'AAR', color: 'bg-blue-100 text-blue-800 border border-blue-200' }
+    if (prom >= 4.01) return { label: 'PA', color: 'bg-amber-100 text-amber-800 border border-amber-200' }
+    return { label: 'NA', color: 'bg-rose-100 text-rose-800 border border-rose-200' }
   }
 
   const getHeaderColor = (cat: CategoriaInsumo) => {
     switch (cat) {
-      case 'Deberes / Indiv.': return 'bg-purple-900 text-white'
+      case 'Deberes / Indiv.': return 'bg-[#4b4c99] text-white'
       case 'Tareas en Clase': return 'bg-indigo-800 text-white'
       case 'Actividades Grupales': return 'bg-sky-800 text-white'
-      case 'Lecciones': return 'bg-emerald-800 text-white'
+      case 'Lecciones': return 'bg-teal-800 text-white'
       default: return 'bg-slate-800 text-white'
     }
   }
@@ -273,110 +262,116 @@ export default function CalificacionesRepresentantePage() {
 
   if (cargando) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-500 border-t-transparent mx-auto mb-3"></div>
-          <p className="text-xs font-bold text-slate-600">Cargando calificaciones del estudiante...</p>
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans selection:bg-[#4b4c99] selection:text-white">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando calificaciones del estudiante...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans max-w-7xl mx-auto">
 
-        {/* ENCABEZADO */}
-        <div className="bg-white p-6 rounded-2xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-              <span>Calificaciones del Representado</span>
-              <span className="text-xs bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full font-bold">Modo Consulta Familiar</span>
-            </h1>
-            <p className="text-xs text-slate-500 font-semibold mt-1">
-              {nombreInstitucion} • Año Lectivo: <strong className="text-slate-900">{anioLectivoVigente}</strong> ({trimestre})
-            </p>
-          </div>
-          <button
-            onClick={() => { supabase.auth.signOut(); router.push('/'); }}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow transition"
+      {/* ENCABEZADO */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
           >
-            Cerrar Sesión
-          </button>
+            Modo Consulta Familiar
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            Calificaciones del Representado
+          </h1>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+            {nombreInstitucion} • Año Lectivo: <strong className="text-slate-800">{anioLectivoVigente}</strong> ({trimestre})
+          </p>
         </div>
 
-        {/* SELECTOR DE HIJO Y TRIMESTRE */}
-        <div className="bg-white p-4 rounded-2xl border shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-          <div>
-            <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Seleccionar Representado (Hijo/a):</label>
-            <select
-              value={estudianteSeleccionadoId}
-              onChange={(e) => setEstudianteSeleccionadoId(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-            >
-              {hijosVinculados.map((hijo) => (
-                <option key={hijo.id} value={hijo.id}>
-                  {hijo.apellidos} {hijo.nombres} — {hijo.grado_curso} "{hijo.paralelo || 'A'}"
-                </option>
-              ))}
-            </select>
-          </div>
+        <button
+          onClick={() => { supabase.auth.signOut(); router.push('/'); }}
+          className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer"
+        >
+          Cerrar Sesión
+        </button>
+      </div>
 
-          <div>
-            <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Asignatura:</label>
-            <select
-              value={asignaturaSeleccionada}
-              onChange={(e) => setAsignaturaSeleccionada(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-            >
-              {asignaturasEstudiante.length === 0 ? (
-                <option value="">Sin asignaturas disponibles</option>
-              ) : (
-                asignaturasEstudiante.map((asig) => (
-                  <option key={asig} value={asig}>{asig}</option>
-                ))
-              )}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black text-amber-700 uppercase mb-1">Trimestre de Consulta:</label>
-            <select
-              value={trimestre}
-              onChange={(e) => setTrimestre(e.target.value)}
-              className="w-full p-2.5 border-2 border-amber-400 rounded-xl text-xs font-black text-amber-950 bg-amber-50 outline-none"
-            >
-              <option value="Trimestre 1">Trimestre 1</option>
-              <option value="Trimestre 2">Trimestre 2</option>
-              <option value="Trimestre 3">Trimestre 3</option>
-            </select>
-          </div>
+      {/* SELECTOR DE HIJO, ASIGNATURA Y TRIMESTRE */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Seleccionar Representado (Hijo/a):</label>
+          <select
+            value={estudianteSeleccionadoId}
+            onChange={(e) => setEstudianteSeleccionadoId(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs cursor-pointer"
+          >
+            {hijosVinculados.map((hijo) => (
+              <option key={hijo.id} value={hijo.id} className="text-slate-900 font-bold bg-white">
+                {hijo.apellidos} {hijo.nombres} — {hijo.grado_curso} "{hijo.paralelo || 'A'}"
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* TABLA SÁBANA EN MODO SOLO LECTURA PARA EL PADRE */}
-        <div className="bg-white rounded-2xl border shadow-sm overflow-x-auto">
-          {!estudianteActual ? (
-            <div className="p-12 text-center text-slate-500 font-semibold text-xs">No hay estudiantes vinculados a este usuario.</div>
-          ) : !asignaturaSeleccionada ? (
-            <div className="p-12 text-center text-amber-800 bg-amber-50 font-bold text-xs">
-              ⚠️ No se encontraron asignaturas registradas para este curso.
-            </div>
-          ) : (
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Asignatura:</label>
+          <select
+            value={asignaturaSeleccionada}
+            onChange={(e) => setAsignaturaSeleccionada(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs cursor-pointer"
+          >
+            {asignaturasEstudiante.length === 0 ? (
+              <option value="" className="text-slate-500 font-bold bg-white">Sin asignaturas disponibles</option>
+            ) : (
+              asignaturasEstudiante.map((asig) => (
+                <option key={asig} value={asig} className="text-slate-900 font-bold bg-white">{asig}</option>
+              ))
+            )}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-amber-900 font-bold uppercase mb-1.5">Trimestre de Consulta:</label>
+          <select
+            value={trimestre}
+            onChange={(e) => setTrimestre(e.target.value)}
+            className="w-full p-3 border-2 border-amber-300 rounded-xl text-xs font-black text-amber-950 bg-amber-50/60 outline-none focus:border-amber-500 shadow-2xs cursor-pointer"
+          >
+            <option value="Trimestre 1" className="text-slate-900 font-bold bg-white">Trimestre 1</option>
+            <option value="Trimestre 2" className="text-slate-900 font-bold bg-white">Trimestre 2</option>
+            <option value="Trimestre 3" className="text-slate-900 font-bold bg-white">Trimestre 3</option>
+          </select>
+        </div>
+      </div>
+
+      {/* TABLA SÁBANA EN MODO SOLO LECTURA */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+        {!estudianteActual ? (
+          <div className="p-12 text-center text-slate-500 font-semibold text-xs">No hay estudiantes vinculados a este usuario.</div>
+        ) : !asignaturaSeleccionada ? (
+          <div className="p-12 text-center text-amber-800 bg-amber-50 font-bold text-xs">
+            ⚠️ No se encontraron asignaturas registradas para este curso.
+          </div>
+        ) : (
+          <div className="overflow-x-auto p-4">
             <table className="w-full text-xs text-left border-collapse border border-slate-300">
               <thead className="text-slate-800 font-bold uppercase text-[10px]">
                 <tr>
-                  <th className="p-3 w-10 text-center bg-slate-100 border border-slate-300" rowSpan={2}>#</th>
-                  <th className="p-3 min-w-50 bg-slate-100 border border-slate-300" rowSpan={2}>Estudiante</th>
+                  <th className="p-3.5 w-10 text-center bg-slate-50 border border-slate-300" rowSpan={2}>#</th>
+                  <th className="p-3.5 min-w-50 bg-slate-50 border border-slate-300" rowSpan={2}>Estudiante</th>
 
                   {gruposHeader.length === 0 ? (
-                    <th className="p-3 text-center bg-amber-50 text-amber-900 border border-slate-300 italic" colSpan={1}>
+                    <th className="p-3.5 text-center bg-amber-50 text-amber-900 border border-slate-300 italic" colSpan={1}>
                       ⚠️ El docente aún no ha registrado insumos en esta asignatura
                     </th>
                   ) : (
                     gruposHeader.map((g) => (
                       <th 
                         key={g.categoria} 
-                        className={`p-2 text-center border border-slate-300 text-xs font-black uppercase ${getHeaderColor(g.categoria)}`}
+                        className={`p-2.5 text-center border border-slate-300 text-xs font-black uppercase tracking-wider ${getHeaderColor(g.categoria)}`}
                         colSpan={g.count}
                       >
                         {g.categoria}
@@ -384,24 +379,24 @@ export default function CalificacionesRepresentantePage() {
                     ))
                   )}
 
-                  <th className="p-2 text-center bg-amber-200 text-amber-950 border border-slate-300 font-black" rowSpan={2}>
+                  <th className="p-2.5 text-center bg-amber-200 text-amber-950 border border-slate-300 font-black" rowSpan={2}>
                     Refuerzo Pedag.
                   </th>
 
-                  <th className="p-2 text-center bg-purple-900 text-white border border-slate-300 font-black" colSpan={2}>
+                  <th className="p-2.5 text-center bg-indigo-950 text-white border border-slate-300 font-black" colSpan={2}>
                     APORTES SUMATIVOS {subnivel !== 'Básica Elemental' && '(30% - ' + trimestre + ')'}
                   </th>
 
-                  <th className="p-3 text-center w-24 bg-slate-200 border border-slate-300 font-black" rowSpan={2}>Prom. Final</th>
-                  <th className="p-3 text-center w-20 bg-slate-200 border border-slate-300 font-black" rowSpan={2}>Escala</th>
+                  <th className="p-3.5 text-center w-24 bg-slate-200 border border-slate-300 font-black" rowSpan={2}>Prom. Final</th>
+                  <th className="p-3.5 text-center w-20 bg-slate-200 border border-slate-300 font-black" rowSpan={2}>Escala</th>
                 </tr>
 
-                <tr className="bg-slate-100 text-slate-800 text-[9px] font-bold">
+                <tr className="bg-slate-50 text-slate-800 text-[9px] font-bold">
                   {columnasOrdenadas.length === 0 ? (
                     <th className="p-2 text-center text-slate-400 border border-slate-300">Sin Insumos</th>
                   ) : (
                     columnasOrdenadas.map((col) => (
-                      <th key={col.id} className="p-2 text-center border border-slate-300 min-w-22.5 bg-slate-50">
+                      <th key={col.id} className="p-2 text-center border border-slate-300 min-w-22.5 bg-white">
                         <span className="block font-black text-slate-900">INSUMO {col.numero}</span>
                         <span className="block text-[8px] font-medium text-slate-500 truncate" title={col.descripcion}>
                           {col.descripcion}
@@ -410,76 +405,76 @@ export default function CalificacionesRepresentantePage() {
                     ))
                   )}
 
-                  <th className="p-1.5 text-center bg-purple-100 border border-slate-300 min-w-27.5">Proy. Interdisciplinar</th>
-                  <th className="p-1.5 text-center bg-purple-100 border border-slate-300 min-w-30">Ev. Base Estructurada</th>
+                  <th className="p-2 text-center bg-indigo-50 border border-slate-300 min-w-27.5 font-bold text-indigo-950">Proy. Interdisciplinar</th>
+                  <th className="p-2 text-center bg-indigo-50 border border-slate-300 min-w-30 font-bold text-indigo-950">Ev. Base Estructurada</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-200">
-                <tr className="hover:bg-slate-50">
-                  <td className="p-2 font-bold text-slate-400 text-center border border-slate-300">1</td>
-                  <td className="p-2 font-bold text-slate-800 border border-slate-300 whitespace-nowrap">
+                <tr className="hover:bg-slate-50/80 transition-colors">
+                  <td className="p-3 font-bold text-slate-400 text-center border border-slate-300">1</td>
+                  <td className="p-3 font-bold text-slate-800 border border-slate-300 whitespace-nowrap">
                     {estudianteActual.apellidos} {estudianteActual.nombres}
                   </td>
 
                   {columnasOrdenadas.length === 0 ? (
-                    <td className="p-2 text-center text-slate-300 border border-slate-300">-</td>
+                    <td className="p-3 text-center text-slate-300 border border-slate-300">-</td>
                   ) : (
                     columnasOrdenadas.map((col) => (
-                      <td key={col.id} className="p-1 text-center border border-slate-300">
+                      <td key={col.id} className="p-1.5 text-center border border-slate-300">
                         <input
                           type="number"
                           disabled={true}
                           value={notasInsumosMap[col.id] > 0 ? notasInsumosMap[col.id] : ''}
-                          className="w-14 p-1 text-center border rounded font-semibold text-slate-800 bg-slate-100 cursor-not-allowed"
+                          className="w-14 p-1.5 text-center border border-slate-300 rounded-xl font-bold text-slate-800 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
                         />
                       </td>
                     ))
                   )}
 
-                  <td className="p-1 text-center bg-amber-50/40 border border-slate-300">
+                  <td className="p-1.5 text-center bg-amber-50/30 border border-slate-300">
                     <input
                       type="number"
                       disabled={true}
                       value={notasAdicionales.refuerzo_pedagogico > 0 ? notasAdicionales.refuerzo_pedagogico : ''}
-                      className="w-14 p-1 text-center border border-amber-300 rounded font-semibold text-amber-900 bg-slate-100 cursor-not-allowed"
+                      className="w-14 p-1.5 text-center border border-amber-300 rounded-xl font-bold text-amber-900 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
                     />
                   </td>
 
-                  <td className="p-1 text-center bg-purple-50/40 border border-slate-300">
+                  <td className="p-1.5 text-center bg-indigo-50/30 border border-slate-300">
                     <input
                       type="number"
                       disabled={true}
                       value={notasAdicionales.proyecto_interdisciplinar > 0 ? notasAdicionales.proyecto_interdisciplinar : ''}
-                      className="w-16 p-1 text-center border border-purple-300 rounded font-semibold text-purple-900 bg-slate-100 cursor-not-allowed"
+                      className="w-16 p-1.5 text-center border border-indigo-300 rounded-xl font-bold text-indigo-950 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
                     />
                   </td>
 
-                  <td className="p-1 text-center bg-purple-50/40 border border-slate-300">
+                  <td className="p-1.5 text-center bg-indigo-50/30 border border-slate-300">
                     <input
                       type="number"
                       disabled={true}
                       value={notasAdicionales.evaluacion_estructurada > 0 ? notasAdicionales.evaluacion_estructurada : ''}
-                      className="w-16 p-1 text-center border border-purple-300 rounded font-semibold text-purple-900 bg-slate-100 cursor-not-allowed"
+                      className="w-16 p-1.5 text-center border border-indigo-300 rounded-xl font-bold text-indigo-950 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
                     />
                   </td>
 
-                  <td className="p-2 text-center bg-slate-100 font-black text-sm text-slate-900 border border-slate-300">
+                  <td className="p-3 text-center bg-slate-100 font-black text-sm text-slate-900 border border-slate-300">
                     {promFinal.toFixed(2)}
                   </td>
 
-                  <td className="p-2 text-center bg-slate-100 border border-slate-300">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${cuali.color}`}>
+                  <td className="p-3 text-center bg-slate-100 border border-slate-300">
+                    <span className={`px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase shadow-2xs ${cuali.color}`}>
                       {cuali.label}
                     </span>
                   </td>
                 </tr>
               </tbody>
             </table>
-          )}
-        </div>
-
+          </div>
+        )}
       </div>
+
     </div>
   )
 }

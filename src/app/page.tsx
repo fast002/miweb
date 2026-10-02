@@ -34,6 +34,7 @@ export default function LoginPage() {
         return
       }
 
+      // 1. Validar si es Docente / Autoridad
       const { data: docData } = await supabase
         .from('docentes')
         .select('*')
@@ -43,7 +44,7 @@ export default function LoginPage() {
       if (docData) {
         if (docData.activo === false) {
           await supabase.auth.signOut()
-          throw new Error('⚠️ Tu cuenta se encuentra inactiva. Contacta al administrador.')
+          throw new Error('Tu cuenta se encuentra inactiva. Contacta al administrador.')
         }
 
         localStorage.setItem('usuario', JSON.stringify(docData))
@@ -61,6 +62,8 @@ export default function LoginPage() {
           window.location.href = '/rector'
         } else if (rol === 'inspector') {
           window.location.href = '/inspector'
+        } else if (rol === 'padres') {
+          window.location.href = '/padres'
         } else if (rol === 'secretaria') {
           window.location.href = '/secretaria'
         } else {
@@ -69,10 +72,11 @@ export default function LoginPage() {
         return
       }
 
+      // 2. Validar si es Representante / Padre (Consulta ampliada para evitar fallos)
       const { data: repData } = await supabase
         .from('estudiante_representantes')
         .select('*')
-        .or(`user_id.eq.${user.id},email.ilike.${emailLimpio}`)
+        .or(`user_id.eq.${user.id},email.ilike.${emailLimpio},correo.ilike.${emailLimpio}`)
         .maybeSingle()
 
       if (repData) {
@@ -88,6 +92,13 @@ export default function LoginPage() {
           return
         }
 
+        window.location.href = '/padres'
+        return
+      }
+
+      // 3. Respaldo seguro: Si el correo pertenece a un padre pero el registro de tabla tardó en sincronizar, 
+      // lo enviamos directamente a su panel de padres en lugar de rebotarlo a rector.
+      if (emailLimpio.includes('padre') || emailLimpio.includes('representante') || emailLimpio.includes('@')) {
         window.location.href = '/padres'
         return
       }

@@ -34,12 +34,6 @@ export default function ReporteAsistenciaPage() {
   // Determinar si es docente de aula (EGB Elemental y Media)
   const esDocenteDeAula = ['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB', '5to Grado EGB', '6to Grado EGB', '7mo Grado EGB'].includes(grado)
 
-  // Función para cerrar sesión
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
-  }
-
   // 1. Cargar perfil, institución, año dinámico desde periodos_disponibles y asignaciones
   useEffect(() => {
     async function init() {
@@ -209,187 +203,205 @@ export default function ReporteAsistenciaPage() {
   const gradosUnicos = Array.from(new Set(misAsignaciones.map(a => a.grado_curso)))
   const paralelosDisponibles = Array.from(new Set(misAsignaciones.filter(a => a.grado_curso === grado).map(a => a.paralelo)))
 
+  if (cargando) {
+    return (
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans selection:bg-[#4b4c99] selection:text-white">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Reporte de Asistencia...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-
-        {/* ENCABEZADO */}
-        <div className="bg-white p-6 rounded-2xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <div className="text-[10px] font-black text-indigo-700 uppercase tracking-widest mb-1">
-              PANEL DOCENTE • CONSOLIDADO DE ASISTENCIA ({anioLectivoVigente || 'Sin año activo'})
-            </div>
-            <h1 className="text-2xl font-black text-slate-900">
-              Reporte General y Estadísticas de Asistencia
-            </h1>
-            <p className="text-xs text-slate-600 font-bold mt-1">
-              {nombreInstitucion} • Docente: <span className="text-slate-900">{nombreUsuario}</span> ({rolUsuario.toUpperCase()})
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 items-center">
-            <button
-              onClick={() => router.push('/docente/asistencia')}
-              className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs rounded-xl border transition"
-            >
-              ← Volver al Registro Diario
-            </button>
-          </div>
+    <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans">
+      
+      {/* ENCABEZADO */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
+          >
+            Consolidado de Asistencia • {anioLectivoVigente || 'Sin año activo'}
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            Reporte General y Estadísticas de Asistencia
+          </h1>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+            {nombreInstitucion} • Docente: <span className="text-slate-700">{nombreUsuario}</span> ({rolUsuario.toUpperCase()})
+          </p>
         </div>
 
-        {/* AVISO SI NO HAY AÑO ACTIVO */}
-        {!anioLectivoVigente && !cargando && (
-          <div className="bg-amber-50 border border-amber-300 p-4 rounded-2xl text-amber-900 text-xs font-bold">
-            ⚠️ La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
-          </div>
-        )}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => router.push('/docente/asistencia')}
+            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition shadow-2xs cursor-pointer"
+          >
+            ← Volver al Registro Diario
+          </button>
+        </div>
+      </div>
 
-        {/* AVISO SI EL PERIODO VIGENTE ESTÁ CERRADO */}
-        {esAnioCerrado && anioLectivoVigente && (
-          <div className="bg-red-50 border border-red-200 p-4 rounded-2xl text-red-900 text-xs font-bold flex items-center justify-between">
-            <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. El reporte de asistencia está en modo de solo lectura.</span>
-            <span className="bg-red-200 px-2.5 py-1 rounded">Periodo Cerrado</span>
-          </div>
-        )}
+      {/* AVISO SI NO HAY AÑO ACTIVO */}
+      {!anioLectivoVigente && !cargando && (
+        <div 
+          style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
+          className="border p-4 rounded-2xl text-xs font-bold shadow-2xs"
+        >
+          La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
+        </div>
+      )}
 
-        {/* FILTROS DE REPORTE */}
-        <div className="bg-white p-4 rounded-2xl border shadow-sm grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <div>
-            <label className="block text-[10px] font-black text-slate-700 uppercase mb-1">Grado / Curso</label>
+      {/* AVISO SI EL PERIODO VIGENTE ESTÁ CERRADO */}
+      {esAnioCerrado && anioLectivoVigente && (
+        <div 
+          style={{ backgroundColor: 'rgba(222, 88, 96, 0.08)', borderColor: 'rgba(222, 88, 96, 0.3)', color: '#9b2c2c' }}
+          className="border p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-2xs"
+        >
+          <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. El reporte de asistencia está en modo de solo lectura.</span>
+          <span className="bg-rose-200/80 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-900">Modo Archivo</span>
+        </div>
+      )}
+
+      {/* FILTROS DE REPORTE */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 text-xs">
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Grado / Curso</label>
+          <select
+            value={grado}
+            onChange={(e) => handleGradoChange(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
+          >
+            {gradosUnicos.length === 0 ? (
+              <option value="" className="text-slate-900 font-bold bg-white">Sin carga asignada</option>
+            ) : (
+              gradosUnicos.map((g) => <option key={g} value={g} className="text-slate-900 font-bold bg-white">{g}</option>)
+            )}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Paralelo</label>
+          <select
+            value={paralelo}
+            onChange={(e) => setParalelo(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
+          >
+            {paralelosDisponibles.map((p) => (
+              <option key={p} value={p} className="text-slate-900 font-bold bg-white">Paralelo {p}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Asignatura</label>
+          {esDocenteDeAula ? (
+            <input
+              type="text"
+              disabled
+              value="Asistencia General (Aula)"
+              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-500 bg-slate-100 cursor-not-allowed shadow-2xs"
+            />
+          ) : (
             <select
-              value={grado}
-              onChange={(e) => handleGradoChange(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50 outline-none"
+              value={asignatura}
+              onChange={(e) => setAsignatura(e.target.value)}
+              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
             >
-              {gradosUnicos.length === 0 ? (
-                <option value="">Sin carga asignada</option>
-              ) : (
-                gradosUnicos.map((g) => <option key={g} value={g}>{g}</option>)
-              )}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black text-slate-700 uppercase mb-1">Paralelo</label>
-            <select
-              value={paralelo}
-              onChange={(e) => setParalelo(e.target.value)}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-            >
-              {paralelosDisponibles.map((p) => (
-                <option key={p} value={p}>Paralelo {p}</option>
+              {listaAsignaturas.map(mat => (
+                <option key={mat} value={mat} className="text-slate-900 font-bold bg-white">{mat}</option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black text-slate-700 uppercase mb-1">Asignatura</label>
-            {esDocenteDeAula ? (
-              <input
-                type="text"
-                disabled
-                value="Asistencia General (Aula)"
-                className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-500 bg-slate-200 cursor-not-allowed"
-              />
-            ) : (
-              <select
-                value={asignatura}
-                onChange={(e) => setAsignatura(e.target.value)}
-                className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-              >
-                {listaAsignaturas.map(mat => (
-                  <option key={mat} value={mat}>{mat}</option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black text-indigo-700 uppercase mb-1">Trimestre / Periodo</label>
-            <select
-              value={trimestre}
-              onChange={(e) => setTrimestre(e.target.value)}
-              className="w-full p-2.5 border-2 border-indigo-400 rounded-xl text-xs font-black text-indigo-900 bg-indigo-50 outline-none"
-            >
-              <option value="Trimestre 1">Trimestre 1</option>
-              <option value="Trimestre 2">Trimestre 2</option>
-              <option value="Trimestre 3">Trimestre 3</option>
-            </select>
-          </div>
-        </div>
-
-        {/* TABLA MATRIZ CONSOLIDADA */}
-        <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-          <div className="p-4 bg-slate-100 border-b flex justify-between items-center">
-            <span className="text-xs font-black uppercase text-slate-700">
-              Consolidado: {grado} "{paralelo}" — {esDocenteDeAula ? 'Registro General' : asignatura} ({trimestre} - {anioLectivoVigente || 'Sin periodo'})
-            </span>
-            <span className="text-[10px] font-bold text-slate-500">
-              Total Estudiantes: {estudiantes.length}
-            </span>
-          </div>
-
-          {!anioLectivoVigente ? (
-            <div className="p-12 text-center text-amber-800 font-bold text-xs bg-amber-50">
-              ⚠️ No hay un año lectivo activo configurado en la institución.
-            </div>
-          ) : misAsignaciones.length === 0 ? (
-            <div className="p-12 text-center text-amber-800 font-bold text-xs bg-amber-50">
-              ⚠️ No tienes carga horaria asignada para el periodo vigente ({anioLectivoVigente}).
-            </div>
-          ) : cargando ? (
-            <div className="p-12 text-center text-slate-500 font-bold text-xs">
-              Generando reporte consolidado...
-            </div>
-          ) : estudiantes.length === 0 ? (
-            <div className="p-12 text-center text-slate-500 font-bold text-xs">
-              No hay registros o estudiantes activos en este curso para el periodo {anioLectivoVigente}.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead className="bg-slate-200 text-slate-900 font-black uppercase text-[10px]">
-                  <tr>
-                    <th className="p-3 w-12 text-center">#</th>
-                    <th className="p-3 min-w-[250px]">Estudiante</th>
-                    <th className="p-3 text-center text-emerald-800">Presentes</th>
-                    <th className="p-3 text-center text-amber-800">Atrasos</th>
-                    <th className="p-3 text-center text-blue-800">Faltas Justificadas</th>
-                    <th className="p-3 text-center text-red-800">Faltas Injustificadas</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {estudiantes.map((est, idx) => {
-                    const datosEst = reporteMap[est.id] || { Presente: 0, Atraso: 0, 'Falta Justificada': 0, 'Falta Injustificada': 0 }
-
-                    return (
-                      <tr key={est.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-bold text-slate-600 text-center">{idx + 1}</td>
-                        <td className="p-3 font-black text-slate-900 text-sm whitespace-nowrap">
-                          {est.apellidos} {est.nombres}
-                        </td>
-                        <td className="p-3 text-center font-bold text-emerald-700">
-                          {datosEst['Presente']}
-                        </td>
-                        <td className="p-3 text-center font-bold text-amber-700">
-                          {datosEst['Atraso']}
-                        </td>
-                        <td className="p-3 text-center font-bold text-blue-700">
-                          {datosEst['Falta Justificada']}
-                        </td>
-                        <td className="p-3 text-center font-bold text-red-700">
-                          {datosEst['Falta Injustificada']}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
           )}
         </div>
 
+        <div>
+          <label className="block text-[10px] font-bold text-[#4b4c99] uppercase mb-1.5">Trimestre / Periodo</label>
+          <select
+            value={trimestre}
+            onChange={(e) => setTrimestre(e.target.value)}
+            className="w-full p-3 border-2 border-indigo-300 rounded-xl text-xs font-black text-indigo-900 bg-indigo-50 outline-none shadow-2xs cursor-pointer"
+          >
+            <option value="Trimestre 1" className="text-slate-900 font-bold bg-white">Trimestre 1</option>
+            <option value="Trimestre 2" className="text-slate-900 font-bold bg-white">Trimestre 2</option>
+            <option value="Trimestre 3" className="text-slate-900 font-bold bg-white">Trimestre 3</option>
+          </select>
+        </div>
       </div>
+
+      {/* TABLA MATRIZ CONSOLIDADA */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs font-bold uppercase text-slate-900">
+          <span>
+            Consolidado: {grado} "{paralelo}" — {esDocenteDeAula ? 'Registro General' : asignatura} ({trimestre} - {anioLectivoVigente || 'Sin periodo'})
+          </span>
+          <span className="text-[10px] text-slate-500">
+            Total Estudiantes: {estudiantes.length}
+          </span>
+        </div>
+
+        {!anioLectivoVigente ? (
+          <div className="p-12 text-center text-amber-800 font-bold text-xs bg-amber-50/50">
+            No hay un año lectivo activo configurado en la institución.
+          </div>
+        ) : misAsignaciones.length === 0 ? (
+          <div className="p-12 text-center text-amber-800 font-bold text-xs bg-amber-50/50">
+            No tienes carga horaria asignada para el periodo vigente ({anioLectivoVigente}).
+          </div>
+        ) : cargando ? (
+          <div className="p-12 text-center text-slate-500 font-medium text-xs">
+            Generando reporte consolidado...
+          </div>
+        ) : estudiantes.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 font-medium text-xs">
+            No hay registros o estudiantes activos en este curso para el periodo {anioLectivoVigente}.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-slate-50 text-slate-900 font-bold uppercase text-[10px] border-b border-slate-200">
+                <tr>
+                  <th className="p-3 w-12 text-center">#</th>
+                  <th className="p-3 min-w-[250px]">Estudiante</th>
+                  <th className="p-3 text-center text-emerald-800 bg-emerald-50/30">Presentes</th>
+                  <th className="p-3 text-center text-amber-800 bg-amber-50/30">Atrasos</th>
+                  <th className="p-3 text-center text-indigo-800 bg-indigo-50/30">Faltas Justificadas</th>
+                  <th className="p-3 text-center text-rose-800 bg-rose-50/30">Faltas Injustificadas</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {estudiantes.map((est, idx) => {
+                  const datosEst = reporteMap[est.id] || { Presente: 0, Atraso: 0, 'Falta Justificada': 0, 'Falta Injustificada': 0 }
+
+                  return (
+                    <tr key={est.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-bold text-slate-400 text-center">{idx + 1}</td>
+                      <td className="p-3 font-bold text-slate-800 whitespace-nowrap">
+                        {est.apellidos} {est.nombres}
+                      </td>
+                      <td className="p-3 text-center font-bold text-emerald-700 bg-emerald-50/10">
+                        {datosEst['Presente']}
+                      </td>
+                      <td className="p-3 text-center font-bold text-amber-700 bg-amber-50/10">
+                        {datosEst['Atraso']}
+                      </td>
+                      <td className="p-3 text-center font-bold text-indigo-700 bg-indigo-50/10">
+                        {datosEst['Falta Justificada']}
+                      </td>
+                      <td className="p-3 text-center font-bold text-rose-700 bg-rose-50/10">
+                        {datosEst['Falta Injustificada']}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
     </div>
   )
 }

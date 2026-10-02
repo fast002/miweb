@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -429,8 +429,32 @@ export default function PlanificadorMicrocurricular() {
     setSemanas(nuevasSemanas)
   }
 
+  // VALIDACIÓN DE LÍMITE DIARIO DE 5 USOS EXITOSOS DE IA
+  const verificarCuotaIA = async () => {
+    const hoy = new Date().toISOString().split('T')[0]
+    const { count, error } = await supabase
+      .from('planificaciones_microcurriculares')
+      .select('*', { count: 'exact', head: true })
+      .eq('docente_id', docente?.id)
+      .gte('created_at', `${hoy}T00:00:00`)
+
+    if (error) {
+      console.error('Error al verificar cuota:', error)
+      return true
+    }
+
+    if ((count || 0) >= 5) {
+      alert('⚠️ Has alcanzado el límite diario de 5 generaciones exitosas con Inteligencia Artificial. Tu cupo se renovará mañana.')
+      return false
+    }
+    return true
+  }
+
   const analizarEstructuraTematicaIA = async () => {
     if (generandoIA) return
+    const cuotaDisponible = await verificarCuotaIA()
+    if (!cuotaDisponible) return
+
     setGenerandoIA(true)
     try {
       const filasSeleccionadas = bloquesCompetencias.flatMap(b => 
@@ -443,7 +467,7 @@ export default function PlanificadorMicrocurricular() {
       )
 
       if (filasSeleccionadas.length === 0) {
-        alert('⚠️ Por favor, selecciona al menos un indicador o saber en tus bloques de competencia antes de analizar.')
+        alert('Por favor, selecciona al menos un indicador o saber en tus bloques de competencia antes de analizar.')
         setGenerandoIA(false)
         return
       }
@@ -465,10 +489,10 @@ export default function PlanificadorMicrocurricular() {
 
       if (data.temas && Array.isArray(data.temas)) {
         setEstructuraTematica(data.temas)
-        alert('✨ ¡Estructura temática generada exclusivamente con tus selecciones!')
+        alert('✨ Estructura temática generada con éxito (No se descuenta si hay fallo).')
       }
     } catch (e: any) {
-      alert('Error al analizar la estructura temática.')
+      alert('❌ La IA falló y no se ha descontado de tu límite diario. Detalle: ' + e.message)
     } finally {
       setGenerandoIA(false)
     }
@@ -476,6 +500,9 @@ export default function PlanificadorMicrocurricular() {
 
   const generarSecuenciaDUAIa = async () => {
     if (generandoIA) return
+    const cuotaDisponible = await verificarCuotaIA()
+    if (!cuotaDisponible) return
+
     setGenerandoIA(true)
     try {
       const filasSeleccionadas = bloquesCompetencias.flatMap(b => 
@@ -488,7 +515,7 @@ export default function PlanificadorMicrocurricular() {
       )
 
       if (filasSeleccionadas.length === 0) {
-        alert('⚠️ Por favor, selecciona al menos un indicador o saber en tus bloques antes de generar la secuencia.')
+        alert('Por favor, selecciona al menos un indicador o saber en tus bloques antes de generar la secuencia.')
         setGenerandoIA(false)
         return
       }
@@ -537,11 +564,11 @@ export default function PlanificadorMicrocurricular() {
           instrumento: s.instrumento || 'Rúbrica de evaluación / Lista de cotejo'
         }))
         setSemanas(semanasMapeadas)
-        alert('✨ ¡Planificación integral generada con éxito!')
+        alert('✨ Planificación integral generada con éxito.')
       }
     } catch (e: any) {
       console.error('Error detallado:', e)
-      alert('❌ Error al generar con IA: ' + e.message)
+      alert('❌ La IA falló y no se ha descontado de tu límite diario. Inténtalo de nuevo. Detalle: ' + e.message)
     } finally {
       setGenerandoIA(false)
     }
@@ -549,11 +576,11 @@ export default function PlanificadorMicrocurricular() {
 
   const guardarPlanificacion = async () => {
     if (gradosPermitidos.length > 0 && !gradosPermitidos.includes(gradoSeleccionado)) {
-      alert('🚫 Error: No tienes una licencia activa para planificar en este grado.')
+      alert('Error: No tienes una licencia activa para planificar en este grado.')
       return
     }
     if (asignaturasPermitidas.length > 0 && !asignaturasPermitidas.includes(materiaSeleccionada)) {
-      alert('🚫 Error: No tienes una licencia activa para esta asignatura.')
+      alert('Error: No tienes una licencia activa para esta asignatura.')
       return
     }
 
@@ -648,13 +675,13 @@ export default function PlanificadorMicrocurricular() {
       doc.text((institucion?.nombre_institucion || 'UNIDAD EDUCATIVA').toUpperCase(), pageWidth / 2, 18, { align: 'center' })
       doc.setFontSize(8)
       doc.text(`CÓDIGO AMIE: ${institucion?.codigo_amie || '03H00106'}`, pageWidth / 2, 24, { align: 'center' })
-      doc.setTextColor(0, 0, 128)
+      doc.setTextColor(75, 76, 153)
       doc.text(`AÑO LECTIVO: ${institucion?.anio_lectivo_activo || '2026-2027'}`, pageWidth / 2, 30, { align: 'center' })
       doc.setTextColor(0, 0, 0)
 
       doc.setFont('helvetica', 'italic')
       doc.setFontSize(8)
-      doc.text('EL NUEVO ECUADOR', pageWidth - 22, 22, { align: 'center' })
+      doc.text('EDUCAMET', pageWidth - 22, 22, { align: 'center' })
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(10)
@@ -665,7 +692,7 @@ export default function PlanificadorMicrocurricular() {
       autoTable(doc, {
         startY: 43,
         theme: 'grid',
-        headStyles: { fillColor: [79, 70, 229], fontSize: 8 },
+        headStyles: { fillColor: [75, 76, 153], fontSize: 8 },
         bodyStyles: { fontSize: 8 },
         body: [
           ['DATOS INFORMATIVOS', ''],
@@ -709,7 +736,7 @@ export default function PlanificadorMicrocurricular() {
         theme: 'grid',
         head: [['Semana', 'Estrategias metodológicas desde el DUA', 'Recursos', 'Técnicas e instrumentos de evaluación']],
         body: bodySemanas,
-        headStyles: { fillColor: [79, 70, 229], fontSize: 8 },
+        headStyles: { fillColor: [75, 76, 153], fontSize: 8 },
         styles: { fontSize: 7, cellPadding: 2 }
       })
 
@@ -781,8 +808,8 @@ export default function PlanificadorMicrocurricular() {
             }
             div.Section1 { page: Section1; }
             body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; }
-            h2 { text-align: center; color: #1e1b4b; font-size: 13pt; }
-            h3 { background: #e0e7ff; padding: 6px; font-size: 10pt; color: #312e81; border-left: 4px solid #4f46e5; }
+            h2 { text-align: center; color: #4b4c99; font-size: 13pt; }
+            h3 { background: #e0e7ff; padding: 6px; font-size: 10pt; color: #4b4c99; border-left: 4px solid #4b4c99; }
             table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 12px; mso-yfti-tbllook: 1184; }
             th, td { border: 1px solid #000; padding: 6px; text-align: left; font-size: 9pt; vertical-align: top; }
             th { background-color: #f3f4f6; color: #1f2937; }
@@ -870,178 +897,186 @@ export default function PlanificadorMicrocurricular() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12 relative">
+    <div className="space-y-6 max-w-6xl mx-auto pb-12 relative font-sans selection:bg-[#4b4c99] selection:text-white">
       
       {generandoIA && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl border border-purple-100 max-w-md w-full mx-4 text-center space-y-5 animate-in fade-in zoom-in duration-200">
-            <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-2xl mx-auto flex items-center justify-center text-3xl animate-bounce">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-2xs">
+          <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-200 max-w-md w-full mx-4 text-center space-y-4">
+            <div className="w-14 h-14 bg-indigo-50 text-[#4b4c99] rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">
               ✨
             </div>
-            <div className="space-y-2">
-              <h3 className="font-black text-slate-800 text-base uppercase tracking-wide">
+            <div className="space-y-1.5">
+              <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wide">
                 Generando Planificación
               </h3>
-              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+              <p className="text-xs text-slate-500 font-medium leading-relaxed">
                 Estamos generando tu planificación con inteligencia artificial, esto tomará de 1 a 2 minutos. Por favor, espera...
               </p>
             </div>
             <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div className="bg-purple-600 h-full rounded-full animate-[indeterminate_1.5s_infinite_linear]" style={{ width: '60%' }}></div>
+              <div style={{ backgroundColor: '#4b4c99', width: '60%' }} className="h-full rounded-full animate-pulse"></div>
             </div>
           </div>
         </div>
       )}
 
       {/* ENCABEZADO */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center flex-wrap gap-4">
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex justify-between items-center flex-wrap gap-4">
         <div>
-          <h2 className="font-black text-slate-800 text-sm uppercase tracking-wide">
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
+          >
+            Módulo Curricular
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
             {planId ? 'Editando Planificación Microcurricular' : 'Nueva Planificación Microcurricular Piloto'}
-          </h2>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
+          </h1>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
             Matriz de competencias y saberes modulares desde la base de datos oficial.
           </p>
         </div>
-        <div className="flex gap-2">
+
+        <div className="flex gap-2.5 flex-wrap">
           <button
             onClick={guardarPlanificacion}
             disabled={guardando}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase rounded-xl shadow transition cursor-pointer"
+            style={{ backgroundColor: '#4b4c99' }}
+            className="px-4 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
           >
-            {guardando ? 'Guardando...' : '💾 Guardar Planificación'}
+            {guardando ? 'Guardando...' : 'Guardar Planificación'}
           </button>
           <button
             onClick={generarPDFPlanificacion}
             disabled={generandoPdf}
-            className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase rounded-xl shadow transition cursor-pointer"
+            className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition shadow-2xs cursor-pointer disabled:opacity-50"
           >
-            {generandoPdf ? 'Generando PDF...' : '📋 PDF'}
+            {generandoPdf ? 'Generando PDF...' : 'Descargar PDF'}
           </button>
           <button
             onClick={generarWordPlanificacion}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase rounded-xl shadow transition cursor-pointer"
+            className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition shadow-2xs cursor-pointer"
           >
-            📄 Word
+            Descargar Word
           </button>
         </div>
       </div>
 
       {/* DATOS INFORMATIVOS */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
-        <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wide border-b pb-2">
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+        <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide border-b border-slate-200 pb-3">
           Datos Informativos (Plan Piloto Oficial)
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5 text-xs">
           <div>
-            <label className="block font-bold text-slate-500 uppercase mb-1">Docente:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Docente:</label>
             <input 
               type="text" 
               disabled 
               value={`${docente?.nombres || ''} ${docente?.apellidos || ''}`} 
-              className="w-full p-3 border rounded-xl bg-slate-100 text-slate-900 font-bold" 
+              className="w-full p-3 border border-slate-300 rounded-xl bg-slate-100 text-slate-700 font-bold shadow-2xs" 
             />
           </div>
 
           <div>
-            <label className="block font-bold text-slate-500 uppercase mb-1">Subnivel Educativo:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Subnivel Educativo:</label>
             <select 
               value={subnivel} 
               onChange={e => handleSubnivelChange(e.target.value)} 
-              className="w-full p-3 border rounded-xl bg-slate-50 text-slate-900 font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
             >
               {subnivelesDisponibles.map((sub, idx) => (
-                <option key={idx} value={sub}>{sub}</option>
+                <option key={idx} value={sub} className="text-slate-900 font-bold bg-white">{sub}</option>
               ))}
             </select>
             {gradosPermitidos.length > 0 && (
-              <span className="text-[10px] text-indigo-600 font-bold mt-1 block">Filtrado por licencia comercial</span>
+              <span className="text-[10px] text-[#4b4c99] font-bold mt-1 block">Filtrado por licencia comercial</span>
             )}
           </div>
 
           <div>
-            <label className="block font-bold text-slate-500 uppercase mb-1">Grado / Curso / Año:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Grado / Curso / Año:</label>
             <select 
               value={gradoSeleccionado} 
               onChange={e => setGradoSeleccionado(e.target.value)} 
-              className="w-full p-3 border rounded-xl bg-slate-50 text-slate-900 font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
             >
               {gradosVisibles.length > 0 ? (
                 gradosVisibles.map((anio, idx) => (
-                  <option key={idx} value={anio}>{anio}</option>
+                  <option key={idx} value={anio} className="text-slate-900 font-bold bg-white">{anio}</option>
                 ))
               ) : (
-                <option value="" disabled>🚫 Sin grados autorizados en este subnivel</option>
+                <option value="" disabled className="text-slate-500 font-bold bg-white">Sin grados autorizados en este subnivel</option>
               )}
             </select>
             {gradosPermitidos.length > 0 && (
-              <span className="text-[10px] text-indigo-600 font-bold mt-1 block">Filtrado por licencia comercial</span>
+              <span className="text-[10px] text-[#4b4c99] font-bold mt-1 block">Filtrado por licencia comercial</span>
             )}
           </div>
 
           <div>
-            <label className="block font-bold text-slate-500 uppercase mb-1">Asignatura:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Asignatura:</label>
             <select 
               value={materiaSeleccionada} 
               onChange={e => setMateriaSeleccionada(e.target.value)} 
-              className="w-full p-3 border rounded-xl bg-slate-50 text-slate-900 font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
             >
               {materiasVisibles.length > 0 ? (
                 materiasVisibles.map((asig: string, idx: number) => (
-                  <option key={idx} value={asig}>{asig}</option>
+                  <option key={idx} value={asig} className="text-slate-900 font-bold bg-white">{asig}</option>
                 ))
               ) : (
-                <option value="" disabled>Sin asignaturas autorizadas</option>
+                <option value="" disabled className="text-slate-500 font-bold bg-white">Sin asignaturas autorizadas</option>
               )}
             </select>
             {asignaturasPermitidas.length > 0 && (
-              <span className="text-[10px] text-purple-600 font-bold mt-1 block">Filtrado por licencia comercial</span>
+              <span className="text-[10px] text-[#4b4c99] font-bold mt-1 block">Filtrado por licencia comercial</span>
             )}
           </div>
 
           <div>
-            <label className="block font-bold text-slate-500 uppercase mb-1">Paralelo:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Paralelo:</label>
             <input 
               type="text" 
               value={paraleloSeleccionado} 
               onChange={e => setParaleloSeleccionado(e.target.value)} 
-              className="w-full p-3 border rounded-xl bg-slate-50 text-slate-900 font-bold outline-none" 
+              className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs" 
             />
           </div>
 
           <div>
-            <label className="block font-bold text-slate-500 uppercase mb-1">Trimestre:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Trimestre:</label>
             <select 
               value={form.trimestre} 
               onChange={e => setForm({...form, trimestre: e.target.value})} 
-              className="w-full p-3 border rounded-xl bg-slate-50 text-slate-900 font-bold outline-none"
+              className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
             >
-              <option value="Trimestre 1">Trimestre 1</option>
-              <option value="Trimestre 2">Trimestre 2</option>
-              <option value="Trimestre 3">Trimestre 3</option>
+              <option value="Trimestre 1" className="text-slate-900 font-bold bg-white">Trimestre 1</option>
+              <option value="Trimestre 2" className="text-slate-900 font-bold bg-white">Trimestre 2</option>
+              <option value="Trimestre 3" className="text-slate-900 font-bold bg-white">Trimestre 3</option>
             </select>
           </div>
 
           <div>
-            <label className="block font-bold text-indigo-700 uppercase mb-1">No. de Semanas (Dinámico):</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">No. de Semanas (Dinámico):</label>
             <input 
               type="number" 
               min="1" 
               max="12" 
               value={form.noSemanas} 
               onChange={e => handleNoSemanasChange(e.target.value)} 
-              className="w-full p-3 border-2 border-indigo-200 rounded-xl bg-indigo-50/40 text-indigo-900 font-black outline-none focus:ring-2 focus:ring-indigo-500" 
+              className="w-full p-3 border-2 border-indigo-200 rounded-xl bg-indigo-50/50 text-indigo-900 font-black outline-none focus:border-[#4b4c99] shadow-2xs" 
             />
           </div>
         </div>
       </div>
 
       {/* MATRIZ DE COMPETENCIAS ESPECIFICAS */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
-        <div className="border-b pb-4 flex justify-between items-center flex-wrap gap-3">
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+        <div className="border-b border-slate-200 pb-4 flex justify-between items-center flex-wrap gap-3">
           <div>
-            <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wide">
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide">
               Matriz de Competencias Específicas
             </h3>
             <p className="text-[11px] text-slate-500 font-medium mt-0.5">
@@ -1052,41 +1087,42 @@ export default function PlanificadorMicrocurricular() {
             <button
               onClick={agregarBloqueCompetencia}
               disabled={generandoIA}
-              className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs uppercase rounded-xl transition border border-indigo-200 flex items-center gap-1.5 shadow-xs cursor-pointer"
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase rounded-xl transition border border-slate-300 shadow-2xs cursor-pointer"
             >
-              + Agregar Bloque de Competencia
+              + Agregar Bloque
             </button>
             <button
               onClick={analizarEstructuraTematicaIA}
               disabled={generandoIA}
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-bold text-xs uppercase rounded-xl transition border border-indigo-200 shadow-2xs cursor-pointer"
             >
-              Analizar y Estructurar Temas con IA
+              Analizar Temas con IA
             </button>
             <button
               onClick={generarSecuenciaDUAIa}
               disabled={generandoIA}
-              className={`px-4 py-2.5 bg-purple-600 text-white font-bold text-xs uppercase rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer ${
-                generandoIA ? 'opacity-80 scale-[0.98] shadow-inner cursor-wait animate-pulse bg-purple-800' : 'hover:bg-purple-700'
+              style={{ backgroundColor: '#4b4c99' }}
+              className={`px-4 py-2.5 text-white font-bold text-xs uppercase rounded-xl shadow-sm transition cursor-pointer ${
+                generandoIA ? 'opacity-80 scale-[0.98] shadow-inner cursor-wait animate-pulse' : 'hover:opacity-95'
               }`}
             >
-              {generandoIA ? `⏳ Generando ${form.noSemanas} Semanas con IA...` : `Generar Secuencia (${form.noSemanas} Semanas) con IA`}
+              {generandoIA ? `Generando ${form.noSemanas} Semanas...` : `Generar Secuencia (${form.noSemanas} Semanas)`}
             </button>
           </div>
         </div>
 
         {estructuraTematica.length > 0 && (
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
-            <h4 className="font-bold text-blue-900 text-xs uppercase">Estructura Temática Secuencial (Análisis IA):</h4>
+          <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-2xl space-y-3 shadow-2xs">
+            <h4 className="font-bold text-indigo-900 text-xs uppercase">Estructura Temática Secuencial (Análisis IA):</h4>
             <div className="space-y-2 text-xs text-slate-800">
               {estructuraTematica.map((t, idx) => (
-                <div key={idx} className="bg-white p-3 rounded-lg border border-blue-100 space-y-1">
-                  <div className="font-bold text-indigo-700">{t.orden}</div>
-                  <div className="text-slate-600 italic">{t.subtitulo}</div>
-                  <div className="font-semibold text-slate-700 mt-1">Indicadores:</div>
+                <div key={idx} className="bg-white p-3.5 rounded-xl border border-indigo-100 space-y-1 shadow-2xs">
+                  <div className="font-bold text-[#4b4c99]">{t.orden}</div>
+                  <div className="text-slate-600 font-medium italic">{t.subtitulo}</div>
+                  <div className="font-bold text-slate-700 mt-1">Indicadores:</div>
                   <pre className="whitespace-pre-wrap font-sans text-slate-600">{t.indicadores}</pre>
-                  <div className="font-semibold text-slate-700 mt-1">Saberes Integrados:</div>
-                  <pre className="whitespace-pre-wrap font-sans text-blue-900">
+                  <div className="font-bold text-slate-700 mt-1">Saberes Integrados:</div>
+                  <pre className="whitespace-pre-wrap font-sans text-indigo-950 font-medium">
                     {`• Conceptual:\n${t.conceptual}\n• Procedimental:\n${t.procedimental}\n• Actitudinal:\n${t.actitudinal}`}
                   </pre>
                 </div>
@@ -1097,10 +1133,10 @@ export default function PlanificadorMicrocurricular() {
 
         <div className="space-y-6">
           {bloquesCompetencias.map((bloque, index) => (
-            <div key={bloque.id} className="p-5 rounded-2xl border border-indigo-200 bg-indigo-50/20 relative space-y-4 shadow-xs">
+            <div key={bloque.id} className="p-5 rounded-2xl border border-slate-200 bg-slate-50/60 relative space-y-4 shadow-2xs">
               
-              <div className="flex justify-between items-center border-b border-indigo-100 pb-3 flex-wrap gap-2">
-                <span className="font-bold text-xs text-indigo-700 uppercase">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-3 flex-wrap gap-2">
+                <span className="font-bold text-xs text-slate-800 uppercase">
                   Fila / Competencia {index + 1}
                 </span>
 
@@ -1108,7 +1144,7 @@ export default function PlanificadorMicrocurricular() {
                   <button
                     onClick={() => agregarSubFilaSaber(bloque.id)}
                     disabled={generandoIA}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] uppercase rounded-lg shadow-xs transition flex items-center gap-1 cursor-pointer"
+                    className="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[11px] uppercase rounded-xl transition cursor-pointer"
                   >
                     + Agregar fila de indicador y saberes
                   </button>
@@ -1117,7 +1153,7 @@ export default function PlanificadorMicrocurricular() {
                     <button 
                       onClick={() => eliminarBloqueCompetencia(bloque.id)} 
                       disabled={generandoIA}
-                      className="text-red-600 font-bold text-xs hover:underline ml-2 cursor-pointer"
+                      className="text-rose-600 font-bold text-xs hover:underline ml-2 cursor-pointer"
                     >
                       Eliminar Bloque
                     </button>
@@ -1126,14 +1162,14 @@ export default function PlanificadorMicrocurricular() {
               </div>
 
               <div className="space-y-1">
-                <label className="block font-bold text-indigo-900 text-xs uppercase">Competencia Específica de esta Fila:</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Competencia Específica de esta Fila:</label>
                 <select
                   value={bloque.competencia}
                   onChange={e => actualizarBloqueCompetencia(bloque.id, e.target.value)}
-                  className="w-full p-2.5 border rounded-xl bg-white text-slate-900 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 text-xs font-bold outline-none focus:border-[#4b4c99] cursor-pointer shadow-2xs"
                 >
                   {competenciasDisponibles.map((comp, idx) => (
-                    <option key={idx} value={comp}>{comp}</option>
+                    <option key={idx} value={comp} className="text-slate-900 font-bold bg-white">{comp}</option>
                   ))}
                 </select>
                 <textarea 
@@ -1143,12 +1179,12 @@ export default function PlanificadorMicrocurricular() {
                     const val = e.target.value
                     setBloquesCompetencias(bloquesCompetencias.map(b => b.id === bloque.id ? { ...b, competencia: val } : b))
                   }} 
-                  className="w-full p-2 border rounded-lg bg-white text-slate-900 text-xs font-medium outline-none mt-1" 
+                  className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 text-xs font-medium outline-none mt-1 shadow-2xs" 
                 />
               </div>
 
               {/* INTERRUPTOR DE SELECCIÓN 1 A 1 */}
-              <div className="flex items-center gap-3 py-2 px-3 bg-white border border-indigo-100 rounded-xl shadow-2xs">
+              <div className="flex items-center gap-3 py-2.5 px-3.5 bg-white border border-slate-300 rounded-xl shadow-2xs">
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input 
                     type="checkbox" 
@@ -1156,7 +1192,7 @@ export default function PlanificadorMicrocurricular() {
                     onChange={() => toggleActivar1a1(bloque.id)}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4b4c99]"></div>
                 </label>
                 <span className="text-xs font-bold text-slate-700 uppercase">
                   Activar selección indicadores y saberes 1 a 1
@@ -1165,7 +1201,6 @@ export default function PlanificadorMicrocurricular() {
 
               <div className="space-y-4 pt-2">
                 {bloque.filasSaberes.map((subFila, subIdx) => {
-                  // Filtramos los registros de la base de datos que corresponden al indicador actualmente seleccionado en esta fila
                   const regAsociados = registrosCurriculares.filter(d => 
                     subFila.indicador ? d.indicador === subFila.indicador : true
                   )
@@ -1174,45 +1209,45 @@ export default function PlanificadorMicrocurricular() {
                   const actitudinalesDisponiblesFila = Array.from(new Set(regAsociados.map(d => d.actitudinal).filter(Boolean)))
 
                   return (
-                    <div key={subFila.id} className="p-4 rounded-xl border border-slate-200 bg-white relative space-y-3 shadow-2xs">
+                    <div key={subFila.id} className="p-4 rounded-2xl border border-slate-200 bg-white relative space-y-3 shadow-2xs">
                       
                       {bloque.filasSaberes.length > 1 && (
                         <div className="flex justify-end">
                           <button 
                             onClick={() => eliminarSubFilaSaber(bloque.id, subFila.id)}
-                            className="text-red-500 font-bold text-[10px] uppercase hover:underline cursor-pointer"
+                            className="text-rose-600 font-bold text-[10px] uppercase hover:underline cursor-pointer"
                           >
-                            ✕ Quitar esta fila
+                            Quitar esta fila
                           </button>
                         </div>
                       )}
 
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5 text-xs">
                         
-                        {/* INDICADOR */}
-                        <div className="space-y-1">
-                          <label className="block font-bold text-slate-600 uppercase">Indicador:</label>
+                        {/* INDICADOR (#4b4c99) */}
+                        <div className="space-y-1.5 p-3 rounded-2xl border border-indigo-200 bg-indigo-50/20 shadow-2xs">
+                          <label style={{ color: '#4b4c99' }} className="block font-black uppercase text-[11px]">Indicador:</label>
                           {bloque.activar1a1 ? (
                             <select
                               onChange={e => {
                                 handleSeleccionarItem1a1(bloque.id, subFila.id, 'indicador', e.target.value)
                                 e.target.value = ""
                               }}
-                              className="w-full p-2 border rounded-lg bg-indigo-50 text-indigo-900 font-bold text-[11px] outline-none cursor-pointer"
+                              className="w-full p-2.5 border border-indigo-200 rounded-xl bg-white text-slate-900 font-bold text-[11px] outline-none cursor-pointer shadow-2xs"
                             >
-                              <option value="">+ Añadir indicador ítem por ítem...</option>
+                              <option value="" className="text-slate-900 font-bold bg-white">+ Añadir indicador ítem por ítem...</option>
                               {bloque.indicadoresDisponibles?.map((ind, i) => (
-                                <option key={i} value={ind}>{ind}</option>
+                                <option key={i} value={ind} className="text-slate-900 font-bold bg-white">{ind}</option>
                               ))}
                             </select>
                           ) : (
                             <select
                               onChange={e => handleSubFilaChange(bloque.id, subFila.id, 'indicador', e.target.value)}
-                              className="w-full p-2 border rounded-lg bg-indigo-50 text-indigo-900 font-bold text-[11px] outline-none cursor-pointer"
+                              className="w-full p-2.5 border border-indigo-200 rounded-xl bg-white text-slate-900 font-bold text-[11px] outline-none cursor-pointer shadow-2xs"
                             >
-                              <option value="">-- Seleccionar individual --</option>
+                              <option value="" className="text-slate-900 font-bold bg-white">-- Seleccionar individual --</option>
                               {bloque.indicadoresDisponibles?.map((ind, i) => (
-                                <option key={i} value={ind}>{ind}</option>
+                                <option key={i} value={ind} className="text-slate-900 font-bold bg-white">{ind}</option>
                               ))}
                             </select>
                           )}
@@ -1220,34 +1255,34 @@ export default function PlanificadorMicrocurricular() {
                             rows={3} 
                             value={subFila.indicador} 
                             onChange={e => handleSubFilaChange(bloque.id, subFila.id, 'indicador', e.target.value)} 
-                            className="w-full p-2 border rounded-lg bg-white text-slate-900 font-medium outline-none" 
+                            className="w-full p-2.5 border border-indigo-200 rounded-xl bg-white text-slate-900 font-medium outline-none shadow-2xs focus:border-[#4b4c99]" 
                           />
                         </div>
 
-                        {/* DECLARATIVO */}
-                        <div className="space-y-1">
-                          <label className="block font-bold text-blue-900 uppercase">Declarativo:</label>
+                        {/* DECLARATIVO (#f6c358) */}
+                        <div className="space-y-1.5 p-3 rounded-2xl border border-amber-200 bg-amber-50/20 shadow-2xs">
+                          <label style={{ color: '#b45309' }} className="block font-black uppercase text-[11px]">Declarativo:</label>
                           {bloque.activar1a1 ? (
                             <select
                               onChange={e => {
                                 handleSeleccionarItem1a1(bloque.id, subFila.id, 'declarativo', e.target.value)
                                 e.target.value = ""
                               }}
-                              className="w-full p-2 border rounded-lg bg-blue-50 text-blue-900 font-bold text-[11px] outline-none cursor-pointer"
+                              className="w-full p-2.5 border border-amber-200 rounded-xl bg-white text-slate-900 font-bold text-[11px] outline-none cursor-pointer shadow-2xs"
                             >
-                              <option value="">+ Añadir declarativo ítem por ítem...</option>
+                              <option value="" className="text-slate-900 font-bold bg-white">+ Añadir declarativo ítem por ítem...</option>
                               {declarativosDisponiblesFila.map((dec, i) => (
-                                <option key={i} value={dec}>{dec}</option>
+                                <option key={i} value={dec} className="text-slate-900 font-bold bg-white">{dec}</option>
                               ))}
                             </select>
                           ) : (
                             <select
                               onChange={e => handleSubFilaChange(bloque.id, subFila.id, 'declarativo', e.target.value)}
-                              className="w-full p-2 border rounded-lg bg-blue-50 text-blue-900 font-bold text-[11px] outline-none cursor-pointer"
+                              className="w-full p-2.5 border border-amber-200 rounded-xl bg-white text-slate-900 font-bold text-[11px] outline-none cursor-pointer shadow-2xs"
                             >
-                              <option value="">-- Seleccionar individual --</option>
+                              <option value="" className="text-slate-900 font-bold bg-white">-- Seleccionar individual --</option>
                               {bloque.declarativosDisponibles?.map((dec, i) => (
-                                <option key={i} value={dec}>{dec}</option>
+                                <option key={i} value={dec} className="text-slate-900 font-bold bg-white">{dec}</option>
                               ))}
                             </select>
                           )}
@@ -1255,34 +1290,34 @@ export default function PlanificadorMicrocurricular() {
                             rows={3} 
                             value={subFila.declarativo} 
                             onChange={e => handleSubFilaChange(bloque.id, subFila.id, 'declarativo', e.target.value)} 
-                            className="w-full p-2 border rounded-lg bg-blue-50/40 text-slate-900 font-medium outline-none" 
+                            className="w-full p-2.5 border border-amber-200 rounded-xl bg-white text-slate-900 font-medium outline-none shadow-2xs focus:border-[#f6c358]" 
                           />
                         </div>
 
-                        {/* PROCEDIMENTAL */}
-                        <div className="space-y-1">
-                          <label className="block font-bold text-emerald-900 uppercase">Procedimental:</label>
+                        {/* PROCEDIMENTAL (#45b3a5) */}
+                        <div className="space-y-1.5 p-3 rounded-2xl border border-teal-200 bg-teal-50/20 shadow-2xs">
+                          <label style={{ color: '#115e59' }} className="block font-black uppercase text-[11px]">Procedimental:</label>
                           {bloque.activar1a1 ? (
                             <select
                               onChange={e => {
                                 handleSeleccionarItem1a1(bloque.id, subFila.id, 'procedimental', e.target.value)
                                 e.target.value = ""
                               }}
-                              className="w-full p-2 border rounded-lg bg-emerald-50 text-emerald-900 font-bold text-[11px] outline-none cursor-pointer"
+                              className="w-full p-2.5 border border-teal-200 rounded-xl bg-white text-slate-900 font-bold text-[11px] outline-none cursor-pointer shadow-2xs"
                             >
-                              <option value="">+ Añadir procedimental ítem por ítem...</option>
+                              <option value="" className="text-slate-900 font-bold bg-white">+ Añadir procedimental ítem por ítem...</option>
                               {procedimentalesDisponiblesFila.map((proc, i) => (
-                                <option key={i} value={proc}>{proc}</option>
+                                <option key={i} value={proc} className="text-slate-900 font-bold bg-white">{proc}</option>
                               ))}
                             </select>
                           ) : (
                             <select
                               onChange={e => handleSubFilaChange(bloque.id, subFila.id, 'procedimental', e.target.value)}
-                              className="w-full p-2 border rounded-lg bg-emerald-50 text-emerald-900 font-bold text-[11px] outline-none cursor-pointer"
+                              className="w-full p-2.5 border border-teal-200 rounded-xl bg-white text-slate-900 font-bold text-[11px] outline-none cursor-pointer shadow-2xs"
                             >
-                              <option value="">-- Seleccionar individual --</option>
+                              <option value="" className="text-slate-900 font-bold bg-white">-- Seleccionar individual --</option>
                               {bloque.procedimentalesDisponibles?.map((proc, i) => (
-                                <option key={i} value={proc}>{proc}</option>
+                                <option key={i} value={proc} className="text-slate-900 font-bold bg-white">{proc}</option>
                               ))}
                             </select>
                           )}
@@ -1290,34 +1325,34 @@ export default function PlanificadorMicrocurricular() {
                             rows={3} 
                             value={subFila.procedimental} 
                             onChange={e => handleSubFilaChange(bloque.id, subFila.id, 'procedimental', e.target.value)} 
-                            className="w-full p-2 border rounded-lg bg-emerald-50/40 text-slate-900 font-medium outline-none" 
+                            className="w-full p-2.5 border border-teal-200 rounded-xl bg-white text-slate-900 font-medium outline-none shadow-2xs focus:border-[#45b3a5]" 
                           />
                         </div>
 
-                        {/* ACTITUDINAL */}
-                        <div className="space-y-1">
-                          <label className="block font-bold text-amber-900 uppercase">Actitudinal:</label>
+                        {/* ACTITUDINAL (#de5860) */}
+                        <div className="space-y-1.5 p-3 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-2xs">
+                          <label style={{ color: '#de5860' }} className="block font-black uppercase text-[11px]">Actitudinal:</label>
                           {bloque.activar1a1 ? (
                             <select
                               onChange={e => {
                                 handleSeleccionarItem1a1(bloque.id, subFila.id, 'actitudinal', e.target.value)
                                 e.target.value = ""
                               }}
-                              className="w-full p-2 border rounded-lg bg-amber-50 text-amber-900 font-bold text-[11px] outline-none cursor-pointer"
+                              className="w-full p-2.5 border border-rose-200 rounded-xl bg-white text-slate-900 font-bold text-[11px] outline-none cursor-pointer shadow-2xs"
                             >
-                              <option value="">+ Añadir actitudinal ítem por ítem...</option>
+                              <option value="" className="text-slate-900 font-bold bg-white">+ Añadir actitudinal ítem por ítem...</option>
                               {actitudinalesDisponiblesFila.map((act, i) => (
-                                <option key={i} value={act}>{act}</option>
+                                <option key={i} value={act} className="text-slate-900 font-bold bg-white">{act}</option>
                               ))}
                             </select>
                           ) : (
                             <select
                               onChange={e => handleSubFilaChange(bloque.id, subFila.id, 'actitudinal', e.target.value)}
-                              className="w-full p-2 border rounded-lg bg-amber-50 text-amber-900 font-bold text-[11px] outline-none cursor-pointer"
+                              className="w-full p-2.5 border border-rose-200 rounded-xl bg-white text-slate-900 font-bold text-[11px] outline-none cursor-pointer shadow-2xs"
                             >
-                              <option value="">-- Seleccionar individual --</option>
+                              <option value="" className="text-slate-900 font-bold bg-white">-- Seleccionar individual --</option>
                               {bloque.actitudinalesDisponibles?.map((act, i) => (
-                                <option key={i} value={act}>{act}</option>
+                                <option key={i} value={act} className="text-slate-900 font-bold bg-white">{act}</option>
                               ))}
                             </select>
                           )}
@@ -1325,7 +1360,7 @@ export default function PlanificadorMicrocurricular() {
                             rows={3} 
                             value={subFila.actitudinal} 
                             onChange={e => handleSubFilaChange(bloque.id, subFila.id, 'actitudinal', e.target.value)} 
-                            className="w-full p-2 border rounded-lg bg-amber-50/40 text-slate-900 font-medium outline-none" 
+                            className="w-full p-2.5 border border-rose-200 rounded-xl bg-white text-slate-900 font-medium outline-none shadow-2xs focus:border-[#de5860]" 
                           />
                         </div>
 
@@ -1341,111 +1376,111 @@ export default function PlanificadorMicrocurricular() {
       </div>
 
       {/* SITUACIÓN DE APRENDIZAJE & CONEXIONES */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
-        <div className="border-b pb-2">
-          <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wide">
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+        <div className="border-b border-slate-200 pb-3">
+          <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide">
             Situación de Aprendizaje (SIA) & Conexión Interdisciplinar
           </h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
           <div>
-            <label className="block font-bold text-slate-700 uppercase mb-1">Título de la SIA:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Título de la SIA:</label>
             <input 
               type="text" 
               value={form.tituloSia} 
               onChange={e => setForm({...form, tituloSia: e.target.value})} 
-              className="w-full p-3 border rounded-xl bg-slate-50 text-slate-900 font-medium outline-none" 
+              className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none focus:border-[#4b4c99] shadow-2xs" 
             />
           </div>
           <div>
-            <label className="block font-bold text-slate-700 uppercase mb-1">Asignaturas en Conexión:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Asignaturas en Conexión:</label>
             <textarea 
               rows={3} 
               value={form.asignaturasConexion} 
               onChange={e => setForm({...form, asignaturasConexion: e.target.value})} 
-              className="w-full p-2.5 border rounded-xl bg-slate-50 text-slate-900 font-medium outline-none leading-relaxed" 
+              className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none focus:border-[#4b4c99] shadow-2xs" 
             />
           </div>
           <div className="md:col-span-2">
-            <label className="block font-bold text-slate-700 uppercase mb-1">Descripción de la SIA:</label>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Descripción de la SIA:</label>
             <textarea 
               rows={3} 
               value={form.descripcionSia} 
               onChange={e => setForm({...form, descripcionSia: e.target.value})} 
-              className="w-full p-3 border rounded-xl bg-slate-50 text-slate-900 font-medium outline-none" 
+              className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none focus:border-[#4b4c99] shadow-2xs" 
             />
           </div>
         </div>
       </div>
 
       {/* SECUENCIA METODOLÓGICA SEMANAL */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
-        <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wide border-b pb-2">
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
+        <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide border-b border-slate-200 pb-3">
           Estrategias Metodológicas DUA ({semanas.length} Semanas Configuradas)
         </h3>
 
         <div className="space-y-6">
           {semanas.map((sem, idx) => (
-            <div key={sem.numero} className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
-              <h4 className="font-black text-xs text-indigo-700 uppercase">Semana {sem.numero}</h4>
+            <div key={sem.numero} className="p-5 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-3 shadow-2xs">
+              <h4 className="font-bold text-xs text-slate-900 uppercase">Semana {sem.numero}</h4>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
                 <div>
-                  <label className="block font-bold text-slate-600 uppercase mb-1">[Principio DUA: Compromiso / Motivación]:</label>
+                  <label className="block text-slate-700 font-bold uppercase mb-1.5">[Principio DUA: Compromiso / Motivación]:</label>
                   <textarea 
                     rows={4} 
                     value={sem.inicio} 
                     onChange={e => handleSemanaChange(idx, 'inicio', e.target.value)} 
-                    className="w-full p-2.5 border rounded-lg bg-white text-slate-900 font-medium outline-none" 
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none focus:border-[#4b4c99] shadow-2xs" 
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-600 uppercase mb-1">[Principio DUA: Representación]:</label>
+                  <label className="block text-slate-700 font-bold uppercase mb-1.5">[Principio DUA: Representación]:</label>
                   <textarea 
                     rows={4} 
                     value={sem.desarrollo} 
                     onChange={e => handleSemanaChange(idx, 'desarrollo', e.target.value)} 
-                    className="w-full p-2.5 border rounded-lg bg-white text-slate-900 font-medium outline-none" 
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none focus:border-[#4b4c99] shadow-2xs" 
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-600 uppercase mb-1">[Principio DUA: Acción y Expresión]:</label>
+                  <label className="block text-slate-700 font-bold uppercase mb-1.5">[Principio DUA: Acción y Expresión]:</label>
                   <textarea 
                     rows={4} 
                     value={sem.cierre} 
                     onChange={e => handleSemanaChange(idx, 'cierre', e.target.value)} 
-                    className="w-full p-2.5 border rounded-lg bg-white text-slate-900 font-medium outline-none" 
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none focus:border-[#4b4c99] shadow-2xs" 
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs pt-2 border-t">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs pt-3 border-t border-slate-200">
                 <div>
-                  <label className="block font-bold text-slate-600 uppercase mb-1">Recursos:</label>
+                  <label className="block text-slate-700 font-bold uppercase mb-1.5">Recursos:</label>
                   <input 
                     type="text" 
                     value={sem.recursos} 
                     onChange={e => handleSemanaChange(idx, 'recursos', e.target.value)} 
-                    className="w-full p-2.5 border rounded-lg bg-white text-slate-900 font-medium outline-none" 
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none focus:border-[#4b4c99] shadow-2xs" 
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-600 uppercase mb-1">Técnica:</label>
+                  <label className="block text-slate-700 font-bold uppercase mb-1.5">Técnica:</label>
                   <input 
                     type="text" 
                     value={sem.tecnica} 
                     onChange={e => handleSemanaChange(idx, 'tecnica', e.target.value)} 
-                    className="w-full p-2.5 border rounded-lg bg-white text-slate-900 font-medium outline-none" 
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none focus:border-[#4b4c99] shadow-2xs" 
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-600 uppercase mb-1">Instrumento:</label>
+                  <label className="block text-slate-700 font-bold uppercase mb-1.5">Instrumento:</label>
                   <input 
                     type="text" 
                     value={sem.instrumento} 
                     onChange={e => handleSemanaChange(idx, 'instrumento', e.target.value)} 
-                    className="w-full p-3 border rounded-lg bg-white text-slate-900 font-medium outline-none" 
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none focus:border-[#4b4c99] shadow-2xs" 
                   />
                 </div>
               </div>

@@ -26,8 +26,8 @@ async function generarConDeepSeek(promptText: string, maxTokens = 2500) {
       }
     ],
     response_format: { type: "json_object" },
-    temperature: 0.2, // Más bajo = respuestas más directas y menor consumo de tokens
-    max_tokens: maxTokens, // Límite estricto de salida para gastar menos
+    temperature: 0.2, 
+    max_tokens: maxTokens, 
   });
 
   return completion.choices[0].message.content || '{}';
@@ -35,6 +35,7 @@ async function generarConDeepSeek(promptText: string, maxTokens = 2500) {
 
 export async function POST(req: Request) {
   try {
+    const body = await req.json()
     const { 
       tipoModelo, 
       tema, 
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
       noSemanas, 
       trimestre, 
       estructuraTematicaPrevia 
-    } = await req.json()
+    } = body
 
     // VALIDACIÓN DE IDIOMA
     const esIngles = asignatura && (
@@ -82,24 +83,27 @@ JSON exacto:
       jsonText = await generarConDeepSeek(promptText, 1500)
 
     } else if (tipoModelo === 'estructura_tematica') {
-      const saberesTexto = filasSaberes?.map((f: any, idx: number) => `
-      - [${idx + 1}] Comp: "${f.competenciaFila || ''}" | Ind: "${f.indicador || ''}" | Dec: "${f.declarativo || ''}" | Proc: "${f.procedimental || ''}" | Act: "${f.actitudinal || ''}"
-      `).join('\n') || 'Sin saberes'
+      // Filtrar de manera segura filas vacías para evitar errores en el prompt
+      const saberesValidos = filasSaberes?.filter((f: any) => f && (f.indicador || f.declarativo || f.procedimental)) || []
+      
+      const saberesTexto = saberesValidos.map((f: any, idx: number) => `
+      - [${idx + 1}] Comp: "${f.competenciaFila || 'Competencia general'}" | Ind: "${f.indicador || 'N/A'}" | Dec: "${f.declarativo || 'N/A'}" | Proc: "${f.procedimental || 'N/A'}" | Act: "${f.actitudinal || 'N/A'}"
+      `).join('\n') || 'Sin saberes específicos'
 
       const totalSemanas = noSemanas || 8
 
       promptText = `
-Estructura ${totalSemanas} temas secuenciados bajo Currículo por Competencias:
-- Asignatura: "${asignatura}" | Grado: "${grado}" | Trimestre: "${trimestre || 'Trimestre 1'}"
-- Datos:
+Estructura temas secuenciados bajo Currículo por Competencias de Ecuador:
+- Asignatura: "${asignatura || 'Matemática'}" | Grado: "${grado || '8vo Grado EGB'}" | Trimestre: "${trimestre || 'Trimestre 1'}"
+- Datos de entrada seleccionados por el docente:
 ${saberesTexto}
 ${instruccionIdioma}
 
-JSON exacto con arreglo "temas" de ${totalSemanas} elementos:
+Regla estricta: Devuelve un objeto JSON que contenga una propiedad principal llamada "temas" que sea un arreglo con elementos que cubran secuencialmente los saberes proporcionados. Cada elemento debe tener exactamente estas llaves:
 {
   "temas": [
     {
-      "orden": "Tema 1: Nombre",
+      "orden": "Tema 1: ...",
       "subtitulo": "...",
       "indicadores": "...",
       "conceptual": "...",
@@ -108,7 +112,7 @@ JSON exacto con arreglo "temas" de ${totalSemanas} elementos:
     }
   ]
 }`
-      jsonText = await generarConDeepSeek(promptText, 2000)
+      jsonText = await generarConDeepSeek(promptText, 3000)
 
     } else if (tipoModelo === 'secuencia_copisi') {
       const saberesTexto = filasSaberes?.map((f: any, idx: number) => `
@@ -164,10 +168,12 @@ JSON exacto:
     }
 
     const jsonLimpio = jsonText.replace(/```json/g, '').replace(/```/g, '').trim()
-    return NextResponse.json(JSON.parse(jsonLimpio))
+    const objetoParseado = JSON.parse(jsonLimpio)
+    
+    return NextResponse.json(objetoParseado)
 
   } catch (error: any) {
     console.error('Error en API route DeepSeek:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message || 'Error interno al procesar con la IA' }, { status: 500 })
   }
 }

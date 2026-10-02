@@ -9,7 +9,6 @@ export default function EsquelasRepresentantePage() {
   const [esquelas, setEsquelas] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
 
-  // Cargar las esquelas correspondientes a los hijos del representante logueado
   useEffect(() => {
     cargarEsquelasHijos()
   }, [])
@@ -23,7 +22,6 @@ export default function EsquelasRepresentantePage() {
         return
       }
 
-      // 1. Consultar la tabla estudiante_representantes para obtener los IDs de los hijos vinculados a este usuario
       const { data: vinculos, error: errVinculos } = await supabase
         .from('estudiante_representantes')
         .select('estudiante_id')
@@ -36,7 +34,6 @@ export default function EsquelasRepresentantePage() {
         return
       }
 
-      // Extraer un arreglo con los IDs de los estudiantes
       const estudianteIds = vinculos.map(v => v.estudiante_id).filter(Boolean)
 
       if (estudianteIds.length === 0) {
@@ -45,7 +42,6 @@ export default function EsquelasRepresentantePage() {
         return
       }
 
-      // 2. Consultar las esquelas exclusivamente de esos estudiantes
       const { data: dataEsquelas, error: errEsquelas } = await supabase
         .from('esquelas')
         .select(`
@@ -80,7 +76,6 @@ export default function EsquelasRepresentantePage() {
     }
   }
 
-  // Función para imprimir la esquela con diseño formal e institucional
   const imprimirEsquela = (esquela: any, indexGlobal: number) => {
     const ventana = window.open('', '_blank')
     if (!ventana) return
@@ -180,68 +175,92 @@ export default function EsquelasRepresentantePage() {
     ventana.document.close()
   }
 
+  if (cargando) {
+    return (
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans selection:bg-[#4b4c99] selection:text-white">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando notificaciones...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans max-w-7xl mx-auto">
+      
+      {/* ENCABEZADO */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800">Notificaciones y Esquelas de Representados</h1>
-          <p className="text-sm text-slate-600 font-medium">Consulte el historial de reportes disciplinarios emitidos para sus hijos.</p>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
+          >
+            Modo Consulta Familiar
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            Notificaciones y Esquelas de Representados
+          </h1>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+            Consulte el historial de reportes disciplinarios emitidos para sus hijos.
+          </p>
         </div>
       </div>
 
-      {/* Tabla de Historial en Modo Solo Lectura */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">Historial Disciplinario</h3>
-          <span className="text-xs font-bold bg-[#45b3a5]/10 text-[#2c7a70] px-3 py-1 rounded-full">
-            Modo Consulta Familiar
+      {/* TABLA DE HISTORIAL EN MODO SOLO LECTURA */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 md:p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Historial Disciplinario</h3>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="text-[10px] font-bold px-3 py-1 rounded-xl uppercase border shadow-2xs"
+          >
+            Consulta Familiar
           </span>
         </div>
 
-        {cargando ? (
-          <div className="p-12 text-center text-slate-400 text-sm">Cargando notificaciones...</div>
-        ) : esquelas.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-sm font-medium">
+        {esquelas.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 font-medium text-xs">
             No registra esquelas o notificaciones disciplinarias para sus hijos en este período.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 text-[11px] font-black text-slate-400 uppercase tracking-wider bg-slate-50">
-                  <th className="p-4">Estudiante (Representado)</th>
-                  <th className="p-4">Institución</th>
-                  <th className="p-4">Curso</th>
-                  <th className="p-4">Gravedad</th>
-                  <th className="p-4">Motivo</th>
-                  <th className="p-4">Fecha</th>
-                  <th className="p-4 text-center">Acciones</th>
+          <div className="overflow-x-auto p-4">
+            <table className="w-full text-xs text-left border-collapse border border-slate-200">
+              <thead className="bg-slate-50 text-slate-800 font-bold uppercase text-[10px] border-b border-slate-200">
+                <tr>
+                  <th style={{ color: '#4b4c99' }} className="p-3.5 border border-slate-200">Estudiante (Representado)</th>
+                  <th style={{ color: '#4b4c99' }} className="p-3.5 border border-slate-200">Institución</th>
+                  <th style={{ color: '#4b4c99' }} className="p-3.5 border border-slate-200">Curso</th>
+                  <th style={{ color: '#4b4c99' }} className="p-3.5 border border-slate-200 text-center">Gravedad</th>
+                  <th style={{ color: '#4b4c99' }} className="p-3.5 border border-slate-200">Motivo</th>
+                  <th style={{ color: '#4b4c99' }} className="p-3.5 border border-slate-200 text-center">Fecha</th>
+                  <th style={{ color: '#4b4c99' }} className="p-3.5 border border-slate-200 text-center">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+              <tbody className="divide-y divide-slate-200 text-slate-700">
                 {esquelas.map((item, index) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50 transition">
-                    <td className="p-4 font-bold text-slate-800">
+                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="p-3.5 border border-slate-200 font-bold text-slate-800 whitespace-nowrap">
                       {item.estudiantes?.apellidos} {item.estudiantes?.nombres}
                     </td>
-                    <td className="p-4 text-slate-500 font-semibold">
+                    <td className="p-3.5 border border-slate-200 text-slate-600 font-semibold">
                       {item.estudiantes?.instituciones?.nombre_institucion || 'N/A'}
                     </td>
-                    <td className="p-4">{item.estudiantes?.grado_curso} "{item.estudiantes?.paralelo}"</td>
-                    <td className="p-4">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                        item.gravedad === 'Leve' ? 'bg-slate-100 text-slate-700' :
-                        item.gravedad === 'Grave' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+                    <td className="p-3.5 border border-slate-200 font-medium">{item.estudiantes?.grado_curso} "{item.estudiantes?.paralelo}"</td>
+                    <td className="p-3.5 border border-slate-200 text-center">
+                      <span className={`px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase shadow-2xs inline-block ${
+                        item.gravedad === 'Leve' ? 'bg-slate-100 text-slate-700 border border-slate-200' :
+                        item.gravedad === 'Grave' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-rose-100 text-rose-800 border border-rose-200'
                       }`}>
                         {item.gravedad}
                       </span>
                     </td>
-                    <td className="p-4 max-w-xs truncate">{item.motivo}</td>
-                    <td className="p-4 text-slate-400">{new Date(item.fecha).toLocaleDateString()}</td>
-                    <td className="p-4 text-center">
+                    <td className="p-3.5 border border-slate-200 max-w-xs truncate text-slate-600">{item.motivo}</td>
+                    <td className="p-3.5 border border-slate-200 text-center text-slate-500">{new Date(item.fecha).toLocaleDateString()}</td>
+                    <td className="p-3.5 border border-slate-200 text-center">
                       <button 
                         onClick={() => imprimirEsquela(item, index)}
-                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition text-[11px] cursor-pointer"
+                        className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition text-[11px] cursor-pointer border border-slate-300 shadow-2xs"
                       >
                         🖨️ Ver / Imprimir
                       </button>
@@ -253,6 +272,7 @@ export default function EsquelasRepresentantePage() {
           </div>
         )}
       </div>
+
     </div>
   )
 }

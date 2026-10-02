@@ -27,12 +27,6 @@ export default function RectorAsignaturasPage() {
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [valorEdicion, setValorEdicion] = useState('')
 
-  // Función para cerrar sesión
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/')
-  }
-
   useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -104,137 +98,141 @@ export default function RectorAsignaturasPage() {
 
   if (cargando) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-800 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-slate-600 font-semibold text-sm">Cargando Módulo de Asignaturas...</p>
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans selection:bg-[#4b4c99] selection:text-white">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Módulo de Asignaturas...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
-      <div className="max-w-5xl mx-auto space-y-6">
-        
-        {/* ENCABEZADO SUPERIOR CON ESTILO MINIMALISTA */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-lg font-black text-slate-900 tracking-wide uppercase">
-              Gestión de Asignaturas Oficiales 📚
-            </h1>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              {nombreInstitucion} • <strong className="text-slate-700">Rector/a: {nombreRector}</strong>
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-          </div>
-        </div>
-
-        {/* RUTA DE NAVEGACIÓN (BREADCRUMB) */}
-        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-          PANEL &gt; GESTIÓN ACADÉMICA &gt; ASIGNATURAS
-        </div>
-
-        {/* SELECTOR DE SUBNIVEL */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
-            Seleccione Subnivel para Gestionar
-          </label>
-          <select 
-            value={filtroSubnivel} 
-            onChange={(e) => setFiltroSubnivel(e.target.value)} 
-            className="w-full p-3 border border-slate-300 rounded-xl font-bold text-xs text-indigo-900 bg-indigo-50/50 outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer"
+    <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans">
+      
+      {/* ENCABEZADO SUPERIOR */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
           >
-            {['Básica Elemental', 'Básica Media', 'Básica Superior', 'Bachillerato'].map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+            Gestión Académica
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            Gestión de Asignaturas Oficiales
+          </h1>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+            {nombreInstitucion} • <strong className="text-slate-700">Rector/a: {nombreRector}</strong>
+          </p>
+        </div>
+      </div>
+
+      {/* RUTA DE NAVEGACIÓN (BREADCRUMB) */}
+      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
+        Panel / Gestión Académica / Asignaturas
+      </div>
+
+      {/* SELECTOR DE SUBNIVEL */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-2">
+        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+          Seleccione Subnivel para Gestionar
+        </label>
+        <select 
+          value={filtroSubnivel} 
+          onChange={(e) => setFiltroSubnivel(e.target.value)} 
+          style={{ color: '#4b4c99' }}
+          className="w-full p-3 border border-slate-300 rounded-xl font-bold text-xs bg-slate-50 outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] cursor-pointer shadow-2xs"
+        >
+          {['Básica Elemental', 'Básica Media', 'Básica Superior', 'Bachillerato'].map(s => (
+            <option key={s} value={s} className="text-slate-900 font-bold bg-white">{s}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* FORMULARIO DE INGRESO */}
+      <form onSubmit={handleAgregarAsignatura} className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row gap-3 items-center">
+        <input 
+          value={nombreAsignatura} 
+          onChange={(e) => setNombreAsignatura(e.target.value)}
+          placeholder={`Escriba el nombre de la nueva materia en ${filtroSubnivel}...`}
+          className="flex-grow w-full p-3 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs"
+        />
+        <button 
+          disabled={guardando} 
+          style={{ backgroundColor: '#4b4c99' }}
+          className="w-full sm:w-auto text-white px-6 py-3 rounded-xl font-bold text-xs transition shadow-sm disabled:opacity-50 shrink-0 cursor-pointer"
+        >
+          {guardando ? 'Guardando...' : '+ Agregar Materia'}
+        </button>
+      </form>
+
+      {/* LISTADO / TABLA DE ASIGNATURAS */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 bg-slate-50 font-bold text-xs uppercase border-b border-slate-200 text-slate-900 flex justify-between items-center">
+           <span>Administrando Malla Curricular: <strong style={{ color: '#4b4c99' }}>{filtroSubnivel}</strong></span>
+           <span className="text-[10px] bg-indigo-50 text-[#4b4c99] px-2.5 py-1 rounded-lg font-bold border border-indigo-100 shadow-2xs">
+             {asignaturasFiltradas.length} Registrada(s)
+           </span>
         </div>
 
-        {/* FORMULARIO DE INGRESO */}
-        <form onSubmit={handleAgregarAsignatura} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row gap-3 items-center">
-          <input 
-            value={nombreAsignatura} 
-            onChange={(e) => setNombreAsignatura(e.target.value)}
-            placeholder={`Escriba el nombre de la nueva materia en ${filtroSubnivel}...`}
-            className="flex-grow w-full p-3 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-200"
-          />
-          <button 
-            disabled={guardando} 
-            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold text-xs transition shadow-2xs disabled:opacity-50 shrink-0"
-          >
-            {guardando ? 'Guardando...' : '+ Agregar Materia'}
-          </button>
-        </form>
-
-        {/* LISTADO / TABLA DE ASIGNATURAS */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-          <div className="p-4 bg-slate-50 font-bold text-xs uppercase border-b border-slate-200 text-slate-700 flex justify-between items-center">
-             <span>Administrando Malla Curricular: <strong className="text-indigo-700">{filtroSubnivel}</strong></span>
-             <span className="text-[10px] bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-full font-bold">
-               {asignaturasFiltradas.length} Registrada(s)
-             </span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <tbody className="divide-y divide-slate-100">
-                {asignaturasFiltradas.length === 0 ? (
-                  <tr>
-                    <td className="p-12 text-center text-slate-400 font-semibold italic">
-                      No hay asignaturas registradas para este subnivel.
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left">
+            <tbody className="divide-y divide-slate-200">
+              {asignaturasFiltradas.length === 0 ? (
+                <tr>
+                  <td className="p-12 text-center text-slate-500 font-medium italic">
+                    No hay asignaturas registradas para este subnivel.
+                  </td>
+                </tr>
+              ) : (
+                asignaturasFiltradas.map(mat => (
+                  <tr key={mat.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="p-4">
+                      {editandoId === mat.id ? (
+                        <input 
+                          value={valorEdicion} 
+                          onChange={(e) => setValorEdicion(e.target.value)} 
+                          className="w-full p-2.5 border border-slate-300 rounded-xl font-bold text-xs text-slate-900 bg-white outline-none shadow-2xs" 
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="font-bold text-slate-800 text-xs">{mat.nombre_asignatura}</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-right">
+                      <div className="flex gap-2 justify-end items-center">
+                        {editandoId === mat.id ? (
+                          <button 
+                            onClick={() => handleGuardarEdicion(mat.id)} 
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl transition border border-emerald-200 cursor-pointer shadow-2xs text-[10px]"
+                          >
+                            Guardar
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => { setEditandoId(mat.id); setValorEdicion(mat.nombre_asignatura) }} 
+                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl transition border border-indigo-200 cursor-pointer shadow-2xs text-[10px]"
+                          >
+                            Editar
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleEliminar(mat.id)} 
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition border border-rose-200 cursor-pointer shadow-2xs text-[10px]"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ) : (
-                  asignaturasFiltradas.map(mat => (
-                    <tr key={mat.id} className="hover:bg-slate-50/80 transition">
-                      <td className="p-4">
-                        {editandoId === mat.id ? (
-                          <input 
-                            value={valorEdicion} 
-                            onChange={(e) => setValorEdicion(e.target.value)} 
-                            className="w-full p-2 border border-indigo-300 rounded-lg font-bold text-xs text-indigo-900 bg-indigo-50 outline-none" 
-                            autoFocus
-                          />
-                        ) : (
-                          <span className="font-bold text-slate-800 text-xs">{mat.nombre_asignatura}</span>
-                        )}
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className="flex gap-2 justify-end items-center">
-                          {editandoId === mat.id ? (
-                            <button 
-                              onClick={() => handleGuardarEdicion(mat.id)} 
-                              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg transition border border-emerald-200"
-                            >
-                              Guardar
-                            </button>
-                          ) : (
-                            <button 
-                              onClick={() => { setEditandoId(mat.id); setValorEdicion(mat.nombre_asignatura) }} 
-                              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg transition border border-blue-200"
-                            >
-                              Editar
-                            </button>
-                          )}
-                          <button 
-                            onClick={() => handleEliminar(mat.id)} 
-                            className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-lg transition border border-red-200"
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-
       </div>
+
     </div>
   )
 }

@@ -38,7 +38,6 @@ export default function ReportesAcademicosPage() {
   const [calificacionesEstudiante, setCalificacionesEstudiante] = useState<any[]>([])
   const [complementariosEstudiante, setComplementariosEstudiante] = useState<any>({})
 
-  // 1. Carga inicial del docente, institución, autoridades, periodos_disponibles y año vigente
   useEffect(() => {
     async function init() {
       try {
@@ -82,7 +81,6 @@ export default function ReportesAcademicosPage() {
           }
         }
 
-        // Cargar autoridades (Rector / Vicerrector / Director) de la misma institución con su rol real
         if (instId) {
           const { data: autoridadesData } = await supabase
             .from('docentes')
@@ -110,7 +108,6 @@ export default function ReportesAcademicosPage() {
           }
         }
 
-        // Cargar asignaciones estrictamente del año lectivo vigente detectado
         if (anioActivo) {
           const { data: asignacionesData } = await supabase
             .from('docente_asignaciones')
@@ -138,17 +135,14 @@ export default function ReportesAcademicosPage() {
     init()
   }, [router])
 
-  // Jornadas disponibles únicas para el docente en el año vigente
   const jornadasDisponibles = Array.from(new Set(misAsignaciones.map(a => a.jornada || 'MATUTINA')))
 
-  // Filtrar grados disponibles según la jornada seleccionada
   const gradosDisponiblesPorJornada = Array.from(new Set(
     misAsignaciones
       .filter(a => (a.jornada || 'MATUTINA') === jornadaActual)
       .map(a => a.grado_curso)
   ))
 
-  // 2. Cargar estudiantes del curso seleccionado filtrados por institución, grado, paralelo y año vigente
   useEffect(() => {
     async function cargarEstudiantesCurso() {
       if (!institucionId || !grado || !paralelo || !anioLectivoVigente) return
@@ -180,7 +174,6 @@ export default function ReportesAcademicosPage() {
     cargarEstudiantesCurso()
   }, [institucionId, grado, paralelo, jornadaActual, anioLectivoVigente])
 
-  // 3. Cargar calificaciones y datos complementarios del estudiante estrictamente del año vigente
   const cargarDatosEstudiante = useCallback(async () => {
     if (!estudianteSeleccionadoId || !anioLectivoVigente) return
     setCargando(true)
@@ -220,7 +213,6 @@ export default function ReportesAcademicosPage() {
 
   const esAnioCerrado = anosCerrados.includes(anioLectivoVigente)
 
-  // Detección exacta del Subnivel Educativo según el grado/curso
   const obtenerNombreSubnivel = (gradoStr: string) => {
     if (['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB'].includes(gradoStr)) {
       return 'Básica Elemental'
@@ -260,7 +252,6 @@ export default function ReportesAcademicosPage() {
 
   const asignaturasFijas = esSuperiorOBachillerato ? asignaturasSuperiorBachillerato : asignaturasElementalMedia
 
-  // Funciones de escala
   const obtenerEscalaElemental = (nota: number) => {
     if (!nota || nota <= 0) return ''
     if (nota >= 9.01) return 'A+'
@@ -312,7 +303,6 @@ export default function ReportesAcademicosPage() {
     window.print()
   }
 
-  // Función segura para extraer recomendaciones
   const obtenerRecomendacionTexto = () => {
     if (tipoReporte !== 'Anual') {
       const campoKey = tipoReporte === 'Trimestre 1' ? 'rec_t1' : tipoReporte === 'Trimestre 2' ? 'rec_t2' : 'rec_t3'
@@ -330,13 +320,22 @@ export default function ReportesAcademicosPage() {
     }
   }
 
-  // Autoridad activa según la selección del desplegable
   const autoridadActual = autoridadesDisponibles[autoridadSeleccionadaIndex] || { nombre: 'LIC. MARIALETI ORELLANA A.', cargo: 'RECTOR(A)' }
 
+  if (cargando) {
+    return (
+      <div className="flex h-full min-h-[60vh] items-center justify-center">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Módulo de Reportes...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8 print:p-0 print:bg-white">
+    <div className="min-h-screen bg-slate-100 p-4 md:p-8 print:p-0 print:bg-white font-sans">
       
-      {/* REGLA CSS GLOBAL DE IMPRESIÓN SIN BORDES EXTERIORES Y EN UNA SOLA HOJA VERTICAL */}
       <style jsx global>{`
         @media print {
           @page {
@@ -375,15 +374,26 @@ export default function ReportesAcademicosPage() {
       <div className="max-w-6xl mx-auto space-y-6 print:space-y-1 print:max-w-none">
 
         {/* CONTROLES SUPERIORES */}
-        <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 print:hidden">
+        <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-center gap-4 print:hidden">
           <div>
-            <h1 className="text-xl font-black text-slate-900">Generador Reportes Académicos ({anioLectivoVigente || 'Sin año activo'})</h1>
-            <p className="text-xs text-slate-700 font-bold">Vista adaptada al periodo vigente y subnivel seleccionado.</p>
+            <span 
+              style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+              className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block"
+            >
+              Año Lectivo Vigente: {anioLectivoVigente || 'Sin año activo'}
+            </span>
+            <h1 className="text-xl md:text-2xl font-bold text-slate-900 mt-2 tracking-tight">
+              Generador Reportes Académicos
+            </h1>
+            <p className="text-xs text-slate-500 font-semibold mt-0.5">
+              {nombreInstitucion} • Vista adaptada al periodo vigente y subnivel
+            </p>
           </div>
-          <div className="flex gap-2 flex-wrap items-center">
+
+          <div className="flex gap-2.5 flex-wrap items-center">
             {/* SELECTOR DE FIRMANTE DINÁMICO */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border px-3 py-1.5 rounded-xl">
-              <label className="text-[10px] font-black text-slate-700 uppercase">Firma:</label>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 px-3 py-2 rounded-xl shadow-2xs">
+              <label className="text-[10px] font-bold text-slate-700 uppercase">Firma:</label>
               <select
                 value={autoridadSeleccionadaIndex}
                 onChange={(e) => setAutoridadSeleccionadaIndex(Number(e.target.value))}
@@ -395,65 +405,81 @@ export default function ReportesAcademicosPage() {
               </select>
             </div>
 
-            <button onClick={handlePrint} disabled={!anioLectivoVigente} className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow transition disabled:opacity-50 cursor-pointer">
-              🖨️ Imprimir / Guardar PDF
+            <button 
+              onClick={handlePrint} 
+              disabled={!anioLectivoVigente} 
+              style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
+              className="px-4 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+            >
+              <span></span> Imprimir / Guardar PDF
             </button>
           </div>
         </div>
 
         {/* AVISO SI NO HAY AÑO ACTIVO */}
-        {!anioLectivoVigente && !cargando && (
-          <div className="bg-amber-50 border border-amber-300 p-4 rounded-2xl text-amber-900 text-xs font-bold print:hidden">
-            ⚠️ La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
+        {!anioLectivoVigente && (
+          <div 
+            style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
+            className="border p-4 rounded-2xl text-xs font-bold shadow-2xs print:hidden"
+          >
+            La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
           </div>
         )}
 
         {/* AVISO SI EL PERIODO VIGENTE ESTÁ CERRADO */}
         {esAnioCerrado && anioLectivoVigente && (
-          <div className="bg-red-50 border border-red-200 p-4 rounded-2xl text-red-900 text-xs font-bold flex items-center justify-between print:hidden">
+          <div 
+            style={{ backgroundColor: 'rgba(222, 88, 96, 0.08)', borderColor: 'rgba(222, 88, 96, 0.3)', color: '#9b2c2c' }}
+            className="border p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-2xs print:hidden"
+          >
             <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. Los reportes están en modo de solo lectura.</span>
-            <span className="bg-red-200 px-2.5 py-1 rounded">Periodo Cerrado</span>
+            <span className="bg-rose-200/80 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-900">Periodo Cerrado</span>
           </div>
         )}
 
         {/* FILTROS DE SELECCIÓN */}
-        <div className="bg-white p-4 rounded-2xl border shadow-sm grid grid-cols-1 sm:grid-cols-5 gap-3 print:hidden">
+        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-5 gap-3.5 print:hidden">
           <div>
-            <label className="block text-[10px] font-black text-slate-800 uppercase mb-1">Jornada</label>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Jornada</label>
             <select
               value={jornadaActual}
               onChange={(e) => handleJornadaChange(e.target.value)}
               disabled={jornadasDisponibles.length <= 1}
-              className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50 disabled:bg-slate-200 disabled:text-slate-500 disabled:cursor-not-allowed"
+              className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none disabled:bg-slate-100 disabled:cursor-not-allowed shadow-2xs"
             >
               {jornadasDisponibles.map(j => <option key={j} value={j}>{j}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-slate-800 uppercase mb-1">Grado / Curso</label>
-            <select value={grado} onChange={(e) => handleGradoChange(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50">
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Grado / Curso</label>
+            <select value={grado} onChange={(e) => handleGradoChange(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs">
               {gradosDisponiblesPorJornada.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-slate-800 uppercase mb-1">Paralelo</label>
-            <select value={paralelo} onChange={(e) => setParalelo(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50">
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Paralelo</label>
+            <select value={paralelo} onChange={(e) => setParalelo(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs">
               {paralelosDisponibles.map(p => <option key={p} value={p}>Paralelo {p}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-slate-800 uppercase mb-1">Estudiante</label>
-            <select value={estudianteSeleccionadoId} onChange={(e) => setEstudianteSeleccionadoId(e.target.value)} className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-900 bg-slate-50">
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Estudiante</label>
+            <select value={estudianteSeleccionadoId} onChange={(e) => setEstudianteSeleccionadoId(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs">
               {estudiantes.map(est => <option key={est.id} value={est.id}>{est.apellidos} {est.nombres}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-indigo-900 uppercase mb-1">Tipo de Reporte</label>
-            <select value={tipoReporte} onChange={(e: any) => setTipoReporte(e.target.value)} className="w-full p-2.5 border-2 border-indigo-500 rounded-xl text-xs font-black text-indigo-950 bg-indigo-50">
+            <label className="block text-[10px] font-bold text-[#4b4c99] uppercase mb-1.5">Tipo de Reporte</label>
+            <select 
+              value={tipoReporte} 
+              onChange={(e: any) => setTipoReporte(e.target.value)} 
+              style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.05)', borderColor: 'rgba(75, 76, 153, 0.3)' }}
+              className="w-full p-2.5 border-2 rounded-xl text-xs font-bold outline-none shadow-2xs"
+            >
               <option value="Trimestre 1">1er Trimestre</option>
               <option value="Trimestre 2">2do Trimestre</option>
               <option value="Trimestre 3">3er Trimestre</option>
@@ -462,10 +488,10 @@ export default function ReportesAcademicosPage() {
           </div>
         </div>
 
-        {/* DOCUMENTO OFICIAL IDÉNTICO A LA VISTA PREVIA SIN BORDE PERIMETRAL AL IMPRIMIR */}
-        <div id="printable-report-area" className="bg-white p-8 rounded-2xl border shadow-md space-y-4 print:border-none print:shadow-none print:p-3 print:w-full text-slate-900">
+        {/* DOCUMENTO OFICIAL IDÉNTICO A LA VISTA PREVIA */}
+        <div id="printable-report-area" className="bg-white p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-4 print:border-none print:shadow-none print:p-3 print:w-full text-slate-900">
           
-          {/* ENCABEZADO CON LOGO INSTITUCIONAL TAMAÑO W-20 H-20 */}
+          {/* ENCABEZADO CON LOGO INSTITUCIONAL */}
           <div className="border-b-2 border-slate-900 pb-3 flex justify-between items-center">
             <div className="flex items-center gap-4 text-left">
               {institucionLogo ? (
@@ -473,18 +499,18 @@ export default function ReportesAcademicosPage() {
               ) : null}
               <div>
                 <h2 className="text-sm font-black uppercase text-slate-900">{nombreInstitucion}</h2>
-                <p className="text-[11px] font-black text-slate-800">CÓDIGO AMIE: 03H00278 • Azogues - Ecuador</p>
+                <p className="text-[11px] font-bold text-slate-700">CÓDIGO AMIE: 03H00278 • Azogues - Ecuador</p>
               </div>
             </div>
             <div className="text-right">
-              <span className="whitespace-nowrap text-[10px] font-black uppercase bg-slate-200 px-2.5 py-1 border border-slate-800 rounded text-slate-900">
+              <span className="whitespace-nowrap text-[10px] font-black uppercase bg-slate-100 px-2.5 py-1 border border-slate-800 rounded text-slate-900 shadow-2xs">
                 RENDIMIENTO ACADÉMICO - {tipoReporte.toUpperCase()} ({anioLectivoVigente || 'Sin año activo'}) {subnivelActual ? `(${subnivelActual.toUpperCase()})` : ''}
               </span>
             </div>
           </div>
 
           {/* DATOS INFORMATIVOS */}
-          <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs border border-slate-800 p-3 bg-slate-50 rounded-lg font-bold text-slate-900">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs border border-slate-800 p-3 bg-slate-50/60 rounded-xl font-bold text-slate-900">
             <div><strong>REFERENCIA:</strong> 1</div>
             <div><strong>PARALELO:</strong> {paralelo}</div>
             <div><strong>GRADO/CURSO:</strong> {grado}</div>
@@ -504,7 +530,7 @@ export default function ReportesAcademicosPage() {
           ) : tipoReporte !== 'Anual' ? (
             <table className="w-full text-xs border-collapse border border-slate-800 text-slate-900 font-semibold">
               <thead>
-                <tr className="bg-slate-300 text-slate-950 font-black uppercase text-[10px] text-center">
+                <tr className="bg-slate-200 text-slate-950 font-black uppercase text-[10px] text-center">
                   <th className="p-2 border border-slate-800 w-1/3">ASIGNATURAS</th>
                   {esBasicaElemental ? (
                     <>
@@ -551,7 +577,7 @@ export default function ReportesAcademicosPage() {
                           <td className="p-2 border border-slate-800">{sum > 0 ? sum.toFixed(2) : '0.00'}</td>
                           <td className="p-2 border border-slate-800">{sum30 > 0 ? sum30.toFixed(2) : '0.00'}</td>
                           <td className="p-2 border border-slate-800 font-black">{prom > 0 ? prom.toFixed(2) : '0.00'}</td>
-                          <td className="p-2 border border-slate-800 font-black text-indigo-950">{obtenerEscalaCuantitativaCualitativa(prom)}</td>
+                          <td className="p-2 border border-slate-800 font-black text-[#4b4c99]">{obtenerEscalaCuantitativaCualitativa(prom)}</td>
                         </>
                       )}
                     </tr>
@@ -562,15 +588,15 @@ export default function ReportesAcademicosPage() {
           ) : (
             <table className="w-full text-xs border-collapse border border-slate-800 text-slate-900 font-semibold">
               <thead>
-                <tr className="bg-slate-300 text-slate-950 font-black uppercase text-[10px] text-center">
+                <tr className="bg-slate-200 text-slate-950 font-black uppercase text-[10px] text-center">
                   <th className="p-2 border border-slate-800 w-1/3" rowSpan={2}>ASIGNATURAS</th>
                   <th className="p-2 border border-slate-800" colSpan={esSuperiorOBachillerato ? 6 : 5}>PROMEDIO ANUAL ({anioLectivoVigente})</th>
                 </tr>
-                <tr className="bg-slate-200 text-slate-950 text-[9px] text-center font-black">
+                <tr className="bg-slate-100 text-slate-950 text-[9px] text-center font-black">
                   <th className="p-1 border border-slate-800">1er TRIM</th>
                   <th className="p-1 border border-slate-800">2do TRIM</th>
                   <th className="p-1 border border-slate-800">3er TRIM</th>
-                  {esSuperiorOBachillerato && <th className="p-1 border border-slate-800 bg-amber-100 font-black">SUPLETORIO</th>}
+                  {esSuperiorOBachillerato && <th className="p-1 border border-slate-800 bg-amber-50 font-black">SUPLETORIO</th>}
                   <th className="p-1 border border-slate-800">PROM. ANUAL</th>
                   <th className="p-1 border border-slate-800">CALIF. CUALITATIVA</th>
                 </tr>
@@ -602,10 +628,10 @@ export default function ReportesAcademicosPage() {
                       <td className="p-2 border border-slate-800">{p2 > 0 ? p2.toFixed(2) : '0.00'}</td>
                       <td className="p-2 border border-slate-800">{p3 > 0 ? p3.toFixed(2) : '0.00'}</td>
                       {esSuperiorOBachillerato && (
-                        <td className="p-2 border border-slate-800 bg-amber-50 font-black">{supletorioVal > 0 ? supletorioVal.toFixed(2) : '-'}</td>
+                        <td className="p-2 border border-slate-800 bg-amber-50/50 font-black">{supletorioVal > 0 ? supletorioVal.toFixed(2) : '-'}</td>
                       )}
                       <td className="p-2 border border-slate-800 font-black">{promAnual > 0 ? promAnual.toFixed(2) : '0.00'}</td>
-                      <td className="p-2 border border-slate-800 font-black text-indigo-950">{obtenerEscalaCuantitativaCualitativa(promAnual)}</td>
+                      <td className="p-2 border border-slate-800 font-black text-[#4b4c99]">{obtenerEscalaCuantitativaCualitativa(promAnual)}</td>
                     </tr>
                   )
                 })}
@@ -613,12 +639,12 @@ export default function ReportesAcademicosPage() {
             </table>
           )}
 
-          {/* SECCIONES COMPLEMENTARIAS CON DATOS ARRASTRADOS DE ACOMPAÑAMIENTO INTEGRAL */}
+          {/* SECCIONES COMPLEMENTARIAS */}
           <div className="grid grid-cols-2 gap-4 pt-2 font-bold text-slate-900">
-            <div className="border border-slate-800 text-xs">
-              <div className="bg-slate-300 text-slate-950 p-1.5 font-black uppercase border-b border-slate-800 text-[10px]">ÁREAS DE DESARROLLO INTEGRAL</div>
-              <div className="p-2 space-y-1">
-                <div className="flex justify-between border-b border-slate-300 pb-1">
+            <div className="border border-slate-800 text-xs rounded-xl overflow-hidden">
+              <div className="bg-slate-200 text-slate-950 p-2 font-black uppercase border-b border-slate-800 text-[10px]">ÁREAS DE DESARROLLO INTEGRAL</div>
+              <div className="p-3 space-y-1.5">
+                <div className="flex justify-between border-b border-slate-200 pb-1">
                   <span>Acompañamiento Integral:</span>
                   <span className="font-black">
                     {tipoReporte !== 'Anual' 
@@ -633,7 +659,7 @@ export default function ReportesAcademicosPage() {
                     }
                   </span>
                 </div>
-                <div className="flex justify-between border-b border-slate-300 pb-1">
+                <div className="flex justify-between border-b border-slate-200 pb-1">
                   <span>Animación a la lectura:</span>
                   <span className="font-black">
                     {tipoReporte !== 'Anual' 
@@ -668,12 +694,12 @@ export default function ReportesAcademicosPage() {
               </div>
             </div>
 
-            <div className="border border-slate-800 text-xs">
-              <div className="bg-slate-300 text-slate-950 p-1.5 font-black uppercase border-b border-slate-800 text-[10px]">RECOMENDACIONES</div>
-              <div className="p-2 space-y-2">
+            <div className="border border-slate-800 text-xs rounded-xl overflow-hidden">
+              <div className="bg-slate-200 text-slate-950 p-2 font-black uppercase border-b border-slate-800 text-[10px]">RECOMENDACIONES</div>
+              <div className="p-3 space-y-2">
                 <div className="text-[11px] pt-1">
                   <strong>Recomendación:</strong>{' '}
-                  <span className="italic font-semibold">
+                  <span className="italic font-semibold text-slate-700">
                     {obtenerRecomendacionTexto()}
                   </span>
                 </div>
@@ -681,7 +707,7 @@ export default function ReportesAcademicosPage() {
             </div>
           </div>
 
-          {/* FIRMAS DE RESPONSABILIDAD CON LA AUTORIDAD Y CARGO DINÁMICO */}
+          {/* FIRMAS DE RESPONSABILIDAD */}
           <div className="grid grid-cols-2 pt-12 text-center text-xs text-slate-900 font-bold">
             <div className="space-y-1">
               <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-black">{nombreDocente}</div>
