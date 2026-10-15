@@ -311,7 +311,7 @@ export default function SuperAdminDashboardPage() {
             onClick={() => { setTab('gestion'); setMensaje(''); }}
             className={`pb-3 text-sm font-semibold border-b-2 whitespace-nowrap transition ${tab === 'gestion' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
           >
-            📋 Control de Escuelas y Licencias
+          Control de Escuelas y Licencias
           </button>
           <button 
             onClick={() => { setTab('instituciones'); setMensaje(''); }}

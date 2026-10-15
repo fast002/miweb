@@ -8,9 +8,13 @@ export default function SabanaTrimestralPage() {
   const router = useRouter()
 
   const [cargando, setCargando] = useState(true)
+  const [generandoPdf, setGenerandoPdf] = useState(false)
   const [institucionId, setInstitucionId] = useState('')
   const [nombreInstitucion, setNombreInstitucion] = useState('')
+  const [codigoAmie, setCodigoAmie] = useState('00H00000')
+  const [logoUrl, setLogoUrl] = useState('')
   const [docenteId, setDocenteId] = useState('')
+  const [nombresDocente, setNombresDocente] = useState('')
 
   // Control Dinámico de Años Lectivos Sincronizado con periodos_disponibles de la Institución
   const [anioLectivoVigente, setAnioLectivoVigente] = useState('')
@@ -20,7 +24,8 @@ export default function SabanaTrimestralPage() {
   // Asignaciones permitidas por el Rector para el año vigente
   const [asignaciones, setAsignaciones] = useState<any[]>([])
   
-  // Filtros principales
+  // Filtros principales (Incluyendo Jornada)
+  const [jornadaSeleccionada, setJornadaSeleccionada] = useState('MATUTINA')
   const [gradoSeleccionado, setGradoSeleccionado] = useState('')
   const [paraleloSeleccionado, setParaleloSeleccionado] = useState('')
   const [trimestreSeleccionado, setTrimestreSeleccionado] = useState('Trimestre 1')
@@ -35,10 +40,10 @@ export default function SabanaTrimestralPage() {
   }, [])
 
   useEffect(() => {
-    if (gradoSeleccionado && paraleloSeleccionado && trimestreSeleccionado && institucionId && anioLectivoVigente) {
+    if (jornadaSeleccionada && gradoSeleccionado && paraleloSeleccionado && trimestreSeleccionado && institucionId && anioLectivoVigente) {
       cargarEstudiantesYMatrizTrimestral()
     }
-  }, [gradoSeleccionado, paraleloSeleccionado, trimestreSeleccionado, anioLectivoVigente, institucionId])
+  }, [jornadaSeleccionada, gradoSeleccionado, paraleloSeleccionado, trimestreSeleccionado, anioLectivoVigente, institucionId])
 
   const cargarDatosDocente = async () => {
     try {
@@ -61,6 +66,9 @@ export default function SabanaTrimestralPage() {
       if (doc?.institucion_id) {
         setInstitucionId(doc.institucion_id)
         setNombreInstitucion(doc.instituciones?.nombre_institucion || 'Unidad Educativa')
+        setCodigoAmie(doc.instituciones?.codigo_amie || '00H00000')
+        setLogoUrl(doc.instituciones?.logo_url || '')
+        setNombresDocente(`${doc.nombres || ''} ${doc.apellidos || ''}`.trim())
 
         const inst = doc.instituciones
         if (inst) {
@@ -90,8 +98,12 @@ export default function SabanaTrimestralPage() {
 
           if (asigs && asigs.length > 0) {
             setAsignaciones(asigs)
-            setGradoSeleccionado(asigs[0].grado_curso)
-            setParaleloSeleccionado(asigs[0].paralelo)
+            const primeraJornada = asigs[0].jornada || 'MATUTINA'
+            setJornadaSeleccionada(primeraJornada)
+
+            const asigJornada = asigs.find(a => (a.jornada || 'MATUTINA') === primeraJornada) || asigs[0]
+            setGradoSeleccionado(asigJornada.grado_curso)
+            setParaleloSeleccionado(asigJornada.paralelo)
           } else {
             setAsignaciones([])
           }
@@ -120,6 +132,8 @@ export default function SabanaTrimestralPage() {
 
       if (asigs && asigs.length > 0) {
         setAsignaciones(asigs)
+        const primeraJ = asigs[0].jornada || 'MATUTINA'
+        setJornadaSeleccionada(primeraJ)
         setGradoSeleccionado(asigs[0].grado_curso)
         setParaleloSeleccionado(asigs[0].paralelo)
       } else {
@@ -132,18 +146,29 @@ export default function SabanaTrimestralPage() {
     }
   }
 
+  const handleJornadaChange = (nuevaJornada: string) => {
+    setJornadaSeleccionada(nuevaJornada)
+    const asigJornada = asignaciones.filter(a => (a.jornada || 'MATUTINA') === nuevaJornada)
+    if (asigJornada.length > 0) {
+      const g = asigJornada[0].grado_curso
+      setGradoSeleccionado(g)
+      const p = asigJornada.find(a => a.grado_curso === g)?.paralelo || 'A'
+      setParaleloSeleccionado(p)
+    }
+  }
+
   const cargarEstudiantesYMatrizTrimestral = async () => {
     try {
       setCargando(true)
 
       const materiasDelCurso = Array.from(new Set(
         asignaciones
-          .filter(a => a.grado_curso === gradoSeleccionado && a.paralelo === paraleloSeleccionado)
+          .filter(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada && a.grado_curso === gradoSeleccionado && a.paralelo === paraleloSeleccionado)
           .map(a => a.asignatura)
       ))
       setMateriasUnicas(materiasDelCurso)
 
-      const { data: estData } = await supabase
+      const { data: estDataRaw } = await supabase
         .from('estudiantes')
         .select('*')
         .eq('institucion_id', institucionId)
@@ -152,6 +177,11 @@ export default function SabanaTrimestralPage() {
         .eq('anio_lectivo', anioLectivoVigente)
         .eq('estado', 'activo')
         .order('apellidos', { ascending: true })
+
+      const estData = (estDataRaw || []).filter(e => {
+        const jEst = e.jornada ? e.jornada.trim().toUpperCase() : 'MATUTINA'
+        return jEst === jornadaSeleccionada.trim().toUpperCase()
+      })
 
       if (estData) {
         setEstudiantes(estData)
@@ -174,10 +204,14 @@ export default function SabanaTrimestralPage() {
             
             const prom = reg?.promedio_parcial !== undefined && reg?.promedio_parcial !== null ? Number(reg.promedio_parcial) : 0
             
-            const formativo = reg?.insumo_1 !== undefined ? (Number(reg.insumo_1) + Number(reg.insumo_2 || 0)) / 2 : prom
+            const ins1 = reg?.insumo_1 !== undefined && reg?.insumo_1 !== null ? Number(reg.insumo_1) : 0
+            const ins2 = reg?.insumo_2 !== undefined && reg?.insumo_2 !== null ? Number(reg.insumo_2) : 0
+            const formativo = (ins1 > 0 || ins2 > 0) ? (ins1 + ins2) / 2 : 0
             const formativo70 = Number((formativo * 0.70).toFixed(2))
             
-            const sumativo = Number(reg?.proyecto_interdisciplinar || reg?.evaluacion_estructurada || prom)
+            const sumativo = reg?.proyecto_interdisciplinar !== undefined && reg?.proyecto_interdisciplinar !== null && Number(reg.proyecto_interdisciplinar) > 0 
+              ? Number(reg.proyecto_interdisciplinar) 
+              : (reg?.evaluacion_estructurada !== undefined && reg?.evaluacion_estructurada !== null ? Number(reg.evaluacion_estructurada) : 0)
             const sumativo30 = Number((sumativo * 0.30).toFixed(2))
 
             mapaMatriz[est.id][materia] = {
@@ -196,6 +230,149 @@ export default function SabanaTrimestralPage() {
       console.error('Error al cargar matriz trimestral:', err)
     } finally {
       setCargando(false)
+    }
+  }
+
+  // Convertir logo institucional a base64 para el PDF
+  const convertirLogoABase64 = async (url: string) => {
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result)
+        reader.readAsDataURL(blob)
+      })
+    } catch (e) {
+      return null
+    }
+  }
+
+  // FUNCIÓN PROFESIONAL DE DESCARGA DIRECTA DE PDF PARA LA SÁBANA
+  const generarPdfSabana = async () => {
+    if (estudiantes.length === 0 || materiasUnicas.length === 0) {
+      alert('⚠ No hay datos suficientes para generar el reporte de la sábana trimestral.')
+      return
+    }
+
+    setGenerandoPdf(true)
+    try {
+      const { jsPDF } = await import('jspdf')
+      const autoTable = (await import('jspdf-autotable')).default
+
+      const doc = new jsPDF('l', 'mm', 'a4') // Horizontal
+      const pageWidth = doc.internal.pageSize.getWidth()
+
+      let logoBase64 = null
+      if (logoUrl) {
+        logoBase64 = await convertirLogoABase64(logoUrl)
+      }
+
+      // Encabezado institucional estilo membrete
+      doc.setLineWidth(0.4)
+      doc.rect(14, 12, pageWidth - 28, 22)
+      doc.line(45, 12, 45, 34)
+      doc.line(pageWidth - 45, 12, pageWidth - 45, 34)
+
+      if (logoBase64) {
+        doc.addImage(logoBase64 as string, 'PNG', 16, 13, 20, 20)
+      }
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.text((nombreInstitucion || 'UNIDAD EDUCATIVA').toUpperCase(), pageWidth / 2, 18, { align: 'center' })
+      doc.setFontSize(8)
+      doc.text(`CÓDIGO AMIE: ${codigoAmie || '00H00000'}`, pageWidth / 2, 24, { align: 'center' })
+      doc.setTextColor(75, 76, 153)
+      doc.text(`AÑO LECTIVO: ${anioLectivoVigente || '2026-2027'}`, pageWidth / 2, 30, { align: 'center' })
+      doc.setTextColor(0, 0, 0)
+
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(8)
+      doc.text('SÁBANA TRIMESTRAL', pageWidth - 25, 22, { align: 'center' })
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.text(`MATRIZ GENERAL DE RENDIMIENTO - ${trimestreSeleccionado.toUpperCase()}`, pageWidth / 2, 41, { align: 'center' })
+
+      // Datos informativos
+      autoTable(doc, {
+        startY: 45,
+        theme: 'grid',
+        headStyles: { fillColor: [75, 76, 153], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        body: [
+          [`Curso: ${gradoSeleccionado} "${paraleloSeleccionado}"`, `Jornada: ${jornadaSeleccionada}`],
+          [`Total Estudiantes: ${estudiantes.length}`, `Periodo: ${trimestreSeleccionado}`]
+        ]
+      })
+
+      // Construir cabeceras dinámicas para la sábana
+      const headersTabla = ['#', 'Cédula', 'Apellidos y Nombres']
+      materiasUnicas.forEach(mat => {
+        if (esBasicaElemental) {
+          headersTabla.push(`${mat} (Prom)`, `${mat} (Cuali)`)
+        } else {
+          headersTabla.push(`${mat} (Form)`, `${mat} (70%)`, `${mat} (Sum)`, `${mat} (30%)`, `${mat} (Prom)`)
+        }
+      })
+
+      const filasTabla = estudiantes.map((est, index) => {
+        const notasEst = matrizCalificaciones[est.id] || {}
+        const fila: any = [
+          index + 1,
+          est.cedula || 'S/N',
+          `${est.apellidos} ${est.nombres}`
+        ]
+
+        materiasUnicas.forEach(materia => {
+          const val = notasEst[materia] || { formativo: 0, formativo70: 0, sumativo: 0, sumativo30: 0, promedio: 0 }
+          if (esBasicaElemental) {
+            fila.push(val.promedio > 0 ? val.promedio.toFixed(2) : '0.00')
+            fila.push(obtenerEscalaElemental(val.promedio) || '0.00')
+          } else {
+            fila.push(val.formativo > 0 ? val.formativo.toFixed(2) : '0.00')
+            fila.push(val.formativo70 > 0 ? val.formativo70.toFixed(2) : '0.00')
+            fila.push(val.sumativo > 0 ? val.sumativo.toFixed(2) : '0.00')
+            fila.push(val.sumativo30 > 0 ? val.sumativo30.toFixed(2) : '0.00')
+            fila.push(val.promedio > 0 ? val.promedio.toFixed(2) : '0.00')
+          }
+        })
+
+        return fila
+      })
+
+      const tablaY = (doc as any).lastAutoTable.finalY + 4
+
+      autoTable(doc, {
+        startY: tablaY,
+        theme: 'grid',
+        head: [headersTabla],
+        body: filasTabla,
+        headStyles: { fillColor: [75, 76, 153], fontSize: 6, halign: 'center' },
+        bodyStyles: { fontSize: 6 },
+        columnStyles: {
+          0: { cellWidth: 8, halign: 'center' },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 45 }
+        }
+      })
+
+      // Firma de responsabilidad
+      const finalY = (doc as any).lastAutoTable.finalY + 15
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.line(pageWidth / 2 - 40, finalY, pageWidth / 2 + 40, finalY)
+      doc.text(nombresDocente.toUpperCase(), pageWidth / 2, finalY + 4, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
+      doc.text('DOCENTE RESPONSABLE / TUTOR', pageWidth / 2, finalY + 8, { align: 'center' })
+
+      doc.save(`Sabana_${gradoSeleccionado}_${paraleloSeleccionado}_${trimestreSeleccionado}.pdf`)
+    } catch (e: any) {
+      console.error(e)
+      alert('Error al generar el PDF de la sábana: ' + e.message)
+    } finally {
+      setGenerandoPdf(false)
     }
   }
 
@@ -226,11 +403,11 @@ export default function SabanaTrimestralPage() {
     )
   }
 
-  const gradosUnicos = Array.from(new Set(asignaciones.map(a => a.grado_curso)))
-  const paralelosPermitidos = Array.from(new Set(asignaciones.filter(a => a.grado_curso === gradoSeleccionado).map(a => a.paralelo)))
+  const jornadasDisponibles = Array.from(new Set(asignaciones.map(a => a.jornada || 'MATUTINA')))
+  const gradosUnicos = Array.from(new Set(asignaciones.filter(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada).map(a => a.grado_curso)))
+  const paralelosPermitidos = Array.from(new Set(asignaciones.filter(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada && a.grado_curso === gradoSeleccionado).map(a => a.paralelo)))
   const esBasicaElemental = ['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB'].includes(gradoSeleccionado)
 
-  // Estilos de color distintivos por trimestre
   const getTrimestreColorStyle = (tri: string) => {
     switch (tri) {
       case 'Trimestre 1':
@@ -244,15 +421,14 @@ export default function SabanaTrimestralPage() {
     }
   }
 
-  // Paleta de colores profesionales y corporativos para diferenciar cada materia en la tabla
   const paletaMaterias = [
-    { headerBg: '#4b4c99', text: '#ffffff', subBg: 'rgba(75, 76, 153, 0.04)' }, // Índigo institucional
-    { headerBg: '#389186', text: '#ffffff', subBg: 'rgba(56, 145, 134, 0.04)' }, // Turquesa educativo
-    { headerBg: '#d99b1e', text: '#ffffff', subBg: 'rgba(217, 155, 30, 0.04)' },  // Ámbar sobrio
-    { headerBg: '#4a5568', text: '#ffffff', subBg: 'rgba(74, 85, 104, 0.04)' },  // Pizarra elegante
-    { headerBg: '#2b6cb0', text: '#ffffff', subBg: 'rgba(43, 108, 176, 0.04)' },  // Azul corporativo
-    { headerBg: '#7b341e', text: '#ffffff', subBg: 'rgba(123, 52, 30, 0.04)' },   // Terracota
-    { headerBg: '#553c9a', text: '#ffffff', subBg: 'rgba(85, 60, 154, 0.04)' }    // Morado oscuro
+    { headerBg: '#4b4c99', text: '#ffffff', subBg: 'rgba(75, 76, 153, 0.04)' },
+    { headerBg: '#389186', text: '#ffffff', subBg: 'rgba(56, 145, 134, 0.04)' },
+    { headerBg: '#d99b1e', text: '#ffffff', subBg: 'rgba(217, 155, 30, 0.04)' },
+    { headerBg: '#4a5568', text: '#ffffff', subBg: 'rgba(74, 85, 104, 0.04)' },
+    { headerBg: '#2b6cb0', text: '#ffffff', subBg: 'rgba(43, 108, 176, 0.04)' },
+    { headerBg: '#7b341e', text: '#ffffff', subBg: 'rgba(123, 52, 30, 0.04)' },
+    { headerBg: '#553c9a', text: '#ffffff', subBg: 'rgba(85, 60, 154, 0.04)' }
   ]
 
   return (
@@ -271,7 +447,7 @@ export default function SabanaTrimestralPage() {
             Sábana Consolidada Trimestral ({trimestreSeleccionado})
           </h1>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
-            {nombreInstitucion} • Curso: {gradoSeleccionado} "{paraleloSeleccionado}" {esBasicaElemental && '• [Básica Elemental - Cualitativa]'}
+            {nombreInstitucion} • Jornada: {jornadaSeleccionada} • Curso: {gradoSeleccionado} "{paraleloSeleccionado}" {esBasicaElemental && '• [Básica Elemental - Cualitativa]'}
           </p>
         </div>
 
@@ -301,6 +477,16 @@ export default function SabanaTrimestralPage() {
           >
             ← Volver a Calificaciones
           </button>
+
+          {/* BOTÓN DESCARGAR PDF */}
+          <button
+            onClick={generarPdfSabana}
+            disabled={generandoPdf || estudiantes.length === 0 || !anioLectivoVigente}
+            style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
+            className="px-5 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+          >
+            <span>📥</span> {generandoPdf ? 'Generando PDF...' : 'Descargar Sábana PDF'}
+          </button>
         </div>
       </div>
 
@@ -326,7 +512,21 @@ export default function SabanaTrimestralPage() {
       )}
 
       {/* SELECTORES DE FILTRO */}
-      <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Jornada</label>
+          <select
+            value={jornadaSeleccionada}
+            onChange={(e) => handleJornadaChange(e.target.value)}
+            disabled={jornadasDisponibles.length <= 1}
+            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none disabled:bg-slate-100 disabled:cursor-not-allowed shadow-2xs cursor-pointer"
+          >
+            {jornadasDisponibles.map(j => (
+              <option key={j} value={j}>{j}</option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Grado / Curso</label>
           <select
@@ -334,10 +534,10 @@ export default function SabanaTrimestralPage() {
             onChange={(e) => {
               const nuevoGrado = e.target.value
               setGradoSeleccionado(nuevoGrado)
-              const par = asignaciones.find(a => a.grado_curso === nuevoGrado)?.paralelo || 'A'
+              const par = asignaciones.find(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada && a.grado_curso === nuevoGrado)?.paralelo || 'A'
               setParaleloSeleccionado(par)
             }}
-            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
+            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs cursor-pointer"
           >
             {gradosUnicos.length === 0 ? (
               <option value="">Sin carga asignada</option>
@@ -354,7 +554,7 @@ export default function SabanaTrimestralPage() {
           <select
             value={paraleloSeleccionado}
             onChange={(e) => setParaleloSeleccionado(e.target.value)}
-            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
+            className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs cursor-pointer"
           >
             {paralelosPermitidos.map(p => (
               <option key={p} value={p}>Paralelo {p}</option>
@@ -388,7 +588,7 @@ export default function SabanaTrimestralPage() {
           className="p-4 px-6 flex justify-between items-center"
         >
           <h2 className="text-xs font-bold uppercase tracking-wider">
-            MATRIZ GENERAL DE RENDIMIENTO • {gradoSeleccionado || 'Curso'} "{paraleloSeleccionado}" ({trimestreSeleccionado} - {anioLectivoVigente || 'Sin periodo'})
+            MATRIZ GENERAL DE RENDIMIENTO • {jornadaSeleccionada} • {gradoSeleccionado || 'Curso'} "{paraleloSeleccionado}" ({trimestreSeleccionado} - {anioLectivoVigente || 'Sin periodo'})
           </h2>
           <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-xl">
             {estudiantes.length} Estudiantes • {materiasUnicas.length} Asignaturas
@@ -456,7 +656,7 @@ export default function SabanaTrimestralPage() {
               ) : estudiantes.length === 0 ? (
                 <tr>
                   <td colSpan={3 + (materiasUnicas.length * (esBasicaElemental ? 2 : 5))} className="p-8 text-center text-slate-500 font-medium">
-                    No hay estudiantes registrados o asignaturas disponibles para este curso en el periodo {anioLectivoVigente}.
+                    No hay estudiantes registrados o asignaturas disponibles para esta jornada, curso y paralelo en el periodo {anioLectivoVigente}.
                   </td>
                 </tr>
               ) : (

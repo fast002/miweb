@@ -14,6 +14,7 @@ export default function PlanificadorInicialPreparatoria() {
   
   const [gradosPermitidos, setGradosPermitidos] = useState<string[]>([])
   const [asignaturasPermitidas, setAsignaturasPermitidas] = useState<string[]>([])
+  const [sinAsignacion, setSinAsignacion] = useState(false)
 
   const [gradoSeleccionado, setGradoSeleccionado] = useState('Preparatoria')
   const [ambitoSeleccionado, setAmbitoSeleccionado] = useState('Currículo Integrado Preparatoria')
@@ -106,20 +107,22 @@ export default function PlanificadorInicialPreparatoria() {
 
   const gradosInicialPrepDisponibles = ['Inicial 1', 'Inicial 2', 'Preparatoria']
 
+  // Filtrado estricto por licencia comercial (grados autorizados)
   const gradosDisponiblesParaDocente = gradosPermitidos.length > 0
     ? gradosInicialPrepDisponibles.filter(g => gradosPermitidos.includes(g))
-    : gradosInicialPrepDisponibles
+    : []
 
   const handleGradoChange = (nuevoGrado: string) => {
     setGradoSeleccionado(nuevoGrado)
-    const ambitosDefault = ambitosPorGrado[nuevoGrado] || []
-    if (ambitosDefault.length > 0) {
-      const permitidasEnGrado = asignaturasPermitidas.filter(a => ambitosDefault.includes(a))
-      if (permitidasEnGrado.length > 0) {
-        setAmbitoSeleccionado(permitidasEnGrado[0])
-      } else {
-        setAmbitoSeleccionado(ambitosDefault[0])
-      }
+    const ambitosDelGrado = ambitosPorGrado[nuevoGrado] || []
+    const ambitosVisibles = asignaturasPermitidas.length > 0
+      ? ambitosDelGrado.filter(a => asignaturasPermitidas.includes(a))
+      : ambitosDelGrado
+
+    if (ambitosVisibles.length > 0) {
+      setAmbitoSeleccionado(ambitosVisibles[0])
+    } else {
+      setAmbitoSeleccionado('')
     }
   }
 
@@ -145,7 +148,7 @@ export default function PlanificadorInicialPreparatoria() {
 
     if (doc) {
       setDocente(doc)
-      setInstitucion(doc.institutions || doc.instituciones)
+      setInstitucion(doc.instituciones)
       
       const gradosAutorizados = doc.grados_asignados || []
       const asignaturasAutorizadas = doc.asignaturas_asignadas || []
@@ -153,9 +156,19 @@ export default function PlanificadorInicialPreparatoria() {
       setGradosPermitidos(gradosAutorizados)
       setAsignaturasPermitidas(asignaturasAutorizadas)
 
+      if (gradosAutorizados.length === 0 || asignaturasAutorizadas.length === 0) {
+        setSinAsignacion(true)
+        return
+      }
+
       const gradosValidos = gradosInicialPrepDisponibles.filter(g => gradosAutorizados.includes(g))
-      if (gradosValidos.length > 0 && !gradosValidos.includes(gradoSeleccionado)) {
+      if (gradosValidos.length > 0) {
         setGradoSeleccionado(gradosValidos[0])
+        const ambitosDelGrado = ambitosPorGrado[gradosValidos[0]] || []
+        const ambitosValidos = ambitosDelGrado.filter(a => asignaturasAutorizadas.includes(a))
+        if (ambitosValidos.length > 0) {
+          setAmbitoSeleccionado(ambitosValidos[0])
+        }
       }
     }
 
@@ -167,8 +180,8 @@ export default function PlanificadorInicialPreparatoria() {
         .single()
 
       if (!error && planData) {
-        setAmbitoSeleccionado(planData.asignatura || 'Currículo Integrado Preparatoria')
-        setGradoSeleccionado(planData.grado_curso || 'Preparatoria')
+        setAmbitoSeleccionado(planData.asignatura || '')
+        setGradoSeleccionado(planData.grado_curso || '')
         setParaleloSeleccionado(planData.paralelo || 'A')
         
         const semanasGuardadas = planData.semanas || []
@@ -186,16 +199,6 @@ export default function PlanificadorInicialPreparatoria() {
 
         if (semanasGuardadas.length > 0) {
           setSemanas(semanasGuardadas)
-        } else {
-          setSemanas(Array.from({ length: parseInt(totalSemanas) }, (_, i) => ({
-            numero: i + 1,
-            inicio: '',
-            desarrollo: '',
-            cierre: '',
-            recursos: 'Material concreto, juguetes, recursos del entorno.',
-            tecnica: 'Observación sistemática',
-            instrumento: 'Lista de cotejo / Registro anecdótico'
-          })))
         }
 
         if (planData.filas_saberes && planData.filas_saberes.length > 0) {
@@ -249,7 +252,7 @@ export default function PlanificadorInicialPreparatoria() {
     registros.forEach(reg => {
       const textoBruto = reg[campo]
       if (textoBruto) {
-        const lineas = textoBruto.split(/\r?\n|•|- /).map((l: string) => l.trim()).filter((l: string) => l.length > 3)
+        const lineas = textoBruto.split(/\r?\n|•/).map((l: string) => l.trim()).filter((l: string) => l.length > 3)
         lineas.forEach((linea: string) => {
           if (!itemsSeparados.includes(linea)) {
             itemsSeparados.push(linea)
@@ -419,7 +422,6 @@ export default function PlanificadorInicialPreparatoria() {
     setSemanas(nuevasSemanas)
   }
 
-  // VALIDACIÓN DE LÍMITE DIARIO DE 5 USOS EXITOSOS DE IA
   const verificarCuotaIA = async () => {
     const hoy = new Date().toISOString().split('T')[0]
     const { count, error } = await supabase
@@ -428,13 +430,9 @@ export default function PlanificadorInicialPreparatoria() {
       .eq('docente_id', docente?.id)
       .gte('created_at', `${hoy}T00:00:00`)
 
-    if (error) {
-      console.error('Error al verificar cuota:', error)
-      return true
-    }
-
+    if (error) return true
     if ((count || 0) >= 5) {
-      alert('⚠️ Has alcanzado el límite diario de 5 generaciones exitosas con Inteligencia Artificial. Tu cupo se renovará mañana.')
+      alert('⚠️ Has alcanzado el límite diario de 5 generaciones exitosas con Inteligencia Artificial.')
       return false
     }
     return true
@@ -457,7 +455,7 @@ export default function PlanificadorInicialPreparatoria() {
       )
 
       if (filasSeleccionadas.length === 0) {
-        alert('⚠️ Por favor, selecciona al menos un indicador o saber en tus bloques de competencia antes de analizar.')
+        alert('⚠️ Por favor, selecciona al menos un indicador o saber antes de analizar.')
         setGenerandoIA(false)
         return
       }
@@ -479,10 +477,10 @@ export default function PlanificadorInicialPreparatoria() {
 
       if (data.temas && Array.isArray(data.temas)) {
         setEstructuraTematica(data.temas)
-        alert('✨ ¡Estructura temática generada exclusivamente con tus selecciones!')
+        alert('✨ Estructura temática generada con éxito.')
       }
     } catch (e: any) {
-      alert('❌ La IA falló y no se ha descontado de tu límite diario. Detalle: ' + e.message)
+      alert('❌ La IA falló: ' + e.message)
     } finally {
       setGenerandoIA(false)
     }
@@ -505,14 +503,12 @@ export default function PlanificadorInicialPreparatoria() {
       )
 
       if (filasSeleccionadas.length === 0) {
-        alert('⚠️ Por favor, selecciona al menos un indicador o saber en tus bloques antes de generar la secuencia.')
+        alert('⚠️ Por favor, selecciona al menos un indicador o saber antes de generar la secuencia.')
         setGenerandoIA(false)
         return
       }
 
-      const compsPrincipales = bloquesCompetencias
-        .map(b => b.competencia)
-        .filter(Boolean)
+      const compsPrincipales = bloquesCompetencias.map(b => b.competencia).filter(Boolean)
 
       const res = await fetch('/api/generar-plan', { 
         method: 'POST',
@@ -551,16 +547,25 @@ export default function PlanificadorInicialPreparatoria() {
           instrumento: s.instrumento || 'Lista de cotejo / Registro anecdótico'
         }))
         setSemanas(semanasMapeadas)
-        alert('✨ ¡Experiencia de aprendizaje generada con éxito con IA!')
+        alert('✨ Experiencia de aprendizaje generada con éxito con IA.')
       }
     } catch (e: any) {
-      alert('❌ La IA falló y no se ha descontado de tu límite diario. Detalle: ' + e.message)
+      alert('❌ La IA falló: ' + e.message)
     } finally {
       setGenerandoIA(false)
     }
   }
 
   const guardarPlanificacion = async () => {
+    if (!gradosPermitidos.includes(gradoSeleccionado)) {
+      alert('Acceso denegado: El Superadministrador no te ha asignado este grado en tu carga horaria.')
+      return
+    }
+    if (!asignaturasPermitidas.includes(ambitoSeleccionado)) {
+      alert('Acceso denegado: El Superadministrador no te ha asignado este ámbito en tu carga horaria.')
+      return
+    }
+
     setGuardando(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -704,7 +709,7 @@ export default function PlanificadorInicialPreparatoria() {
       const tableSemanasY = (doc as any).lastAutoTable.finalY + 4
       const bodySemanas = semanas.map((sem) => [
         `Semana ${sem.numero}`,
-        `• Experiencia de Inicio: ${sem.inicio}\n• Experiencia de Desarrollo: ${sem.desarrollo}\n• Experiencia de Cierre: ${sem.cierre}`,
+        `• Experiencia de Inicio: ${sem.inicio}\nExperiencia de Desarrollo: ${sem.desarrollo}\nExperiencia de Cierre: ${sem.cierre}`,
         sem.recursos,
         `Técnicas: ${sem.tecnica}\nInstrumentos: ${sem.instrumento}`
       ])
@@ -725,6 +730,28 @@ export default function PlanificadorInicialPreparatoria() {
     } finally {
       setGenerandoPdf(false)
     }
+  }
+
+  if (sinAsignacion) {
+    return (
+      <div className="flex h-[70vh] items-center justify-center font-sans p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-200 max-w-md w-full text-center space-y-4">
+          <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">
+            ⚠️
+          </div>
+          <h2 className="text-base font-bold text-slate-900 uppercase">Sin Carga Horaria Asignada</h2>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            No tienes grados ni ámbitos configurados en tu perfil de Inicial o Preparatoria. Solicita al Superadministrador que te asigne tu carga horaria desde su panel de control.
+          </p>
+          <button
+            onClick={() => router.push('/docente')}
+            className="px-5 py-2.5 bg-[#4b4c99] text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer"
+          >
+            Volver al Panel Docente
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -758,13 +785,13 @@ export default function PlanificadorInicialPreparatoria() {
             style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
             className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
           >
-            Módulo Inicial y Preparatoria
+            Módulo Inicial y Preparatoria • Licencia Verificada
           </span>
           <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
             {planId ? 'Editando Planificación Inicial / Preparatoria' : 'Planificación Microcurricular - Inicial & Preparatoria'}
           </h1>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
-            Formato oficial basado en Ámbitos de Desarrollo y Aprendizaje.
+            Formato oficial basado en Ámbitos de Desarrollo y Aprendizaje restringido a tu carga horaria.
           </p>
         </div>
 
@@ -791,7 +818,7 @@ export default function PlanificadorInicialPreparatoria() {
       {/* DATOS INFORMATIVOS */}
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
         <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide border-b border-slate-200 pb-3">
-          Datos Informativos
+          Datos Informativos (Restringido por Asignación Curricular)
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
@@ -820,9 +847,7 @@ export default function PlanificadorInicialPreparatoria() {
                 <option value="" disabled className="text-slate-500 font-bold bg-white">Sin grados autorizados</option>
               )}
             </select>
-            {gradosPermitidos.length > 0 && (
-              <span className="text-[10px] text-[#4b4c99] font-bold mt-1 block">Filtrado por licencia comercial</span>
-            )}
+            <span className="text-[10px] text-[#4b4c99] font-bold mt-1 block">Filtrado por carga horaria</span>
           </div>
 
           <div>
@@ -836,7 +861,7 @@ export default function PlanificadorInicialPreparatoria() {
                 const ambitosDelGrado = ambitosPorGrado[gradoSeleccionado] || []
                 const ambitosVisibles = asignaturasPermitidas.length > 0
                   ? ambitosDelGrado.filter(a => asignaturasPermitidas.includes(a))
-                  : ambitosDelGrado
+                  : []
 
                 return ambitosVisibles.length > 0 ? (
                   ambitosVisibles.map((amb: string, idx: number) => (
@@ -847,9 +872,7 @@ export default function PlanificadorInicialPreparatoria() {
                 )
               })()}
             </select>
-            {asignaturasPermitidas.length > 0 && (
-              <span className="text-[10px] text-[#4b4c99] font-bold mt-1 block">Filtrado por licencia comercial</span>
-            )}
+            <span className="text-[10px] text-[#4b4c99] font-bold mt-1 block">Filtrado por carga horaria</span>
           </div>
 
           <div>
@@ -998,7 +1021,7 @@ export default function PlanificadorInicialPreparatoria() {
                     const val = e.target.value
                     setBloquesCompetencias(bloquesCompetencias.map(b => b.id === bloque.id ? { ...b, competencia: val } : b))
                   }} 
-                  className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none mt-1 shadow-2xs" 
+                  className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 text-xs font-medium outline-none mt-1 shadow-2xs" 
                 />
               </div>
 
@@ -1245,7 +1268,7 @@ export default function PlanificadorInicialPreparatoria() {
       {/* DESARROLLO DE LA EXPERIENCIA DE APRENDIZAJE */}
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
         <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide border-b border-slate-200 pb-3">
-          Desarrolla de la experiencia de aprendizaje (Estrategias DUA en {semanas.length} Semanas)
+          Desarrollo de la experiencia de aprendizaje (Estrategias DUA en {semanas.length} Semanas)
         </h3>
 
         <div className="space-y-6">

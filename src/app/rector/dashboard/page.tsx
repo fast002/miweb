@@ -354,7 +354,7 @@ export default function AutoridadPage() {
             onClick={() => supabase.auth.signOut().then(() => window.location.href = '/')} 
             className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
           >
-            <span>Cerrar Sesión</span> 🚪
+            <span>Cerrar Sesión</span>
           </button>
         </div>
       </div>
@@ -476,7 +476,7 @@ export default function AutoridadPage() {
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex justify-between items-center">
             <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-              📋 Nómina de Docentes ({docentes.length})
+              Nómina de Docentes ({docentes.length})
             </span>
             <span className="text-[10px] font-semibold text-slate-500">
               Los inactivos conservan su historial académico

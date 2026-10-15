@@ -7,8 +7,11 @@ import { supabase } from '@/lib/supabase'
 export default function ReporteAsistenciaPage() {
   const router = useRouter()
   const [cargando, setCargando] = useState(true)
+  const [generandoPdf, setGenerandoPdf] = useState(false)
 
   const [nombreInstitucion, setNombreInstitucion] = useState('')
+  const [codigoAmie, setCodigoAmie] = useState('00H00000')
+  const [logoUrl, setLogoUrl] = useState('')
   const [nombreUsuario, setNombreUsuario] = useState('Usuario')
   const [rolUsuario, setRolUsuario] = useState('docente')
   const [institucionId, setInstitucionId] = useState('')
@@ -20,7 +23,8 @@ export default function ReporteAsistenciaPage() {
   // Carga Horaria Asignada por el Rector estrictamente del año vigente
   const [misAsignaciones, setMisAsignaciones] = useState<any[]>([])
 
-  // Filtros de reporte
+  // Filtros de reporte (Incluyendo Jornada)
+  const [jornadaSeleccionada, setJornadaSeleccionada] = useState('MATUTINA')
   const [grado, setGrado] = useState('')
   const [paralelo, setParalelo] = useState('')
   const [asignatura, setAsignatura] = useState('')
@@ -49,6 +53,8 @@ export default function ReporteAsistenciaPage() {
 
         if (doc) {
           setNombreInstitucion(doc.instituciones?.nombre_institucion || 'Unidad Educativa')
+          setCodigoAmie(doc.instituciones?.codigo_amie || '00H00000')
+          setLogoUrl(doc.instituciones?.logo_url || '')
           setNombreUsuario(`${doc.nombres || ''} ${doc.apellidos || ''}`.trim() || 'Docente')
           setRolUsuario(doc.rol || 'docente')
           
@@ -85,9 +91,13 @@ export default function ReporteAsistenciaPage() {
 
           if (asignacionesData && asignacionesData.length > 0) {
             setMisAsignaciones(asignacionesData)
-            setGrado(asignacionesData[0].grado_curso)
-            setParalelo(asignacionesData[0].paralelo)
-            setAsignatura(asignacionesData[0].asignatura)
+            const primeraJornada = asignacionesData[0].jornada || 'MATUTINA'
+            setJornadaSeleccionada(primeraJornada)
+
+            const asigJornada = asignacionesData.find(a => (a.jornada || 'MATUTINA') === primeraJornada) || asignacionesData[0]
+            setGrado(asigJornada.grado_curso)
+            setParalelo(asigJornada.paralelo)
+            setAsignatura(asigJornada.asignatura)
           } else {
             setMisAsignaciones([])
           }
@@ -103,18 +113,35 @@ export default function ReporteAsistenciaPage() {
     init()
   }, [router])
 
-  // Manejar cambio de Grado desde las asignaciones
+  // Manejar cambio de Jornada
+  const handleJornadaChange = (nuevaJornada: string) => {
+    setJornadaSeleccionada(nuevaJornada)
+    const asigJornada = misAsignaciones.filter(a => (a.jornada || 'MATUTINA') === nuevaJornada)
+    if (asigJornada.length > 0) {
+      const g = asigJornada[0].grado_curso
+      setGrado(g)
+      const p = asigJornada.find(a => a.grado_curso === g)?.paralelo || 'A'
+      setParalelo(p)
+      setAsignatura(asigJornada.find(a => a.grado_curso === g && a.paralelo === p)?.asignatura || asigJornada[0].asignatura)
+    }
+  }
+
+  // Manejar cambio de Grado
   const handleGradoChange = (nuevoGrado: string) => {
     setGrado(nuevoGrado)
-    const paralelosDeGrado = Array.from(new Set(misAsignaciones.filter(a => a.grado_curso === nuevoGrado).map(a => a.paralelo)))
+    const paralelosDeGrado = Array.from(new Set(
+      misAsignaciones
+        .filter(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada && a.grado_curso === nuevoGrado)
+        .map(a => a.paralelo)
+    ))
     if (paralelosDeGrado.length > 0) {
       setParalelo(paralelosDeGrado[0])
-      const asigMatch = misAsignaciones.find(a => a.grado_curso === nuevoGrado && a.paralelo === paralelosDeGrado[0])
+      const asigMatch = misAsignaciones.find(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada && a.grado_curso === nuevoGrado && a.paralelo === paralelosDeGrado[0])
       if (asigMatch) setAsignatura(asigMatch.asignatura)
     }
   }
 
-  // 2. Cargar asignaturas según el subnivel y carga horaria del año vigente
+  // 2. Cargar asignaturas según la jornada, grado y paralelo seleccionados
   useEffect(() => {
     async function cargarAsignaturasConfiguradas() {
       if (!institucionId || !grado) return
@@ -127,7 +154,7 @@ export default function ReporteAsistenciaPage() {
 
       const materiasDelGrado = Array.from(new Set(
         misAsignaciones
-          .filter(a => a.grado_curso === grado && a.paralelo === paralelo)
+          .filter(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada && a.grado_curso === grado && a.paralelo === paralelo)
           .map(a => a.asignatura)
       ))
 
@@ -138,16 +165,16 @@ export default function ReporteAsistenciaPage() {
       }
     }
     cargarAsignaturasConfiguradas()
-  }, [grado, paralelo, institucionId, esDocenteDeAula, misAsignaciones, asignatura])
+  }, [grado, paralelo, jornadaSeleccionada, institucionId, esDocenteDeAula, misAsignaciones, asignatura])
 
   const esAnioCerrado = anosCerrados.includes(anioLectivoVigente)
 
-  // 3. Cargar datos y consolidar conteos de asistencia estrictamente del año vigente
+  // 3. Cargar datos y consolidar conteos de asistencia estrictamente del año vigente y jornada
   const cargarConsolidado = useCallback(async () => {
     if (!institucionId || !grado || !anioLectivoVigente) return
     setCargando(true)
     try {
-      const { data: ests } = await supabase
+      const { data: estsRaw } = await supabase
         .from('estudiantes')
         .select('*')
         .eq('institucion_id', institucionId)
@@ -156,6 +183,11 @@ export default function ReporteAsistenciaPage() {
         .eq('anio_lectivo', anioLectivoVigente)
         .eq('estado', 'activo')
         .order('apellidos', { ascending: true })
+
+      const ests = (estsRaw || []).filter(e => {
+        const jEst = e.jornada ? e.jornada.trim().toUpperCase() : 'MATUTINA'
+        return jEst === jornadaSeleccionada.trim().toUpperCase()
+      })
 
       setEstudiantes(ests || [])
 
@@ -193,15 +225,150 @@ export default function ReporteAsistenciaPage() {
     } finally {
       setCargando(false)
     }
-  }, [institucionId, grado, paralelo, asignatura, trimestre, esDocenteDeAula, anioLectivoVigente])
+  }, [institucionId, grado, paralelo, jornadaSeleccionada, asignatura, trimestre, esDocenteDeAula, anioLectivoVigente])
 
   useEffect(() => {
     cargarConsolidado()
   }, [cargarConsolidado])
 
-  // Listas únicas filtradas de las asignaciones para el año vigente
-  const gradosUnicos = Array.from(new Set(misAsignaciones.map(a => a.grado_curso)))
-  const paralelosDisponibles = Array.from(new Set(misAsignaciones.filter(a => a.grado_curso === grado).map(a => a.paralelo)))
+  // Listas filtradas para los selectores
+  const jornadasDisponibles = Array.from(new Set(misAsignaciones.map(a => a.jornada || 'MATUTINA')))
+  const gradosUnicos = Array.from(new Set(misAsignaciones.filter(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada).map(a => a.grado_curso)))
+  const paralelosDisponibles = Array.from(new Set(misAsignaciones.filter(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada && a.grado_curso === grado).map(a => a.paralelo)))
+
+  // Convertir logo institucional a base64 para el PDF
+  const convertirLogoABase64 = async (url: string) => {
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result)
+        reader.readAsDataURL(blob)
+      })
+    } catch (e) {
+      return null
+    }
+  }
+
+  // FUNCIÓN PROFESIONAL DE DESCARGA DIRECTA DE PDF
+  const generarPdfAsistencia = async () => {
+    if (estudiantes.length === 0) {
+      alert('⚠ No hay estudiantes para generar el reporte de asistencia.')
+      return
+    }
+
+    setGenerandoPdf(true)
+    try {
+      const { jsPDF } = await import('jspdf')
+      const autoTable = (await import('jspdf-autotable')).default
+
+      const doc = new jsPDF('p', 'mm', 'a4') // Vertical
+      const pageWidth = doc.internal.pageSize.getWidth()
+
+      let logoBase64 = null
+      if (logoUrl) {
+        logoBase64 = await convertirLogoABase64(logoUrl)
+      }
+
+      // Encabezado institucional estilo membrete
+      doc.setLineWidth(0.4)
+      doc.rect(14, 12, pageWidth - 28, 22)
+      doc.line(45, 12, 45, 34)
+      doc.line(pageWidth - 45, 12, pageWidth - 45, 34)
+
+      if (logoBase64) {
+        doc.addImage(logoBase64 as string, 'PNG', 16, 13, 20, 20)
+      }
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.text((nombreInstitucion || 'UNIDAD EDUCATIVA').toUpperCase(), pageWidth / 2, 18, { align: 'center' })
+      doc.setFontSize(8)
+      doc.text(`CÓDIGO AMIE: ${codigoAmie || '00H00000'}`, pageWidth / 2, 24, { align: 'center' })
+      doc.setTextColor(75, 76, 153)
+      doc.text(`AÑO LECTIVO: ${anioLectivoVigente || '2026-2027'}`, pageWidth / 2, 30, { align: 'center' })
+      doc.setTextColor(0, 0, 0)
+
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(8)
+      doc.text('REPORTE ASISTENCIA', pageWidth - 22, 22, { align: 'center' })
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.text(`CONSOLIDADO DE ASISTENCIA - ${trimestre.toUpperCase()}`, pageWidth / 2, 41, { align: 'center' })
+
+      // Datos informativos del curso y docente
+      autoTable(doc, {
+        startY: 45,
+        theme: 'grid',
+        headStyles: { fillColor: [75, 76, 153], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        body: [
+          [`Docente: ${nombreUsuario}`, `Asignatura: ${esDocenteDeAula ? 'Registro General (Aula)' : asignatura}`],
+          [`Grado / Curso: ${grado}`, `Paralelo: ${paralelo} (${jornadaSeleccionada})`],
+          [`Periodo: ${trimestre}`, `Total Estudiantes: ${estudiantes.length}`]
+        ]
+      })
+
+      const headersTabla = [
+        '#',
+        'Apellidos y Nombres',
+        'Presentes',
+        'Atrasos',
+        'F. Justificadas',
+        'F. Injustificadas'
+      ]
+
+      const filasTabla = estudiantes.map((est, index) => {
+        const datosEst = reporteMap[est.id] || { Presente: 0, Atraso: 0, 'Falta Justificada': 0, 'Falta Injustificada': 0 }
+
+        return [
+          index + 1,
+          `${est.apellidos} ${est.nombres}`,
+          datosEst['Presente'],
+          datosEst['Atraso'],
+          datosEst['Falta Justificada'],
+          datosEst['Falta Injustificada']
+        ]
+      })
+
+      const tablaY = (doc as any).lastAutoTable.finalY + 4
+
+      autoTable(doc, {
+        startY: tablaY,
+        theme: 'grid',
+        head: [headersTabla],
+        body: filasTabla,
+        headStyles: { fillColor: [75, 76, 153], fontSize: 8, halign: 'center' },
+        bodyStyles: { fontSize: 8 },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 80 },
+          2: { cellWidth: 25, halign: 'center' },
+          3: { cellWidth: 25, halign: 'center' },
+          4: { cellWidth: 25, halign: 'center' },
+          5: { cellWidth: 25, halign: 'center' }
+        }
+      })
+
+      // Firma de responsabilidad al pie
+      const finalY = (doc as any).lastAutoTable.finalY + 20
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.line(pageWidth / 2 - 40, finalY, pageWidth / 2 + 40, finalY)
+      doc.text(nombreUsuario.toUpperCase(), pageWidth / 2, finalY + 4, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
+      doc.text('DOCENTE RESPONSABLE', pageWidth / 2, finalY + 8, { align: 'center' })
+
+      doc.save(`Asistencia_${grado}_${paralelo}_${trimestre}.pdf`)
+    } catch (e: any) {
+      console.error(e)
+      alert('Error al generar el PDF de asistencia: ' + e.message)
+    } finally {
+      setGenerandoPdf(false)
+    }
+  }
 
   if (cargando) {
     return (
@@ -241,6 +408,16 @@ export default function ReporteAsistenciaPage() {
           >
             ← Volver al Registro Diario
           </button>
+
+          {/* BOTÓN DESCARGA DIRECTA PDF */}
+          <button
+            onClick={generarPdfAsistencia}
+            disabled={generandoPdf || estudiantes.length === 0 || !anioLectivoVigente}
+            style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
+            className="px-5 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+          >
+            <span>📥</span> {generandoPdf ? 'Generando PDF...' : 'Descargar Reporte PDF'}
+          </button>
         </div>
       </div>
 
@@ -265,8 +442,20 @@ export default function ReporteAsistenciaPage() {
         </div>
       )}
 
-      {/* FILTROS DE REPORTE */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 text-xs">
+      {/* FILTROS DE REPORTE (Incluyendo Jornada) */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5 text-xs">
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Jornada</label>
+          <select
+            value={jornadaSeleccionada}
+            onChange={(e) => handleJornadaChange(e.target.value)}
+            disabled={jornadasDisponibles.length <= 1}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:cursor-not-allowed"
+          >
+            {jornadasDisponibles.map(j => <option key={j} value={j}>{j}</option>)}
+          </select>
+        </div>
+
         <div>
           <label className="block text-slate-700 font-bold uppercase mb-1.5">Grado / Curso</label>
           <select
@@ -275,9 +464,9 @@ export default function ReporteAsistenciaPage() {
             className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
           >
             {gradosUnicos.length === 0 ? (
-              <option value="" className="text-slate-900 font-bold bg-white">Sin carga asignada</option>
+              <option value="">Sin carga asignada</option>
             ) : (
-              gradosUnicos.map((g) => <option key={g} value={g} className="text-slate-900 font-bold bg-white">{g}</option>)
+              gradosUnicos.map((g) => <option key={g} value={g}>{g}</option>)
             )}
           </select>
         </div>
@@ -290,7 +479,7 @@ export default function ReporteAsistenciaPage() {
             className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
           >
             {paralelosDisponibles.map((p) => (
-              <option key={p} value={p} className="text-slate-900 font-bold bg-white">Paralelo {p}</option>
+              <option key={p} value={p}>Paralelo {p}</option>
             ))}
           </select>
         </div>
@@ -311,7 +500,7 @@ export default function ReporteAsistenciaPage() {
               className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
             >
               {listaAsignaturas.map(mat => (
-                <option key={mat} value={mat} className="text-slate-900 font-bold bg-white">{mat}</option>
+                <option key={mat} value={mat}>{mat}</option>
               ))}
             </select>
           )}
@@ -324,9 +513,9 @@ export default function ReporteAsistenciaPage() {
             onChange={(e) => setTrimestre(e.target.value)}
             className="w-full p-3 border-2 border-indigo-300 rounded-xl text-xs font-black text-indigo-900 bg-indigo-50 outline-none shadow-2xs cursor-pointer"
           >
-            <option value="Trimestre 1" className="text-slate-900 font-bold bg-white">Trimestre 1</option>
-            <option value="Trimestre 2" className="text-slate-900 font-bold bg-white">Trimestre 2</option>
-            <option value="Trimestre 3" className="text-slate-900 font-bold bg-white">Trimestre 3</option>
+            <option value="Trimestre 1">Trimestre 1</option>
+            <option value="Trimestre 2">Trimestre 2</option>
+            <option value="Trimestre 3">Trimestre 3</option>
           </select>
         </div>
       </div>
@@ -335,7 +524,7 @@ export default function ReporteAsistenciaPage() {
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs font-bold uppercase text-slate-900">
           <span>
-            Consolidado: {grado} "{paralelo}" — {esDocenteDeAula ? 'Registro General' : asignatura} ({trimestre} - {anioLectivoVigente || 'Sin periodo'})
+            Consolidado: {jornadaSeleccionada} • {grado} "{paralelo}" — {esDocenteDeAula ? 'Registro General' : asignatura} ({trimestre} - {anioLectivoVigente || 'Sin periodo'})
           </span>
           <span className="text-[10px] text-slate-500">
             Total Estudiantes: {estudiantes.length}
@@ -356,7 +545,7 @@ export default function ReporteAsistenciaPage() {
           </div>
         ) : estudiantes.length === 0 ? (
           <div className="p-12 text-center text-slate-500 font-medium text-xs">
-            No hay registros o estudiantes activos en este curso para el periodo {anioLectivoVigente}.
+            No hay registros o estudiantes activos en esta jornada y curso para el periodo {anioLectivoVigente}.
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -284,7 +284,7 @@ export default function AutoridadPage() {
           {/* COLUMNA 2 Y 3: LISTA DE DOCENTES */}
           <div className="lg:col-span-2 space-y-6">
             <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <span>📋</span> Nómina de Docentes de la Institución
+              <span></span> Nómina de Docentes de la Institución
             </h2>
 
             <div className="overflow-x-auto border rounded-xl">

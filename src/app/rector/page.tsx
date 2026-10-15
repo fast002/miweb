@@ -81,7 +81,7 @@ export default function RectorDashboardPage() {
   const handleCrearNuevoAnio = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!nuevoAnioInput.trim() || periodosDisponibles.includes(nuevoAnioInput.trim())) {
-      alert('Ingresa un periodo válido que não exista previamente (ej. 2026-2027).')
+      alert('Ingresa un periodo válido que no exista previamente (ej. 2026-2027).')
       return
     }
 
@@ -168,21 +168,27 @@ export default function RectorDashboardPage() {
     setModalPromocionAbierto(true)
   }
 
+  // Ejecución de la Promoción con validación estricta de notas y supletorios
   const ejecutarPromocionAnual = async () => {
     try {
       setProcesando(true)
 
-      const { error } = await supabase.rpc('promover_estudiantes_anual', {
+      const { data, error } = await supabase.rpc('promover_estudiantes_anual', {
         inst_id: autoridad.institucion_id
       })
 
-      if (error) {
-        alert('Proceso de transición registrado. Recuerda verificar las matrículas del nuevo periodo.')
+      if (error) throw error
+
+      if (data && data.success === false) {
+        let detalleAlumnos = (data.bloqueantes || [])
+          .map((b: any) => `• ${b.nombre} (${b.curso}): ${b.motivo}`)
+          .join('\n')
+
+        alert(`❌ No se puede ejecutar la promoción anual.\n\n${data.message}\n\nEstudiantes pendientes o con supletorios reprobados:\n${detalleAlumnos}`)
       } else {
         alert('✅ ¡Promoción de estudiantes realizada con éxito para el nuevo periodo!')
+        setModalPromocionAbierto(false)
       }
-
-      setModalPromocionAbierto(false)
     } catch (err: any) {
       alert('Error al procesar la promoción: ' + err.message)
     } finally {
@@ -360,7 +366,7 @@ export default function RectorDashboardPage() {
             onClick={handleSignOut}
             className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
           >
-            <span>Cerrar Sesión</span> 🚪
+            <span>Cerrar Sesión</span>
           </button>
         </div>
       </div>
@@ -560,13 +566,13 @@ export default function RectorDashboardPage() {
               ⚠️ Confirmar Cierre y Promoción Anual
             </h3>
             <p className="text-xs text-slate-600 font-medium leading-relaxed">
-              Estás a punto de iniciar la transición para el periodo escolar. Esto avanzará a los alumnos al siguiente nivel de educación manteniendo el archivo histórico intacto para consultas directivas.
+              Estás a punto de iniciar la transición para el periodo escolar. El sistema evaluará automáticamente las notas finales y los supletorios de los alumnos de 8vo en adelante para validar su promoción.
             </p>
             <div 
               style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
               className="border p-3.5 rounded-2xl text-xs font-bold shadow-2xs"
             >
-              💡 Asegúrate de haber completado y cerrado todas las sábanas de calificaciones del periodo activo antes de continuar.
+              💡 Si existen estudiantes con promedios menores a 7.00 que no han aprobado el examen supletorio, el sistema detendrá el proceso e indicará quiénes son.
             </div>
             <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
               <button
@@ -582,7 +588,7 @@ export default function RectorDashboardPage() {
                 style={{ backgroundColor: '#4b4c99' }}
                 className="px-5 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
               >
-                {procesando ? 'Procesando...' : 'Confirmar Promoción'}
+                {procesando ? 'Evaluando notas y promoviendo...' : 'Confirmar Promoción'}
               </button>
             </div>
           </div>

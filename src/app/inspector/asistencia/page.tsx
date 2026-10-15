@@ -1,19 +1,26 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function AsistenciaGlobalPage() {
+  const router = useRouter()
   const [cargando, setCargando] = useState(true)
   const [estudiantes, setEstudiantes] = useState<any[]>([])
   const [asistenciaMap, setAsistenciaMap] = useState<{ [id: string]: string }>({})
   
+  const [institucionId, setInstitucionId] = useState('')
   const [nombreInstitucion, setNombreInstitucion] = useState('')
   const [anioLectivoVigente, setAnioLectivoVigente] = useState('2026-2027')
   const [periodosDisponibles, setPeriodosDisponibles] = useState<string[]>(['2026-2027'])
   const [anosCerrados, setAnosCerrados] = useState<string[]>([])
 
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
+  
+  // Filtros de Jornada, Grado y Paralelo
+  const [jornadasDisponibles, setJornadasDisponibles] = useState<string[]>(['MATUTINA'])
+  const [jornadaSeleccionada, setJornadaSeleccionada] = useState('MATUTINA')
   const [gradosDisponibles, setGradosDisponibles] = useState<string[]>([])
   const [grado, setGrado] = useState('')
   const [paralelo, setParalelo] = useState('A')
@@ -25,33 +32,93 @@ export default function AsistenciaGlobalPage() {
   useEffect(() => {
     async function init() {
       try {
-        const { data: insts } = await supabase.from('instituciones').select('*').limit(1)
-        if (insts && insts[0]) {
-          const inst = insts[0]
-          setNombreInstitucion(inst.nombre_institucion || 'Unidad Educativa')
-          setPeriodosDisponibles(inst.periodos_disponibles || ['2026-2027'])
-          setAnosCerrados(inst.anos_cerrados || [])
-          setAnioLectivoVigente(inst.anio_lectivo_activo || '2026-2027')
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/'); return; }
+
+        // Consultar la institución del inspector/usuario actual logueado
+        const { data: doc } = await supabase
+          .from('docentes')
+          .select('*, instituciones(*)')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        let instId = ''
+        let anioActivo = '2026-2027'
+
+        if (doc?.institucion_id) {
+          instId = doc.institucion_id
+          setInstitucionId(instId)
+          setNombreInstitucion(doc.instituciones?.nombre_institucion || 'Unidad Educativa')
+
+          const inst = doc.instituciones
+          if (inst) {
+            setPeriodosDisponibles(inst.periodos_disponibles || ['2026-2027'])
+            setAnosCerrados(inst.anos_cerrados || [])
+            if (inst.anio_lectivo_activo) {
+              anioActivo = inst.anio_lectivo_activo
+            }
+            setAnioLectivoVigente(anioActivo)
+          }
         }
 
-        const { data: estsData } = await supabase
-          .from('estudiantes')
-          .select('grado_curso')
-          .eq('estado', 'activo')
+        if (instId) {
+          // Filtrar estrictamente los estudiantes de la institución del inspector
+          const { data: estsData } = await supabase
+            .from('estudiantes')
+            .select('grado_curso, jornada')
+            .eq('institucion_id', instId)
+            .eq('anio_lectivo', anioActivo)
+            .eq('estado', 'activo')
 
-        if (estsData && estsData.length > 0) {
-          const uniqueGrados = Array.from(new Set(estsData.map(d => d.grado_curso))) as string[]
-          setGradosDisponibles(uniqueGrados)
-          setGrado(uniqueGrados[0])
+          if (estsData && estsData.length > 0) {
+            const jornadasUnicas = Array.from(new Set(estsData.map(d => (d.jornada || 'MATUTINA').trim().toUpperCase()))) as string[]
+            setJornadasDisponibles(jornadasUnicas.length > 0 ? jornadasUnicas : ['MATUTINA'])
+            const primeraJornada = jornadasUnicas[0] || 'MATUTINA'
+            setJornadaSeleccionada(primeraJornada)
+
+            const gradosDeJornada = Array.from(new Set(
+              estsData
+                .filter(d => ((d.jornada || 'MATUTINA').trim().toUpperCase() === primeraJornada))
+                .map(d => d.grado_curso)
+            )) as string[]
+
+            setGradosDisponibles(gradosDeJornada)
+            if (gradosDeJornada.length > 0) setGrado(gradosDeJornada[0])
+          }
         }
       } catch (err) {
-        console.error('Error al inicializar:', err)
+        console.error('Error al inicializar inspector:', err)
       } finally {
         setCargando(false)
       }
     }
     init()
-  }, [])
+  }, [router])
+
+  // Actualizar grados disponibles cuando cambia la jornada seleccionada respetando la institución
+  const handleJornadaChange = async (nuevaJornada: string) => {
+    setJornadaSeleccionada(nuevaJornada)
+    if (!institucionId) return
+
+    const { data: estsData } = await supabase
+      .from('estudiantes')
+      .select('grado_curso, jornada')
+      .eq('institucion_id', institucionId)
+      .eq('anio_lectivo', anioLectivoVigente)
+      .eq('estado', 'activo')
+
+    if (estsData) {
+      const gradosDeJornada = Array.from(new Set(
+        estsData
+          .filter(d => ((d.jornada || 'MATUTINA').trim().toUpperCase() === nuevaJornada.trim().toUpperCase()))
+          .map(d => d.grado_curso)
+      )) as string[]
+
+      setGradosDisponibles(gradosDeJornada)
+      if (gradosDeJornada.length > 0) setGrado(gradosDeJornada[0])
+      else setGrado('')
+    }
+  }
 
   useEffect(() => {
     if (esDocenteDeAula) {
@@ -60,11 +127,13 @@ export default function AsistenciaGlobalPage() {
   }, [grado, esDocenteDeAula])
 
   const cargarDatos = useCallback(async () => {
-    if (!grado || !anioLectivoVigente) return
+    if (!grado || !anioLectivoVigente || !jornadaSeleccionada || !institucionId) return
 
-    const { data: ests, error: errEsts } = await supabase
+    // Consulta estricta filtrando por institucion_id
+    const { data: estsRaw, error: errEsts } = await supabase
       .from('estudiantes')
-      .select('id, nombres, apellidos')
+      .select('id, nombres, apellidos, grado_curso, paralelo, jornada, institucion_id')
+      .eq('institucion_id', institucionId)
       .eq('grado_curso', grado)
       .eq('paralelo', paralelo)
       .eq('anio_lectivo', anioLectivoVigente)
@@ -72,6 +141,11 @@ export default function AsistenciaGlobalPage() {
       .order('apellidos', { ascending: true })
 
     if (errEsts) return
+
+    const ests = (estsRaw || []).filter(e => {
+      const jEst = e.jornada ? e.jornada.trim().toUpperCase() : 'MATUTINA'
+      return jEst === jornadaSeleccionada.trim().toUpperCase()
+    })
 
     setEstudiantes(ests || [])
 
@@ -96,7 +170,7 @@ export default function AsistenciaGlobalPage() {
     } else {
       setAsistenciaMap({})
     }
-  }, [grado, paralelo, asignatura, fecha, anioLectivoVigente, esDocenteDeAula])
+  }, [institucionId, grado, paralelo, jornadaSeleccionada, asignatura, fecha, anioLectivoVigente, esDocenteDeAula])
 
   useEffect(() => {
     cargarDatos()
@@ -169,7 +243,7 @@ export default function AsistenciaGlobalPage() {
             Control Global y Auditoría de Asistencia
           </h1>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
-            {nombreInstitucion} • Sincronización directa y limpia.
+            {nombreInstitucion} • Sincronización institucional estricta.
           </p>
         </div>
 
@@ -184,8 +258,8 @@ export default function AsistenciaGlobalPage() {
         </div>
       )}
 
-      {/* FILTROS PRINCIPALES */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5 text-xs">
+      {/* FILTROS PRINCIPALES (Con aislamiento institucional y jornada) */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3.5 text-xs">
         <div>
           <label className="block text-slate-700 font-bold uppercase mb-1.5">Fecha de Clase</label>
           <input 
@@ -194,6 +268,17 @@ export default function AsistenciaGlobalPage() {
             onChange={(e) => setFecha(e.target.value)} 
             className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs" 
           />
+        </div>
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Jornada</label>
+          <select 
+            value={jornadaSeleccionada} 
+            onChange={(e) => handleJornadaChange(e.target.value)} 
+            disabled={jornadasDisponibles.length <= 1}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer disabled:bg-slate-100 disabled:cursor-not-allowed"
+          >
+            {jornadasDisponibles.map(j => <option key={j} value={j}>{j}</option>)}
+          </select>
         </div>
         <div>
           <label className="block text-slate-700 font-bold uppercase mb-1.5">Grado / Curso</label>
@@ -256,13 +341,13 @@ export default function AsistenciaGlobalPage() {
           style={{ backgroundColor: '#4b4c99' }}
           className="p-4 text-xs font-bold uppercase text-white tracking-wider shadow-2xs flex justify-between items-center"
         >
-          <span>Nómina: {grado} "{paralelo}" {esDocenteDeAula ? '— (Registro General)' : `— (${asignatura})`}</span>
+          <span>Nómina: {jornadaSeleccionada} • {grado} "{paralelo}" {esDocenteDeAula ? '— (Registro General)' : `— (${asignatura})`}</span>
           <span>Total Alumnos: {estudiantes.length}</span>
         </div>
 
         {estudiantes.length === 0 ? (
           <div className="p-12 text-center text-slate-500 font-medium text-xs">
-            No hay estudiantes activos matriculados en este curso y paralelo para el periodo {anioLectivoVigente}.
+            No hay estudiantes activos matriculados en esta jornada, curso y paralelo para el periodo {anioLectivoVigente}.
           </div>
         ) : (
           <div className="overflow-x-auto">

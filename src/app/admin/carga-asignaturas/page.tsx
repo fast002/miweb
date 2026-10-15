@@ -61,7 +61,7 @@ export default function CargaAsignaturasPage() {
   }
 
   const cargarDocentes = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('docentes')
       .select('*, instituciones(nombre_institucion)')
       .order('nombres', { ascending: true })
@@ -125,7 +125,7 @@ export default function CargaAsignaturasPage() {
 
       if (error) throw error
 
-      setMensaje('✅ Asignaciones guardadas con éxito.')
+      setMensaje('Asignaciones guardadas con éxito.')
       setModalAbierto(false)
       cargarDocentes()
     } catch (err: any) {
@@ -136,89 +136,132 @@ export default function CargaAsignaturasPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6 md:p-8">
-      <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-md p-6 space-y-6">
-        
-        {/* Encabezado */}
-        <div className="flex justify-between items-center border-b pb-4">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">📚 Carga Académica de Asignaturas y Grados</h1>
-            <p className="text-xs text-slate-500">Asigna permisos específicos de planificación a cada usuario del sistema.</p>
-          </div>
-          <button
-            onClick={() => router.push('/admin/dashboard')}
-            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+    <div className="space-y-6 pb-12 font-sans selection:bg-[#4b4c99] selection:text-white">
+      
+      {/* ENCABEZADO CORPORATIVO */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
           >
-            ← Volver al Panel
-          </button>
+            Consola Central • Gestión Curricular
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            Carga Académica de Asignaturas y Grados
+          </h1>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+            Asigna permisos específicos de planificación y aulas a cada usuario del sistema.
+          </p>
         </div>
 
-        {mensaje && (
-          <div className="p-3 bg-blue-50 text-blue-900 rounded-xl text-xs font-bold border border-blue-200">
-            {mensaje}
-          </div>
-        )}
+        <button
+          onClick={() => router.push('/admin/dashboard')}
+          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200/80 transition cursor-pointer flex items-center gap-2 shadow-2xs shrink-0"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+          Volver al Panel
+        </button>
+      </div>
 
-        {/* Tabla de Usuarios */}
-        <div className="overflow-x-auto border rounded-xl">
-          <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 text-slate-700 uppercase font-bold border-b">
+      {mensaje && (
+        <div className={`p-4 rounded-2xl text-xs font-bold border shadow-2xs flex items-center gap-2.5 ${
+          mensaje.toLowerCase().includes('error') 
+            ? 'bg-rose-50 text-rose-900 border-rose-200' 
+            : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+        }`}>
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span>{mensaje}</span>
+        </div>
+      )}
+
+      {/* TABLA DE USUARIOS */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div 
+          style={{ backgroundColor: '#4b4c99' }}
+          className="p-4 text-xs font-bold uppercase text-white tracking-wider flex justify-between items-center"
+        >
+          <span>Asignación de Permisos Curriculares por Usuario</span>
+          <span className="text-[10px] bg-white/20 px-2.5 py-1 rounded-xl">Total Usuarios: {docentes.length}</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left border-collapse">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-900 font-bold uppercase text-[10px]">
               <tr>
-                <th className="p-3">Usuario / Autoridad</th>
-                <th className="p-3">Institución</th>
-                <th className="p-3">Rol</th>
-                <th className="p-3">Grados Autorizados</th>
-                <th className="p-3">Asignaturas Autorizadas</th>
-                <th className="p-3 text-center">Acción</th>
+                <th className="p-3.5">Usuario / Autoridad</th>
+                <th className="p-3.5">Institución</th>
+                <th className="p-3.5">Rol</th>
+                <th className="p-3.5">Grados Autorizados</th>
+                <th className="p-3.5">Asignaturas Autorizadas</th>
+                <th className="p-3.5 text-center">Acción</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-slate-200">
               {docentes.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50">
-                  <td className="p-3 font-semibold text-slate-900">
+                <tr key={doc.id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="p-3.5 font-bold text-slate-800">
                     {doc.nombres} {doc.apellidos}
                     <span className="block text-[10px] text-slate-500 font-normal">{doc.email}</span>
                   </td>
-                  <td className="p-3 text-slate-600">{doc.instituciones?.nombre_institucion || 'Sin institución'}</td>
-                  <td className="p-3 uppercase font-bold text-indigo-700">{doc.rol || 'docente'}</td>
+                  <td className="p-3.5 text-slate-600 font-medium">{doc.instituciones?.nombre_institucion || 'Sin institución'}</td>
+                  <td className="p-3.5">
+                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase inline-block ${
+                      doc.rol === 'rector' ? 'bg-purple-100 text-purple-800' :
+                      doc.rol === 'vicerrector' ? 'bg-indigo-100 text-indigo-800' :
+                      doc.rol === 'inspector' ? 'bg-amber-100 text-amber-800' :
+                      doc.rol === 'secretaria' ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      {doc.rol || 'docente'}
+                    </span>
+                  </td>
                   
                   {/* Grados */}
-                  <td className="p-3">
+                  <td className="p-3.5">
                     <div className="flex flex-wrap gap-1 max-w-xs">
                       {doc.grados_asignados?.length > 0 ? (
                         doc.grados_asignados.map((g: string) => (
-                          <span key={g} className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[9px]">
+                          <span key={g} className="px-2 py-0.5 bg-blue-50 text-blue-800 border border-blue-200/60 rounded-md font-bold text-[10px]">
                             {g}
                           </span>
                         ))
                       ) : (
-                        <span className="text-slate-400 italic">Sin grados</span>
+                        <span className="text-slate-400 italic text-[11px]">Sin grados</span>
                       )}
                     </div>
                   </td>
 
                   {/* Asignaturas */}
-                  <td className="p-3">
+                  <td className="p-3.5">
                     <div className="flex flex-wrap gap-1 max-w-xs">
                       {doc.asignaturas_asignadas?.length > 0 ? (
                         doc.asignaturas_asignadas.map((a: string) => (
-                          <span key={a} className="px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded font-bold text-[9px]">
+                          <span key={a} className="px-2 py-0.5 bg-indigo-50 text-[#4b4c99] border border-indigo-200/60 rounded-md font-bold text-[10px]">
                             {a}
                           </span>
                         ))
                       ) : (
-                        <span className="text-slate-400 italic">Sin asignaturas</span>
+                        <span className="text-slate-400 italic text-[11px]">Sin asignaturas</span>
                       )}
                     </div>
                   </td>
 
-                  <td className="p-3 text-center">
+                  <td className="p-3.5 text-center">
                     {!doc.es_superadmin && (
                       <button
                         onClick={() => abrirModal(doc)}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow cursor-pointer transition"
+                        style={{ backgroundColor: '#4b4c99' }}
+                        className="px-3.5 py-2 hover:opacity-95 text-white font-bold rounded-xl text-[11px] shadow-2xs cursor-pointer transition inline-flex items-center gap-1.5"
                       >
-                        ⚙️ Asignar
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        Asignar
                       </button>
                     )}
                   </td>
@@ -227,20 +270,28 @@ export default function CargaAsignaturasPage() {
             </tbody>
           </table>
         </div>
-
       </div>
 
       {/* MODAL DE ASIGNACIÓN */}
       {modalAbierto && docenteActual && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 space-y-6 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto font-sans my-8">
             
-            <div className="flex justify-between items-center border-b pb-3">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
-                <h2 className="text-base font-bold text-slate-900">Configurar Permisos de Planificación</h2>
-                <p className="text-xs text-slate-500">Docente: <strong className="text-slate-800">{docenteActual.nombres} {docenteActual.apellidos}</strong></p>
+                <h2 className="text-xs font-bold uppercase text-slate-900 tracking-wide">
+                  Configurar Permisos de Planificación
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Docente: <strong className="text-slate-800">{docenteActual.nombres} {docenteActual.apellidos}</strong>
+                </p>
               </div>
-              <button onClick={() => setModalAbierto(false)} className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">✕</button>
+              <button 
+                onClick={() => setModalAbierto(false)} 
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer p-1"
+              >
+                ✕
+              </button>
             </div>
 
             <form onSubmit={guardarAsignaciones} className="space-y-6">
@@ -248,13 +299,24 @@ export default function CargaAsignaturasPage() {
               {/* Sección Grados */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">1. Años de Básica / Bachillerato Autorizados</h3>
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    1. Años de Básica / Bachillerato Autorizados
+                  </h3>
                   <button
                     type="button"
                     onClick={toggleTodosGrados}
-                    className="text-xs text-blue-600 font-bold hover:underline cursor-pointer"
+                    className="text-xs text-[#4b4c99] font-bold hover:underline cursor-pointer flex items-center gap-1"
                   >
-                    {TODOS_LOS_GRADOS.every(g => gradosSeleccionados.includes(g)) ? 'Deseleccionar todos los grados' : '✓ Asignar todos los grados'}
+                    {TODOS_LOS_GRADOS.every(g => gradosSeleccionados.includes(g)) ? (
+                      'Deseleccionar todos los grados'
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Asignar todos los grados
+                      </>
+                    )}
                   </button>
                 </div>
                 
@@ -262,8 +324,8 @@ export default function CargaAsignaturasPage() {
                   {Object.entries(NIVELES_EDUCATIVOS).map(([subnivel, grados]) => {
                     const todosSubnivel = grados.every(g => gradosSeleccionados.includes(g))
                     return (
-                      <div key={subnivel} className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                        <div className="flex justify-between items-center mb-2">
+                      <div key={subnivel} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div className="flex justify-between items-center mb-2.5">
                           <span className="text-[11px] font-bold text-slate-700 uppercase">{subnivel}</span>
                           <button
                             type="button"
@@ -274,23 +336,30 @@ export default function CargaAsignaturasPage() {
                                 setGradosSeleccionados(prev => Array.from(new Set([...prev, ...grados])))
                               }
                             }}
-                            className="text-[10px] text-indigo-600 font-bold hover:underline cursor-pointer"
+                            className="text-[10px] text-[#4b4c99] font-bold hover:underline cursor-pointer"
                           >
                             {todosSubnivel ? 'Desmarcar subnivel' : 'Seleccionar subnivel'}
                           </button>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           {grados.map((grado) => {
                             const marcado = gradosSeleccionados.includes(grado)
                             return (
-                              <label key={grado} className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-semibold cursor-pointer transition ${marcado ? 'bg-blue-50 border-blue-400 text-blue-900' : 'bg-white border-slate-200 text-slate-600'}`}>
+                              <label 
+                                key={grado} 
+                                className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition ${
+                                  marcado 
+                                    ? 'bg-indigo-50/80 border-[#4b4c99] text-slate-900 shadow-2xs' 
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100/50'
+                                }`}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={marcado}
                                   onChange={() => toggleGrado(grado)}
-                                  className="rounded text-blue-600 focus:ring-blue-500"
+                                  className="rounded border-slate-300 text-[#4b4c99] focus:ring-[#4b4c99]"
                                 />
-                                <span>{grado}</span>
+                                <span className="truncate">{grado}</span>
                               </label>
                             )
                           })}
@@ -304,28 +373,46 @@ export default function CargaAsignaturasPage() {
               {/* Sección Asignaturas */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">2. Asignaturas Autorizadas</h3>
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    2. Asignaturas Autorizadas
+                  </h3>
                   <button
                     type="button"
                     onClick={toggleTodasAsignaturas}
-                    className="text-xs text-purple-600 font-bold hover:underline cursor-pointer"
+                    className="text-xs text-[#4b4c99] font-bold hover:underline cursor-pointer flex items-center gap-1"
                   >
-                    {ASIGNATURAS_CURRICULARES.every(a => asignaturasSeleccionadas.includes(a)) ? 'Deseleccionar todas las asignaturas' : '✓ Asignar todas las asignaturas'}
+                    {ASIGNATURAS_CURRICULARES.every(a => asignaturasSeleccionadas.includes(a)) ? (
+                      'Deseleccionar todas las asignaturas'
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Asignar todas las asignaturas
+                      </>
+                    )}
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200 max-h-48 overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 max-h-52 overflow-y-auto">
                   {ASIGNATURAS_CURRICULARES.map((asig) => {
                     const marcado = asignaturasSeleccionadas.includes(asig)
                     return (
-                      <label key={asig} className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-semibold cursor-pointer transition ${marcado ? 'bg-purple-50 border-purple-400 text-purple-900' : 'bg-white border-slate-200 text-slate-600'}`}>
+                      <label 
+                        key={asig} 
+                        className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition ${
+                          marcado 
+                            ? 'bg-indigo-50/80 border-[#4b4c99] text-slate-900 shadow-2xs' 
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100/50'
+                        }`}
+                      >
                         <input
                           type="checkbox"
                           checked={marcado}
                           onChange={() => toggleAsignatura(asig)}
-                          className="rounded text-purple-600 focus:ring-purple-500"
+                          className="rounded border-slate-300 text-[#4b4c99] focus:ring-[#4b4c99]"
                         />
-                        <span>{asig}</span>
+                        <span className="truncate">{asig}</span>
                       </label>
                     )
                   })}
@@ -333,18 +420,19 @@ export default function CargaAsignaturasPage() {
               </div>
 
               {/* Botones */}
-              <div className="flex justify-end gap-2 border-t pt-4">
+              <div className="flex justify-end gap-2.5 border-t border-slate-100 pt-4">
                 <button
                   type="button"
                   onClick={() => setModalAbierto(false)}
-                  className="px-4 py-2 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={cargando}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer transition disabled:opacity-50"
+                  style={{ backgroundColor: '#4b4c99' }}
+                  className="px-5 py-2.5 hover:opacity-95 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer transition disabled:opacity-50"
                 >
                   {cargando ? 'Guardando...' : 'Guardar Asignaciones'}
                 </button>

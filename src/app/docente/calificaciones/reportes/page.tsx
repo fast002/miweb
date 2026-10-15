@@ -23,8 +23,8 @@ export default function ReportesAcademicosPage() {
   const [periodosDisponibles, setPeriodosDisponibles] = useState<string[]>([])
   const [anosCerrados, setAnosCerrados] = useState<string[]>([])
 
-  // Asignaciones del docente estrictamente del año vigente
-  const [misAsignaciones, setMisAsignaciones] = useState<any[]>([])
+  // Asignaciones institucionales para habilitar grados y paralelos sin restricciones de usuario
+  const [todasAsignaciones, setTodasAsignaciones] = useState<any[]>([])
   
   // Filtros
   const [grado, setGrado] = useState('')
@@ -33,6 +33,9 @@ export default function ReportesAcademicosPage() {
   const [tipoReporte, setTipoReporte] = useState<'Trimestre 1' | 'Trimestre 2' | 'Trimestre 3' | 'Anual'>('Trimestre 1')
   const [estudiantes, setEstudiantes] = useState<any[]>([])
   const [estudianteSeleccionadoId, setEstudianteSeleccionadoId] = useState('')
+
+  // Listado dinámico de asignaturas reales del curso actual
+  const [asignaturasDelCurso, setAsignaturasDelCurso] = useState<string[]>([])
 
   // Datos consolidados del estudiante seleccionado
   const [calificacionesEstudiante, setCalificacionesEstudiante] = useState<any[]>([])
@@ -82,6 +85,7 @@ export default function ReportesAcademicosPage() {
         }
 
         if (instId) {
+          // Cargar autoridades de la institución
           const { data: autoridadesData } = await supabase
             .from('docentes')
             .select('nombres, apellidos, rol')
@@ -106,25 +110,22 @@ export default function ReportesAcademicosPage() {
               setAutoridadSeleccionadaIndex(0)
             }
           }
-        }
 
-        if (anioActivo) {
-          const { data: asignacionesData } = await supabase
-            .from('docente_asignaciones')
-            .select('*')
-            .eq('docente_id', user.id)
-            .eq('anio_lectivo', anioActivo)
+          // Cargar TODAS las asignaciones de la institución para que el visor muestre cualquier curso sin restricciones de un solo docente
+          if (anioActivo) {
+            const { data: todasAsigs } = await supabase
+              .from('docente_asignaciones')
+              .select('*')
+              .eq('institucion_id', instId)
+              .eq('anio_lectivo', anioActivo)
 
-          if (asignacionesData && asignacionesData.length > 0) {
-            setMisAsignaciones(asignacionesData)
-            setGrado(asignacionesData[0].grado_curso)
-            setParalelo(asignacionesData[0].paralelo)
-            setJornadaActual(asignacionesData[0].jornada || 'MATUTINA')
-          } else {
-            setMisAsignaciones([])
+            if (todasAsigs && todasAsigs.length > 0) {
+              setTodasAsignaciones(todasAsigs)
+              setGrado(todasAsigs[0].grado_curso)
+              setParalelo(todasAsigs[0].paralelo)
+              setJornadaActual(todasAsigs[0].jornada || 'MATUTINA')
+            }
           }
-        } else {
-          setMisAsignaciones([])
         }
       } catch (err) {
         console.error(err)
@@ -135,17 +136,35 @@ export default function ReportesAcademicosPage() {
     init()
   }, [router])
 
-  const jornadasDisponibles = Array.from(new Set(misAsignaciones.map(a => a.jornada || 'MATUTINA')))
+  const jornadasDisponibles = Array.from(new Set(todasAsignaciones.map(a => a.jornada || 'MATUTINA')))
 
   const gradosDisponiblesPorJornada = Array.from(new Set(
-    misAsignaciones
+    todasAsignaciones
       .filter(a => (a.jornada || 'MATUTINA') === jornadaActual)
       .map(a => a.grado_curso)
   ))
 
   useEffect(() => {
-    async function cargarEstudiantesCurso() {
+    async function cargarEstudiantesYAsignaturas() {
       if (!institucionId || !grado || !paralelo || !anioLectivoVigente) return
+      
+      // Obtener todas las asignaturas reales configuradas para este curso en la institución
+      const asigsFiltradas = todasAsignaciones.filter(a => a.grado_curso === grado && a.paralelo === paralelo)
+      if (asigsFiltradas.length > 0) {
+        const unicas = Array.from(new Set(asigsFiltradas.map(a => a.asignatura.trim().toUpperCase())))
+        setAsignaturasDelCurso(unicas)
+      } else {
+        setAsignaturasDelCurso([
+          'LENGUA Y LITERATURA',
+          'MATEMÁTICAS',
+          'ESTUDIOS SOCIALES',
+          'CIENCIAS NATURALES',
+          'INGLÉS',
+          'EDUCACIÓN FÍSICA',
+          'EDUCACIÓN CULTURAL Y ARTÍSTICA'
+        ])
+      }
+
       const { data } = await supabase
         .from('estudiantes')
         .select('*')
@@ -165,19 +184,20 @@ export default function ReportesAcademicosPage() {
         const listaFinal = filtradosPorJornada.length > 0 ? filtradosPorJornada : data
 
         setEstudiantes(listaFinal)
-        setEstudianteSeleccionadoId(listaFinal[0].id)
+        setEstudianteSeleccionadoId(prev => (prev && listaFinal.some(e => e.id === prev) ? prev : listaFinal[0].id))
       } else {
         setEstudiantes([])
         setEstudianteSeleccionadoId('')
       }
     }
-    cargarEstudiantesCurso()
-  }, [institucionId, grado, paralelo, jornadaActual, anioLectivoVigente])
+    cargarEstudiantesYAsignaturas()
+  }, [institucionId, grado, paralelo, jornadaActual, anioLectivoVigente, todasAsignaciones])
 
   const cargarDatosEstudiante = useCallback(async () => {
     if (!estudianteSeleccionadoId || !anioLectivoVigente) return
     setCargando(true)
     try {
+      // Consulta abierta: Trae todas las calificaciones del estudiante para el año vigente sin filtrar por docente
       const { data: calData } = await supabase
         .from('calificaciones')
         .select('*')
@@ -214,13 +234,14 @@ export default function ReportesAcademicosPage() {
   const esAnioCerrado = anosCerrados.includes(anioLectivoVigente)
 
   const obtenerNombreSubnivel = (gradoStr: string) => {
+    if (!gradoStr) return ''
     if (['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB'].includes(gradoStr)) {
       return 'Básica Elemental'
     } else if (['5to Grado EGB', '6to Grado EGB', '7mo Grado EGB'].includes(gradoStr)) {
       return 'Básica Media'
-    } else if (['8vo EGB', '9no EGB', '10mo EGB'].includes(gradoStr)) {
+    } else if (['8vo EGB', '9no EGB', '10mo EGB'].includes(gradoStr) || gradoStr.includes('8vo') || gradoStr.includes('9no') || gradoStr.includes('10mo')) {
       return 'Básica Superior'
-    } else if (gradoStr.includes('BGU') || gradoStr.includes('BT')) {
+    } else if (gradoStr.includes('BGU') || gradoStr.includes('BT') || gradoStr.includes('Bachillerato')) {
       return 'Bachillerato'
     }
     return ''
@@ -230,7 +251,7 @@ export default function ReportesAcademicosPage() {
   const esBasicaElemental = subnivelActual === 'Básica Elemental'
   const esSuperiorOBachillerato = subnivelActual === 'Básica Superior' || subnivelActual === 'Bachillerato'
 
-  const asignaturasElementalMedia = [
+  const asignaturasFijas = asignaturasDelCurso.length > 0 ? asignaturasDelCurso : [
     'LENGUA Y LITERATURA',
     'MATEMÁTICAS',
     'ESTUDIOS SOCIALES',
@@ -239,18 +260,6 @@ export default function ReportesAcademicosPage() {
     'EDUCACIÓN FÍSICA',
     'EDUCACIÓN CULTURAL Y ARTÍSTICA'
   ]
-
-  const asignaturasSuperiorBachillerato = [
-    'LENGUA Y LITERATURA',
-    'MATEMÁTICAS',
-    'ESTUDIOS SOCIALES',
-    'CIENCIAS NATURALES',
-    'INGLÉS',
-    'EDUCACIÓN FÍSICA',
-    'EDUCACIÓN CULTURAL Y ARTÍSTICA'
-  ]
-
-  const asignaturasFijas = esSuperiorOBachillerato ? asignaturasSuperiorBachillerato : asignaturasElementalMedia
 
   const obtenerEscalaElemental = (nota: number) => {
     if (!nota || nota <= 0) return ''
@@ -276,24 +285,24 @@ export default function ReportesAcademicosPage() {
 
   const estudianteActual = estudiantes.find(e => e.id === estudianteSeleccionadoId)
   const paralelosDisponibles = Array.from(new Set(
-    misAsignaciones
+    todasAsignaciones
       .filter(a => (a.jornada || 'MATUTINA') === jornadaActual && a.grado_curso === grado)
       .map(a => a.paralelo)
   ))
 
   const handleJornadaChange = (nuevaJornada: string) => {
     setJornadaActual(nuevaJornada)
-    const primerGradoJornada = misAsignaciones.find(a => (a.jornada || 'MATUTINA') === nuevaJornada)?.grado_curso || ''
+    const primerGradoJornada = todasAsignaciones.find(a => (a.jornada || 'MATUTINA') === nuevaJornada)?.grado_curso || ''
     if (primerGradoJornada) {
       setGrado(primerGradoJornada)
-      const primerParalelo = misAsignaciones.find(a => (a.jornada || 'MATUTINA') === nuevaJornada && a.grado_curso === primerGradoJornada)?.paralelo || 'A'
+      const primerParalelo = todasAsignaciones.find(a => (a.jornada || 'MATUTINA') === nuevaJornada && a.grado_curso === primerGradoJornada)?.paralelo || 'A'
       setParalelo(primerParalelo)
     }
   }
 
   const handleGradoChange = (nuevoGrado: string) => {
     setGrado(nuevoGrado)
-    const asigMatch = misAsignaciones.find(a => (a.jornada || 'MATUTINA') === jornadaActual && a.grado_curso === nuevoGrado)
+    const asigMatch = todasAsignaciones.find(a => (a.jornada || 'MATUTINA') === jornadaActual && a.grado_curso === nuevoGrado)
     if (asigMatch) {
       setParalelo(asigMatch.paralelo || 'A')
     }
@@ -411,7 +420,7 @@ export default function ReportesAcademicosPage() {
               style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
               className="px-4 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
             >
-              <span></span> Imprimir / Guardar PDF
+              <span>🖨️</span> Imprimir / Guardar PDF
             </button>
           </div>
         </div>
@@ -480,9 +489,9 @@ export default function ReportesAcademicosPage() {
               style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.05)', borderColor: 'rgba(75, 76, 153, 0.3)' }}
               className="w-full p-2.5 border-2 rounded-xl text-xs font-bold outline-none shadow-2xs"
             >
-              <option value="Trimestre 1">1er Trimestre</option>
-              <option value="Trimestre 2">2do Trimestre</option>
-              <option value="Trimestre 3">3er Trimestre</option>
+              <option value="Trimestre 1">Trimestre 1</option>
+              <option value="Trimestre 2">Trimestre 2</option>
+              <option value="Trimestre 3">Trimestre 3</option>
               <option value="Anual">Reporte Final (Anual)</option>
             </select>
           </div>
@@ -552,12 +561,21 @@ export default function ReportesAcademicosPage() {
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {asignaturasFijas.map((asig) => {
-                  const reg = calificacionesEstudiante.find(c => c.asignatura.trim().toUpperCase() === asig && c.trimestre === tipoReporte)
-                  const prom = Number(reg?.promedio_parcial || 0)
-                  const form = Number(reg?.insumo_1 || prom)
-                  const form70 = Number((form * 0.70).toFixed(2))
-                  const sum = Number(reg?.evaluacion_estructurada || reg?.proyecto_interdisciplinar || prom)
-                  const sum30 = Number((sum * 0.30).toFixed(2))
+                  // Búsqueda flexible tolerando mayúsculas, tildes y el trimestre exacto
+                  const reg = calificacionesEstudiante.find(c => {
+                    const dbAsig = (c.asignatura || '').trim().toUpperCase()
+                    const targetAsig = asig.trim().toUpperCase()
+                    const coincideMateria = dbAsig === targetAsig || dbAsig.includes(targetAsig) || targetAsig.includes(dbAsig)
+                    const coincideTrimestre = (c.trimestre || '').trim().toLowerCase() === tipoReporte.trim().toLowerCase()
+                    return coincideMateria && coincideTrimestre
+                  })
+
+                  // Extracción exacta de los datos tal como los procesa la sábana y el calificador
+                  const prom = reg?.promedio_parcial !== undefined && reg?.promedio_parcial !== null ? Number(reg.promedio_parcial) : 0
+                  const formativo = reg?.insumo_1 !== undefined && reg?.insumo_1 !== null ? (Number(reg.insumo_1) + Number(reg.insumo_2 || 0)) / 2 : prom
+                  const formativo70 = Number((formativo * 0.70).toFixed(2))
+                  const sumativo = Number(reg?.proyecto_interdisciplinar || reg?.evaluacion_estructurada || prom)
+                  const sumativo30 = Number((sumativo * 0.30).toFixed(2))
 
                   return (
                     <tr key={asig} className="text-center font-bold text-slate-900">
@@ -572,10 +590,10 @@ export default function ReportesAcademicosPage() {
                         </>
                       ) : (
                         <>
-                          <td className="p-2 border border-slate-800">{form > 0 ? form.toFixed(2) : '0.00'}</td>
-                          <td className="p-2 border border-slate-800">{form70 > 0 ? form70.toFixed(2) : '0.00'}</td>
-                          <td className="p-2 border border-slate-800">{sum > 0 ? sum.toFixed(2) : '0.00'}</td>
-                          <td className="p-2 border border-slate-800">{sum30 > 0 ? sum30.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-800">{formativo > 0 ? formativo.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-800">{formativo70 > 0 ? formativo70.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-800">{sumativo > 0 ? sumativo.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-800">{sumativo30 > 0 ? sumativo30.toFixed(2) : '0.00'}</td>
                           <td className="p-2 border border-slate-800 font-black">{prom > 0 ? prom.toFixed(2) : '0.00'}</td>
                           <td className="p-2 border border-slate-800 font-black text-[#4b4c99]">{obtenerEscalaCuantitativaCualitativa(prom)}</td>
                         </>
@@ -603,10 +621,10 @@ export default function ReportesAcademicosPage() {
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {asignaturasFijas.map((asig) => {
-                  const regT1 = calificacionesEstudiante.find(c => c.asignatura.trim().toUpperCase() === asig && c.trimestre === 'Trimestre 1')
-                  const regT2 = calificacionesEstudiante.find(c => c.asignatura.trim().toUpperCase() === asig && c.trimestre === 'Trimestre 2')
-                  const regT3 = calificacionesEstudiante.find(c => c.asignatura.trim().toUpperCase() === asig && c.trimestre === 'Trimestre 3')
-                  const regSupletorio = calificacionesEstudiante.find(c => c.asignatura.trim().toUpperCase() === asig && c.trimestre === 'SUPLETORIO')
+                  const regT1 = calificacionesEstudiante.find(c => (c.asignatura || '').trim().toUpperCase().includes(asig) && (c.trimestre || '').includes('Trimestre 1'))
+                  const regT2 = calificacionesEstudiante.find(c => (c.asignatura || '').trim().toUpperCase().includes(asig) && (c.trimestre || '').includes('Trimestre 2'))
+                  const regT3 = calificacionesEstudiante.find(c => (c.asignatura || '').trim().toUpperCase().includes(asig) && (c.trimestre || '').includes('Trimestre 3'))
+                  const regSupletorio = calificacionesEstudiante.find(c => (c.asignatura || '').trim().toUpperCase().includes(asig) && (c.trimestre || '').includes('SUPLETORIO'))
 
                   const p1 = Number(regT1?.promedio_parcial || 0)
                   const p2 = Number(regT2?.promedio_parcial || 0)
@@ -614,8 +632,7 @@ export default function ReportesAcademicosPage() {
                   
                   let promAnual = Number(((p1 + p2 + p3) / (p1 && p2 && p3 ? 3 : (p1 || p2 || p3 ? 1 : 1))).toFixed(2))
                   
-                  const supletorioRaw = regSupletorio?.examen_supletorio ?? regSupletorio?.ex_supletorio ?? regSupletorio?.supletorio ?? null
-                  let supletorioVal = supletorioRaw !== null && supletorioRaw !== '' ? Number(supletorioRaw) : 0
+                  const supletorioVal = regSupletorio?.examen_supletorio ? Number(regSupletorio.examen_supletorio) : 0
 
                   if (esSuperiorOBachillerato && supletorioVal > 0) {
                     promAnual = Number(((promAnual + supletorioVal) / 2).toFixed(2))

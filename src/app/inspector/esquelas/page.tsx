@@ -11,6 +11,10 @@ export default function EsquelasPage() {
   const [estudiantes, setEstudiantes] = useState<any[]>([])
   const [cargando, setCargando] = useState(true)
 
+  // Estados de búsqueda y filtros
+  const [busquedaTexto, setBusquedaTexto] = useState('')
+  const [filtroGravedad, setFiltroGravedad] = useState('TODAS')
+
   // Estados del formulario para la nueva esquela
   const [estudianteIdSeleccionado, setEstudianteIdSeleccionado] = useState('')
   const [motivo, setMotivo] = useState('')
@@ -207,6 +211,19 @@ export default function EsquelasPage() {
     ventana.document.close()
   }
 
+  // Filtrado reactivo de esquelas según la búsqueda por texto y gravedad
+  const esquelasFiltradas = esquelas.filter(item => {
+    const texto = busquedaTexto.toLowerCase().trim()
+    const nombreCompleto = `${item.estudiantes?.apellidos || ''} ${item.estudiantes?.nombres || ''}`.toLowerCase()
+    const codigo = (item.numero_esquela || '').toLowerCase()
+    const motivoTexto = (item.motivo || '').toLowerCase()
+
+    const cumpleTexto = !texto || nombreCompleto.includes(texto) || codigo.includes(texto) || motivoTexto.includes(texto)
+    const cumpleGravedad = filtroGravedad === 'TODAS' || item.gravedad === filtroGravedad
+
+    return cumpleTexto && cumpleGravedad
+  })
+
   return (
     <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans">
       
@@ -242,19 +259,48 @@ export default function EsquelasPage() {
         </div>
       )}
 
+      {/* BARRA DE BÚSQUEDA Y FILTROS */}
+      <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Buscar Estudiante o Código</label>
+          <input
+            type="text"
+            value={busquedaTexto}
+            onChange={(e) => setBusquedaTexto(e.target.value)}
+            placeholder="Ej: Pérez, ESQ-001..."
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs"
+          />
+        </div>
+
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Filtrar por Gravedad</label>
+          <select
+            value={filtroGravedad}
+            onChange={(e) => setFiltroGravedad(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
+          >
+            <option value="TODAS">Todas las gravedades</option>
+            <option value="Leve">Leve</option>
+            <option value="Grave">Grave</option>
+            <option value="Muy Grave">Muy Grave</option>
+          </select>
+        </div>
+      </div>
+
       {/* TABLA DE HISTORIAL */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div 
           style={{ backgroundColor: '#4b4c99' }}
-          className="p-4 text-xs font-bold uppercase text-white tracking-wider shadow-2xs"
+          className="p-4 text-xs font-bold uppercase text-white tracking-wider shadow-2xs flex justify-between items-center"
         >
-          Historial de Esquelas Emitidas
+          <span>Historial de Esquelas Emitidas</span>
+          <span className="text-[10px] bg-white/20 px-2.5 py-1 rounded-xl">Mostrando {esquelasFiltradas.length} de {esquelas.length} registros</span>
         </div>
 
         {cargando ? (
           <div className="p-12 text-center text-slate-500 font-medium text-xs">Cargando registros...</div>
-        ) : esquelas.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 font-medium text-xs">No hay esquelas registradas en este período.</div>
+        ) : esquelasFiltradas.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 font-medium text-xs">No se encontraron esquelas con los filtros aplicados.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left border-collapse">
@@ -270,7 +316,7 @@ export default function EsquelasPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {esquelas.map((item, index) => (
+                {esquelasFiltradas.map((item, index) => (
                   <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="p-3.5 font-bold text-slate-800">
                       {item.estudiantes?.apellidos} {item.estudiantes?.nombres}

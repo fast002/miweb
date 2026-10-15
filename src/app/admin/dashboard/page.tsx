@@ -610,7 +610,7 @@ export default function SuperAdminDashboardPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al restablecer contraseña')
 
-      setMensaje(`✅ La contraseña de ${emailUsuario} ha sido restablecida a "123456" y su cuenta fue desbloqueada.`)
+      setMensaje(`La contraseña de ${emailUsuario} ha sido restablecida a "123456" y su cuenta fue desbloqueada.`)
       cargarDatos()
     } catch (err: any) {
       setMensaje('Error al restablecer clave: ' + err.message)
@@ -619,299 +619,376 @@ export default function SuperAdminDashboardPage() {
 
   if (verificandoAcceso) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100">
-        <div className="text-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-slate-600 font-medium">Verificando accesos de Superadministrador...</p>
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans selection:bg-[#4b4c99] selection:text-white">
+        <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Verificando accesos de Superadministrador...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-md p-6">
-        
-        {/* Encabezado */}
-        <div className="flex justify-between items-center border-b pb-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Panel del Superadministrador 👑</h1>
-            <p className="text-xs text-slate-500">Gestión Global de Licencias, Cupos de Usuarios y Autoridades</p>
-          </div>
-          <button 
-            onClick={() => supabase.auth.signOut().then(() => window.location.href = '/')} 
-            className="text-xs bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-2 px-3 rounded-lg transition cursor-pointer"
+    <div className="space-y-6 pb-12 font-sans selection:bg-[#4b4c99] selection:text-white">
+      
+      {/* ENCABEZADO CORPORATIVO */}
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <span 
+            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+            className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block mb-1.5"
           >
-            Cerrar Sesión
-          </button>
+            Consola Central • Administración Global
+          </span>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+            Panel del Superadministrador
+          </h1>
+          <p className="text-xs text-slate-500 font-semibold mt-0.5">
+            Gestión Global de Licencias, Cupos de Usuarios, Instituciones y Autoridades.
+          </p>
         </div>
 
-        {/* Pestañas */}
-        <div className="flex space-x-6 mb-6 border-b overflow-x-auto">
-          <button 
-            onClick={() => { setTab('gestion'); setMensaje(''); }}
-            className={`pb-3 text-sm font-semibold border-b-2 whitespace-nowrap transition cursor-pointer ${tab === 'gestion' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-          >
-            📋 Control de Escuelas y Licencias
-          </button>
-          <button 
-            onClick={() => { setTab('instituciones'); setMensaje(''); }}
-            className={`pb-3 text-sm font-semibold border-b-2 whitespace-nowrap transition cursor-pointer ${tab === 'instituciones' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-          >
-            ➕ Registrar Escuela
-          </button>
-          <button 
-            onClick={() => { setTab('docentes'); setMensaje(''); }}
-            className={`pb-3 text-sm font-semibold border-b-2 whitespace-nowrap transition cursor-pointer ${tab === 'docentes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-          >
-            👤 Creación de Cuentas
-          </button>
-          <button 
-            onClick={() => { setTab('padres'); setMensaje(''); }}
-            className={`pb-3 text-sm font-semibold border-b-2 whitespace-nowrap transition cursor-pointer ${tab === 'padres' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-          >
-            👨‍👩‍👦 Cuentas Padres
-          </button>
+        <button 
+          onClick={() => supabase.auth.signOut().then(() => window.location.href = '/')} 
+          className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition cursor-pointer flex items-center gap-2 shadow-2xs shrink-0"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+          </svg>
+          Cerrar Sesión
+        </button>
+      </div>
+
+      {/* BARRA DE PESTAÑAS */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap gap-2">
+        <button 
+          onClick={() => { setTab('gestion'); setMensaje(''); }}
+          style={tab === 'gestion' ? { backgroundColor: '#4b4c99' } : {}}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            tab === 'gestion' ? 'text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+          </svg>
+          Control de Escuelas y Licencias
+        </button>
+
+        <button 
+          onClick={() => { setTab('instituciones'); setMensaje(''); }}
+          style={tab === 'instituciones' ? { backgroundColor: '#4b4c99' } : {}}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            tab === 'instituciones' ? 'text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Registrar Escuela
+        </button>
+
+        <button 
+          onClick={() => { setTab('docentes'); setMensaje(''); }}
+          style={tab === 'docentes' ? { backgroundColor: '#4b4c99' } : {}}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            tab === 'docentes' ? 'text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+          </svg>
+          Creación de Cuentas
+        </button>
+
+        <button 
+          onClick={() => { setTab('padres'); setMensaje(''); }}
+          style={tab === 'padres' ? { backgroundColor: '#4b4c99' } : {}}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            tab === 'padres' ? 'text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+          </svg>
+          Cuentas Padres
+        </button>
+      </div>
+
+      {mensaje && (
+        <div className={`p-4 rounded-2xl text-xs font-bold border shadow-2xs flex items-center gap-2.5 ${
+          mensaje.toLowerCase().includes('error') 
+            ? 'bg-rose-50 text-rose-900 border-rose-200' 
+            : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+        }`}>
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span>{mensaje}</span>
         </div>
+      )}
 
-        {mensaje && (
-          <div className="p-4 mb-6 bg-blue-50 text-blue-900 rounded-xl text-sm font-medium border border-blue-200 shadow-sm">
-            {mensaje}
-          </div>
-        )}
-
-        {/* PESTAÑA 1: GESTIÓN DE ESCUELAS, CUPOS Y LICENCIAS */}
-        {tab === 'gestion' && (
-          <div className="space-y-8">
-            <div>
-              <h2 className="text-lg font-bold text-slate-800 mb-4">Instituciones Educativas, Límite de Usuarios y Licencias</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left border rounded-lg">
-                  <thead className="bg-slate-50 text-slate-700 uppercase text-xs border-b">
-                    <tr>
-                      <th className="p-3">Institución</th>
-                      <th className="p-3">AMIE</th>
-                      <th className="p-3">Plan</th>
-                      <th className="p-3">Límite / Cupo de Usuarios</th>
-                      <th className="p-3">Vencimiento</th>
-                      <th className="p-3">Estado</th>
-                      <th className="p-3 text-center">Renovación de Licencia</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {instituciones.map((inst) => {
-                      const lic = inst.licencias?.[0]
-                      return (
-                        <tr key={inst.id} className="hover:bg-slate-50">
-                          <td className="p-3 font-semibold text-slate-800">{inst.nombre_institucion}</td>
-                          <td className="p-3 text-slate-600">{inst.codigo_amie}</td>
-                          <td className="p-3 text-slate-600 capitalize">{lic?.tipo_licencia || 'N/A'}</td>
-
-                          <td className="p-3">
-                            {lic ? (
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={cuposEditables[lic.id] ?? (lic.limite_docentes || 0)}
-                                  onChange={(e) =>
-                                    setCuposEditables({
-                                      ...cuposEditables,
-                                      [lic.id]: Number(e.target.value),
-                                    })
-                                  }
-                                  className="w-20 p-1.5 border border-slate-300 rounded text-center text-xs font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none"
-                                />
-                                <button
-                                  onClick={() => handleGuardarCupoLicencia(lic.id)}
-                                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded transition whitespace-nowrap shadow-sm cursor-pointer"
-                                >
-                                  💾 Guardar
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-slate-400 text-xs">Sin licencia</span>
-                            )}
-                          </td>
-
-                          <td className="p-3 text-slate-600">
-                            {lic ? new Date(lic.fecha_vencimiento).toLocaleDateString('es-EC') : 'N/A'}
-                          </td>
-                          <td className="p-3">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                              lic?.estado === 'activa' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                              {lic?.estado || 'Inactiva'}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center space-x-1 whitespace-nowrap">
-                            {lic && (
-                              <>
-                                <button 
-                                  onClick={() => handleRenovarLicencia(lic.id, 'dias', 1)}
-                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded text-xs font-medium cursor-pointer"
-                                >
-                                  +1 Día
-                                </button>
-                                <button 
-                                  onClick={() => handleRenovarLicencia(lic.id, 'mensual')}
-                                  className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-xs font-medium cursor-pointer"
-                                >
-                                  +1 Mes
-                                </button>
-                                <button 
-                                  onClick={() => handleRenovarLicencia(lic.id, 'trimestral')}
-                                  className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-xs font-medium cursor-pointer"
-                                >
-                                  +3 Meses
-                                </button>
-                                <button 
-                                  onClick={() => handleRenovarLicencia(lic.id, 'anual')}
-                                  className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded text-xs font-medium cursor-pointer"
-                                >
-                                  +1 Año
-                                </button>
-                                <button 
-                                  onClick={() => handleToggleLicencia(lic.id, lic.estado)}
-                                  className={`px-2 py-1 rounded text-xs font-semibold cursor-pointer ${
-                                    lic.estado === 'activa' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                                  }`}
-                                >
-                                  {lic.estado === 'activa' ? 'Suspender' : 'Activar'}
-                                </button>
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+      {/* PESTAÑA 1: GESTIÓN DE ESCUELAS, CUPOS Y LICENCIAS */}
+      {tab === 'gestion' && (
+        <div className="space-y-6">
+          
+          {/* Tabla de Instituciones y Licencias */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div 
+              style={{ backgroundColor: '#4b4c99' }}
+              className="p-4 text-xs font-bold uppercase text-white tracking-wider flex justify-between items-center"
+            >
+              <span>Instituciones Educativas, Límite de Usuarios y Licencias</span>
+              <span className="text-[10px] bg-white/20 px-2.5 py-1 rounded-xl">Total: {instituciones.length}</span>
             </div>
 
-            <div>
-              <h2 className="text-lg font-bold text-slate-800 mb-4">Usuarios y Autoridades</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left border rounded-lg">
-                  <thead className="bg-slate-50 text-slate-700 uppercase text-xs border-b">
-                    <tr>
-                      <th className="p-3">Usuario</th>
-                      <th className="p-3">Correo</th>
-                      <th className="p-3">Institución Actual / Reasignar</th>
-                      <th className="p-3">Rol</th>
-                      <th className="p-3">Estado Acceso</th>
-                      <th className="p-3 text-center">Acciones</th>
-                      <th className="p-3 text-center">Restablecer Clave</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {docentesLista.map((doc) => (
-                      <tr key={doc.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-semibold text-slate-800">{doc.nombres} {doc.apellidos}</td>
-                        <td className="p-3 text-slate-600">{doc.email}</td>
-                        
-                        <td className="p-3">
-                          {doc.es_superadmin ? (
-                            <span className="text-xs font-bold text-purple-700">Superadministrador</span>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-900 font-bold uppercase text-[10px]">
+                  <tr>
+                    <th className="p-3.5">Institución</th>
+                    <th className="p-3.5">AMIE</th>
+                    <th className="p-3.5">Plan</th>
+                    <th className="p-3.5">Límite / Cupo de Usuarios</th>
+                    <th className="p-3.5">Vencimiento</th>
+                    <th className="p-3.5">Estado</th>
+                    <th className="p-3.5 text-center">Renovación de Licencia</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {instituciones.map((inst) => {
+                    const lic = inst.licencias?.[0]
+                    return (
+                      <tr key={inst.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3.5 font-bold text-slate-800">{inst.nombre_institucion}</td>
+                        <td className="p-3.5 font-mono text-slate-600">{inst.codigo_amie}</td>
+                        <td className="p-3.5 text-slate-700 font-semibold capitalize">{lic?.tipo_licencia || 'N/A'}</td>
+
+                        <td className="p-3.5">
+                          {lic ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min={1}
+                                value={cuposEditables[lic.id] ?? (lic.limite_docentes || 0)}
+                                onChange={(e) =>
+                                  setCuposEditables({
+                                    ...cuposEditables,
+                                    [lic.id]: Number(e.target.value),
+                                  })
+                                }
+                                className="w-20 p-2 border border-slate-300 rounded-xl text-center text-xs font-bold text-slate-900 focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] outline-none shadow-2xs"
+                              />
+                              <button
+                                onClick={() => handleGuardarCupoLicencia(lic.id)}
+                                style={{ backgroundColor: '#4b4c99' }}
+                                className="px-3 py-2 text-white font-bold text-[11px] rounded-xl transition whitespace-nowrap shadow-2xs cursor-pointer flex items-center gap-1.5 hover:opacity-95"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Guardar
+                              </button>
+                            </div>
                           ) : (
-                            <select
-                              value={doc.institucion_id || ''}
-                              onChange={(e) => handleCambiarInstitucionDocente(doc.id, e.target.value)}
-                              className="p-1.5 border border-slate-300 rounded text-xs font-semibold text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 outline-none max-w-[200px]"
-                            >
-                              {instituciones.map((inst) => (
-                                <option key={inst.id} value={inst.id}>
-                                  {inst.nombre_institucion}
-                                </option>
-                              ))}
-                            </select>
+                            <span className="text-slate-400 text-xs">Sin licencia</span>
                           )}
                         </td>
 
-                        <td className="p-3">
-                          <span className={`px-2.5 py-0.5 rounded text-xs font-bold uppercase ${
-                            doc.rol === 'rector' ? 'bg-purple-100 text-purple-800' :
-                            doc.rol === 'vicerrector' ? 'bg-indigo-100 text-indigo-800' :
-                            doc.rol === 'inspector' ? 'bg-amber-100 text-amber-800' :
-                            doc.rol === 'secretaria' ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-700'
+                        <td className="p-3.5 text-slate-600 font-semibold">
+                          {lic ? new Date(lic.fecha_vencimiento).toLocaleDateString('es-EC') : 'N/A'}
+                        </td>
+                        <td className="p-3.5">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase inline-block ${
+                            lic?.estado === 'activa' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                           }`}>
-                            {doc.rol || 'docente'}
+                            {lic?.estado || 'Inactiva'}
                           </span>
                         </td>
-                        <td className="p-3">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                            doc.activo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {doc.activo !== false ? 'Activo' : 'Inactivo'}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          {!doc.es_superadmin && (
-                            <button 
-                              onClick={() => handleToggleEstadoDocente(doc.id, doc.activo !== false)}
-                              className={`px-3 py-1 rounded text-xs font-semibold transition cursor-pointer ${
-                                doc.activo !== false 
-                                  ? 'bg-red-100 hover:bg-red-200 text-red-800' 
-                                  : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
-                              }`}
-                            >
-                              {doc.activo !== false ? 'Inactivar' : 'Activar'}
-                            </button>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          {!doc.es_superadmin && (
-                            <button 
-                              onClick={() => handleResetearPasswordSuperadmin(doc.id, doc.email, doc.nombres)}
-                              className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded text-xs font-semibold transition cursor-pointer"
-                            >
-                              🔑 Resetear a 123456
-                            </button>
+                        <td className="p-3.5 text-center space-x-1.5 whitespace-nowrap">
+                          {lic && (
+                            <>
+                              <button 
+                                onClick={() => handleRenovarLicencia(lic.id, 'dias', 1)}
+                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] font-bold transition cursor-pointer"
+                              >
+                                +1 Día
+                              </button>
+                              <button 
+                                onClick={() => handleRenovarLicencia(lic.id, 'mensual')}
+                                className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[11px] font-bold transition cursor-pointer"
+                              >
+                                +1 Mes
+                              </button>
+                              <button 
+                                onClick={() => handleRenovarLicencia(lic.id, 'trimestral')}
+                                className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[11px] font-bold transition cursor-pointer"
+                              >
+                                +3 Meses
+                              </button>
+                              <button 
+                                onClick={() => handleRenovarLicencia(lic.id, 'anual')}
+                                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-[11px] font-bold transition cursor-pointer"
+                              >
+                                +1 Año
+                              </button>
+                              <button 
+                                onClick={() => handleToggleLicencia(lic.id, lic.estado)}
+                                className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition cursor-pointer ${
+                                  lic.estado === 'activa' ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
+                                }`}
+                              >
+                                {lic.estado === 'activa' ? 'Suspender' : 'Activar'}
+                              </button>
+                            </>
                           )}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
-        )}
 
-        {/* PESTAÑA 2: REGISTRAR ESCUELA */}
-        {tab === 'instituciones' && (
-          <form onSubmit={handleCrearInstitucion} className="space-y-4 max-w-lg">
-            <h2 className="text-lg font-bold text-slate-800">Registrar Nueva Institución Educativa</h2>
+          {/* Tabla de Usuarios y Autoridades */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div 
+              style={{ backgroundColor: '#4b4c99' }}
+              className="p-4 text-xs font-bold uppercase text-white tracking-wider flex justify-between items-center"
+            >
+              <span>Usuarios y Autoridades Registradas</span>
+              <span className="text-[10px] bg-white/20 px-2.5 py-1 rounded-xl">Total: {docentesLista.length}</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-900 font-bold uppercase text-[10px]">
+                  <tr>
+                    <th className="p-3.5">Usuario</th>
+                    <th className="p-3.5">Correo</th>
+                    <th className="p-3.5">Institución Actual / Reasignar</th>
+                    <th className="p-3.5">Rol</th>
+                    <th className="p-3.5">Estado Acceso</th>
+                    <th className="p-3.5 text-center">Acciones</th>
+                    <th className="p-3.5 text-center">Restablecer Clave</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {docentesLista.map((doc) => (
+                    <tr key={doc.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3.5 font-bold text-slate-800">{doc.nombres} {doc.apellidos}</td>
+                      <td className="p-3.5 text-slate-600">{doc.email}</td>
+                      
+                      <td className="p-3.5">
+                        {doc.es_superadmin ? (
+                          <span className="text-[11px] font-bold text-[#4b4c99] uppercase">Superadministrador</span>
+                        ) : (
+                          <select
+                            value={doc.institucion_id || ''}
+                            onChange={(e) => handleCambiarInstitucionDocente(doc.id, e.target.value)}
+                            className="p-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white focus:border-[#4b4c99] outline-none max-w-[220px] shadow-2xs cursor-pointer"
+                          >
+                            {instituciones.map((inst) => (
+                              <option key={inst.id} value={inst.id}>
+                                {inst.nombre_institucion}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
+
+                      <td className="p-3.5">
+                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase inline-block ${
+                          doc.rol === 'rector' ? 'bg-purple-100 text-purple-800' :
+                          doc.rol === 'vicerrector' ? 'bg-indigo-100 text-indigo-800' :
+                          doc.rol === 'inspector' ? 'bg-amber-100 text-amber-800' :
+                          doc.rol === 'secretaria' ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {doc.rol || 'docente'}
+                        </span>
+                      </td>
+                      <td className="p-3.5">
+                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase inline-block ${
+                          doc.activo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {doc.activo !== false ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-center">
+                        {!doc.es_superadmin && (
+                          <button 
+                            onClick={() => handleToggleEstadoDocente(doc.id, doc.activo !== false)}
+                            className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition cursor-pointer ${
+                              doc.activo !== false 
+                                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700' 
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                            }`}
+                          >
+                            {doc.activo !== false ? 'Inactivar' : 'Activar'}
+                          </button>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-center">
+                        {!doc.es_superadmin && (
+                          <button 
+                            onClick={() => handleResetearPasswordSuperadmin(doc.id, doc.email, doc.nombres)}
+                            className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-[11px] font-bold transition cursor-pointer inline-flex items-center gap-1.5"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                            </svg>
+                            Resetear a 123456
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* PESTAÑA 2: REGISTRAR ESCUELA */}
+      {tab === 'instituciones' && (
+        <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs max-w-xl">
+          <div className="border-b border-slate-100 pb-4 mb-5">
+            <h2 className="text-sm font-bold uppercase text-slate-900 tracking-wide">Registrar Nueva Institución Educativa</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Configura los datos base y el plan de licenciamiento inicial.</p>
+          </div>
+
+          <form onSubmit={handleCrearInstitucion} className="space-y-4 text-xs">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Nombre de la Institución</label>
+              <label className="block text-slate-700 font-bold uppercase mb-1.5">Nombre de la Institución</label>
               <input 
                 type="text" 
                 required 
                 value={nombreInst} 
                 onChange={(e) => setNombreInst(e.target.value)}
                 placeholder="Ej: Unidad Educativa Ecuatoriana"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none"
+                className="w-full p-3 rounded-xl border border-slate-300 font-semibold text-slate-900 focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] outline-none shadow-2xs"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Código AMIE</label>
+              <label className="block text-slate-700 font-bold uppercase mb-1.5">Código AMIE</label>
               <input 
                 type="text" 
                 required 
                 value={codigoAmie} 
                 onChange={(e) => setCodigoAmie(e.target.value)}
                 placeholder="Ej: 01H00123"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none"
+                className="w-full p-3 rounded-xl border border-slate-300 font-semibold text-slate-900 focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] outline-none shadow-2xs"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Tipo de Licencia</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Tipo de Licencia</label>
                 <select 
                   value={tipoLicencia} 
                   onChange={(e) => setTipoLicencia(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none"
+                  className="w-full p-3 rounded-xl border border-slate-300 font-bold text-slate-900 bg-white focus:border-[#4b4c99] outline-none shadow-2xs cursor-pointer"
                 >
                   <option value="diaria">Diaria (Días Exactos)</option>
                   <option value="mensual">Mensual</option>
@@ -922,52 +999,64 @@ export default function SuperAdminDashboardPage() {
 
               {tipoLicencia === 'diaria' ? (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Cantidad de Días</label>
+                  <label className="block text-slate-700 font-bold uppercase mb-1.5">Cantidad de Días</label>
                   <input 
                     type="number" 
                     min={1} 
                     value={diasPersonalizados} 
                     onChange={(e) => setDiasPersonalizados(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none"
+                    className="w-full p-3 rounded-xl border border-slate-300 font-bold text-slate-900 focus:border-[#4b4c99] outline-none shadow-2xs"
                   />
                 </div>
               ) : (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Límite de Docentes</label>
+                  <label className="block text-slate-700 font-bold uppercase mb-1.5">Límite de Docentes</label>
                   <input 
                     type="number" 
                     value={limiteDocentes} 
                     onChange={(e) => setLimiteDocentes(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none"
+                    className="w-full p-3 rounded-xl border border-slate-300 font-bold text-slate-900 focus:border-[#4b4c99] outline-none shadow-2xs"
                   />
                 </div>
               )}
             </div>
 
-            <button 
-              type="submit" 
-              disabled={cargando}
-              className="bg-blue-600 text-white font-semibold py-2.5 px-6 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer"
-            >
-              {cargando ? 'Guardando...' : 'Registrar Institución'}
-            </button>
+            <div className="pt-2">
+              <button 
+                type="submit" 
+                disabled={cargando}
+                style={{ backgroundColor: '#4b4c99' }}
+                className="px-6 py-3 text-white font-bold text-xs rounded-xl hover:opacity-95 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {cargando ? 'Guardando...' : 'Registrar Institución'}
+              </button>
+            </div>
           </form>
-        )}
+        </div>
+      )}
 
-        {/* PESTAÑA 3: CREAR USUARIOS CON ROL */}
-        {tab === 'docentes' && (
-          <form onSubmit={handleCrearDocente} className="space-y-4 max-w-lg">
-            <h2 className="text-lg font-bold text-slate-800">Crear Cuenta de Usuario / Autoridad</h2>
-            <div className="bg-slate-50 p-3 rounded-lg border text-xs text-slate-600 space-y-1">
-              <p>ℹ️ La contraseña inicial temporal será siempre <strong className="text-blue-700 font-bold">123456</strong>.</p>
+      {/* PESTAÑA 3: CREAR USUARIOS CON ROL */}
+      {tab === 'docentes' && (
+        <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs max-w-xl">
+          <div className="border-b border-slate-100 pb-4 mb-5">
+            <h2 className="text-sm font-bold uppercase text-slate-900 tracking-wide">Crear Cuenta de Usuario / Autoridad</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Asigna credenciales vinculadas directamente a una institución educativa.</p>
+          </div>
+
+          <form onSubmit={handleCrearDocente} className="space-y-4 text-xs">
+            <div className="bg-indigo-50/70 p-3.5 rounded-2xl border border-indigo-200/80 text-xs text-slate-700 flex items-center gap-2.5">
+              <svg className="w-4 h-4 text-[#4b4c99] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <p>La contraseña inicial temporal será siempre <strong className="text-[#4b4c99] font-bold">123456</strong>.</p>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Institución Educativa</label>
+              <label className="block text-slate-700 font-bold uppercase mb-1.5">Institución Educativa</label>
               <select 
                 value={institucionIdDocente} 
                 onChange={(e) => setInstitucionIdDocente(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none"
+                className="w-full p-3 rounded-xl border border-slate-300 font-bold text-slate-900 bg-white focus:border-[#4b4c99] outline-none shadow-2xs cursor-pointer"
               >
                 {instituciones.map((inst) => (
                   <option key={inst.id} value={inst.id}>
@@ -978,11 +1067,11 @@ export default function SuperAdminDashboardPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Rol en la Institución</label>
+              <label className="block text-slate-700 font-bold uppercase mb-1.5">Rol en la Institución</label>
               <select 
                 value={rolUsuario} 
                 onChange={(e: any) => setRolUsuario(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none font-semibold text-blue-900 bg-blue-50"
+                className="w-full p-3 rounded-xl border border-slate-300 font-bold text-[#4b4c99] bg-indigo-50/40 focus:border-[#4b4c99] outline-none shadow-2xs cursor-pointer"
               >
                 <option value="rector">Rector / Director (Autoridad)</option>
                 <option value="vicerrector">Vicerrector / Coordinador (Autoridad)</option>
@@ -994,365 +1083,390 @@ export default function SuperAdminDashboardPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Nombres</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Nombres</label>
                 <input 
                   type="text" 
                   required 
                   value={nombresDocente} 
                   onChange={(e) => setNombresDocente(e.target.value)}
                   placeholder="Ej: Carlos Alberto"
-                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none"
+                  className="w-full p-3 rounded-xl border border-slate-300 font-semibold text-slate-900 focus:border-[#4b4c99] outline-none shadow-2xs"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Apellidos</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Apellidos</label>
                 <input 
                   type="text" 
                   required 
                   value={apellidosDocente} 
                   onChange={(e) => setApellidosDocente(e.target.value)}
                   placeholder="Ej: Andrade Vaca"
-                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none"
+                  className="w-full p-3 rounded-xl border border-slate-300 font-semibold text-slate-900 focus:border-[#4b4c99] outline-none shadow-2xs"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Correo Electrónico</label>
+              <label className="block text-slate-700 font-bold uppercase mb-1.5">Correo Electrónico</label>
               <input 
                 type="email" 
                 required 
                 value={emailDocente} 
                 onChange={(e) => setEmailDocente(e.target.value)}
                 placeholder="autoridad@escuela.edu.ec"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none"
+                className="w-full p-3 rounded-xl border border-slate-300 font-semibold text-slate-900 focus:border-[#4b4c99] outline-none shadow-2xs"
               />
             </div>
 
-            <button 
-              type="submit" 
-              disabled={cargando || instituciones.length === 0}
-              className="bg-emerald-600 text-white font-semibold py-2.5 px-6 rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 cursor-pointer"
-            >
-              {cargando ? 'Creando Cuenta...' : 'Crear Cuenta'}
-            </button>
+            <div className="pt-2">
+              <button 
+                type="submit" 
+                disabled={cargando || instituciones.length === 0}
+                style={{ backgroundColor: '#4b4c99' }}
+                className="px-6 py-3 text-white font-bold text-xs rounded-xl hover:opacity-95 transition disabled:opacity-50 cursor-pointer shadow-sm"
+              >
+                {cargando ? 'Creando Cuenta...' : 'Crear Cuenta'}
+              </button>
+            </div>
           </form>
-        )}
+        </div>
+      )}
 
-        {/* PESTAÑA 4: CUENTAS PADRES */}
-        {tab === 'padres' && (
-          <div className="space-y-6">
+      {/* PESTAÑA 4: CUENTAS PADRES */}
+      {tab === 'padres' && (
+        <div className="space-y-6">
 
-            {/* Formulario de Registro con Filtros en Cascada */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">Crear y Vincular Representante</h2>
+          {/* Formulario de Registro con Filtros en Cascada */}
+          <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-5">
+            <div className="border-b border-slate-100 pb-3">
+              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Crear y Vincular Representante</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Filtra al estudiante por jornada, grado y paralelo para asignarle su representante legal.</p>
+            </div>
+            
+            <form onSubmit={handleCrearPadre} className="space-y-4 text-xs">
               
-              <form onSubmit={handleCrearPadre} className="space-y-4">
-                
-                {/* Filtros de Estudiantes */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-600 uppercase mb-1">Jornada</label>
-                    <select
-                      value={jornadaFiltro}
-                      onChange={(e) => {
-                        setJornadaFiltro(e.target.value)
-                        const gradosJ = Array.from(new Set(estudiantesLista.filter(est => (est.jornada || 'MATUTINA').toUpperCase() === e.target.value.toUpperCase()).map(est => est.grado_curso)))
-                        if (gradosJ.length > 0) setGradoFiltro(gradosJ[0] as string)
-                      }}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none"
-                    >
-                      <option value="MATUTINA">Matutina</option>
-                      <option value="VESPERTINA">Vespertina</option>
-                      <option value="NOCTURNA">Nocturna</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-600 uppercase mb-1">Año / Grado de Básica</label>
-                    <select
-                      value={gradoFiltro}
-                      onChange={(e) => {
-                        setGradoFiltro(e.target.value)
-                        const paralelosG = Array.from(new Set(estudiantesLista.filter(est => est.grado_curso === e.target.value).map(est => est.paralelo || 'A')))
-                        if (paralelosG.length > 0) setParaleloFiltro(paralelosG[0] as string)
-                      }}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none"
-                    >
-                      {gradosDisponibles.map(g => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-600 uppercase mb-1">Paralelo</label>
-                    <select
-                      value={paraleloFiltro}
-                      onChange={(e) => setParaleloFiltro(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none"
-                    >
-                      {paralelosDisponibles.map(par => (
-                        <option key={par} value={par}>Paralelo "{par}"</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Selector del Estudiante */}
+              {/* Filtros de Estudiantes */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Seleccionar Estudiante Disponible ({anioLectivoFiltro})</label>
-                  <select 
-                    value={estudianteIdVinculo} 
-                    onChange={(e) => setEstudianteIdVinculo(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-                    required
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Jornada</label>
+                  <select
+                    value={jornadaFiltro}
+                    onChange={(e) => {
+                      setJornadaFiltro(e.target.value)
+                      const gradosJ = Array.from(new Set(estudiantesLista.filter(est => (est.jornada || 'MATUTINA').toUpperCase() === e.target.value.toUpperCase()).map(est => est.grado_curso)))
+                      if (gradosJ.length > 0) setGradoFiltro(gradosJ[0] as string)
+                    }}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none cursor-pointer shadow-2xs"
                   >
-                    {estudiantesFiltrados.map((est) => (
-                      <option key={est.id} value={est.id}>
-                        {est.apellidos} {est.nombres} — Paralelo "{est.paralelo}" ({est.instituciones?.nombre_institucion})
-                      </option>
-                    ))}
-                    {estudiantesFiltrados.length === 0 && (
-                      <option value="">No hay estudiantes disponibles en este filtro</option>
-                    )}
+                    <option value="MATUTINA">Matutina</option>
+                    <option value="VESPERTINA">Vespertina</option>
+                    <option value="NOCTURNA">Nocturna</option>
                   </select>
                 </div>
 
-                {/* Datos del Representante */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Nombres del Representante</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={nombresPadre} 
-                      onChange={(e) => setNombresPadre(e.target.value)}
-                      placeholder="Ej: Marco Antonio"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Apellidos</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={apellidosPadre} 
-                      onChange={(e) => setApellidosPadre(e.target.value)}
-                      placeholder="Ej: Urgilez Pinos"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Año / Grado de Básica</label>
+                  <select
+                    value={gradoFiltro}
+                    onChange={(e) => {
+                      setGradoFiltro(e.target.value)
+                      const paralelosG = Array.from(new Set(estudiantesLista.filter(est => est.grado_curso === e.target.value).map(est => est.paralelo || 'A')))
+                      if (paralelosG.length > 0) setParaleloFiltro(paralelosG[0] as string)
+                    }}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none cursor-pointer shadow-2xs"
+                  >
+                    {gradosDisponibles.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Cédula de Identidad</label>
-                    <input 
-                      type="text" 
-                      required 
-                      maxLength={10}
-                      value={cedulaPadre} 
-                      onChange={(e) => setCedulaPadre(e.target.value)}
-                      placeholder="0301060601"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Número Telefónico / Celular</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={telefonoPadre} 
-                      onChange={(e) => setTelefonoPadre(e.target.value)}
-                      placeholder="0991234567"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Paralelo</label>
+                  <select
+                    value={paraleloFiltro}
+                    onChange={(e) => setParaleloFiltro(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white outline-none cursor-pointer shadow-2xs"
+                  >
+                    {paralelosDisponibles.map(par => (
+                      <option key={par} value={par}>Paralelo "{par}"</option>
+                    ))}
+                  </select>
                 </div>
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Correo Electrónico (Acceso)</label>
-                    <input 
-                      type="email" 
-                      required 
-                      value={emailPadre} 
-                      onChange={(e) => setEmailPadre(e.target.value)}
-                      placeholder="representante@correo.com"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-                    />
-                    <span className="text-[10px] text-slate-400 mt-1 block">Clave por defecto: 123456 (Obligatorio cambio en primer inicio).</span>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Parentesco</label>
-                    <select 
-                      value={parentescoPadre} 
-                      onChange={(e) => setParentescoPadre(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-slate-50 outline-none"
-                    >
-                      <option value="Padre">Padre</option>
-                      <option value="Madre">Madre</option>
-                      <option value="Tutor/Representante">Tutor / Representante</option>
-                    </select>
-                  </div>
-                </div>
-
-                <button 
-                  type="submit" 
-                  disabled={cargando || estudiantesFiltrados.length === 0}
-                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition disabled:opacity-50 cursor-pointer"
+              {/* Selector del Estudiante */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Seleccionar Estudiante Disponible ({anioLectivoFiltro})</label>
+                <select 
+                  value={estudianteIdVinculo} 
+                  onChange={(e) => setEstudianteIdVinculo(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white focus:border-[#4b4c99] outline-none shadow-2xs cursor-pointer"
+                  required
                 >
-                  {cargando ? 'Registrando...' : 'Crear Cuenta y Vincular'}
-                </button>
-              </form>
-            </div>
+                  {estudiantesFiltrados.map((est) => (
+                    <option key={est.id} value={est.id}>
+                      {est.apellidos} {est.nombres} — Paralelo "{est.paralelo}" ({est.instituciones?.nombre_institucion})
+                    </option>
+                  ))}
+                  {estudiantesFiltrados.length === 0 && (
+                    <option value="">No hay estudiantes disponibles en este filtro</option>
+                  )}
+                </select>
+              </div>
 
-            {/* TABLA: Representantes Registrados */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Representantes Registrados en el Sistema (Global)</h3>
-                <div className="w-full sm:w-72">
-                  <input
-                    type="text"
-                    value={filtroTexto}
-                    onChange={(e) => setFiltroTexto(e.target.value)}
-                    placeholder="🔍 Buscar por nombre, cédula o hijo..."
-                    className="w-full px-3 py-2 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500"
+              {/* Datos del Representante */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Nombres del Representante</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={nombresPadre} 
+                    onChange={(e) => setNombresPadre(e.target.value)}
+                    placeholder="Ej: Marco Antonio"
+                    className="w-full p-3 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:border-[#4b4c99] outline-none shadow-2xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Apellidos</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={apellidosPadre} 
+                    onChange={(e) => setApellidosPadre(e.target.value)}
+                    placeholder="Ej: Urgilez Pinos"
+                    className="w-full p-3 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:border-[#4b4c99] outline-none shadow-2xs"
                   />
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse border border-slate-200">
-                  <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px]">
-                    <tr>
-                      <th className="p-3 border">Representante (Datos)</th>
-                      <th className="p-3 border">Cédula / Teléfono</th>
-                      <th className="p-3 border">Estudiantes Vinculados (Hijos)</th>
-                      <th className="p-3 border text-center">Estado / Bloqueo</th>
-                      <th className="p-3 border text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {padresFiltrados.map((p) => {
-                      const nombreCompletoRep = `${p.apellidos || ''} ${p.nombres || ''}`.trim() || 'Representante'
-                      return (
-                        <tr key={p.id} className="hover:bg-slate-50">
-                          <td className="p-3 border">
-                            <span className="block font-bold text-slate-900">{nombreCompletoRep}</span>
-                            <span className="block text-[10px] text-slate-500">{p.email}</span>
-                          </td>
-                          <td className="p-3 border">
-                            <span className="block font-semibold text-slate-800">Cédula: {p.cedula}</span>
-                            <span className="block text-slate-600">Telf: {p.telefono}</span>
-                          </td>
-                          <td className="p-3 border">
-                            <ul className="space-y-1">
-                              {p.hijos.map((h: any) => (
-                                <li key={h.vinculo_id} className="flex justify-between items-center bg-slate-50 px-2 py-1.5 rounded border border-slate-200">
-                                  <div>
-                                    <span className="font-bold text-slate-800">
-                                      {h.nombreCompleto} <span className="text-[10px] text-slate-500">({h.cursoParalelo})</span>
-                                    </span>
-                                    <span className="block text-[9px] text-purple-700 font-black">{h.institucionNombre}</span>
-                                    <span className="block text-[9px] text-indigo-600 font-black uppercase">Parentesco: {h.parentesco}</span>
-                                  </div>
-                                  <button
-                                    onClick={() => handleEliminarVinculo(h.vinculo_id)}
-                                    className="text-red-500 hover:text-red-700 font-bold text-[10px] ml-2 cursor-pointer"
-                                    title="Eliminar este estudiante vinculado"
-                                  >
-                                    ✕
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          </td>
-                          <td className="p-3 border text-center">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${p.activo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                              {p.activo !== false ? 'ACTIVO' : 'INACTIVO / BLOQUEADO'}
-                            </span>
-                          </td>
-                          <td className="p-3 border text-center space-x-1 whitespace-nowrap">
-                            <button
-                              onClick={() => {
-                                setEditVinculoId(p.id)
-                                setEditNombres(p.nombres || '')
-                                setEditApellidos(p.apellidos || '')
-                                setEditCedula(p.cedula || '')
-                                setEditTelefono(p.telefono || '')
-                                setModalEditarAbierto(true)
-                              }}
-                              className="px-2 py-1 bg-blue-100 text-blue-800 hover:bg-blue-200 font-bold rounded text-[10px] cursor-pointer"
-                              title="Editar datos"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              onClick={() => {
-                                setRepresentanteSeleccionadoUserId(p.user_id)
-                                setRepresentanteNombreDisplay(nombreCompletoRep)
-                                setModalVinculacionAbierto(true)
-                              }}
-                              className="px-2 py-1 bg-purple-100 text-purple-800 hover:bg-purple-200 font-bold rounded text-[10px] cursor-pointer"
-                              title="Vincular otro hijo"
-                            >
-                              + Hijo
-                            </button>
-                            <button
-                              onClick={() => handleToggleActivo(p.user_id, p.activo !== false)}
-                              className={`px-2 py-1 font-bold rounded text-[10px] cursor-pointer ${p.activo !== false ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'}`}
-                              title="Activar o bloquear"
-                            >
-                              {p.activo !== false ? 'Inactivar' : 'Activar'}
-                            </button>
-                            <button
-                              onClick={() => handleResetearPasswordSuperadmin(p.user_id, p.email, nombreCompletoRep)}
-                              className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold rounded text-[10px] cursor-pointer"
-                              title="Resetear contraseña"
-                            >
-                              🔑 Reset
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                    {padresFiltrados.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="p-8 text-center text-slate-400 font-medium">
-                          No hay representantes registrados en el sistema.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Cédula de Identidad</label>
+                  <input 
+                    type="text" 
+                    required 
+                    maxLength={10}
+                    value={cedulaPadre} 
+                    onChange={(e) => setCedulaPadre(e.target.value)}
+                    placeholder="0301060601"
+                    className="w-full p-3 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:border-[#4b4c99] outline-none shadow-2xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Número Telefónico / Celular</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={telefonoPadre} 
+                    onChange={(e) => setTelefonoPadre(e.target.value)}
+                    placeholder="0991234567"
+                    className="w-full p-3 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:border-[#4b4c99] outline-none shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Correo Electrónico (Acceso)</label>
+                  <input 
+                    type="email" 
+                    required 
+                    value={emailPadre} 
+                    onChange={(e) => setEmailPadre(e.target.value)}
+                    placeholder="representante@correo.com"
+                    className="w-full p-3 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:border-[#4b4c99] outline-none shadow-2xs"
+                  />
+                  <span className="text-[10px] text-slate-400 font-semibold mt-1 block">Clave por defecto: 123456 (Obligatorio cambio en primer inicio).</span>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Parentesco</label>
+                  <select 
+                    value={parentescoPadre} 
+                    onChange={(e) => setParentescoPadre(e.target.value)}
+                    className="w-full p-3 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 bg-white focus:border-[#4b4c99] outline-none shadow-2xs cursor-pointer"
+                  >
+                    <option value="Padre">Padre</option>
+                    <option value="Madre">Madre</option>
+                    <option value="Tutor/Representante">Tutor / Representante</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button 
+                  type="submit" 
+                  disabled={cargando || estudiantesFiltrados.length === 0}
+                  style={{ backgroundColor: '#4b4c99' }}
+                  className="px-6 py-3 text-white font-bold text-xs rounded-xl shadow-sm hover:opacity-95 transition disabled:opacity-50 cursor-pointer"
+                >
+                  {cargando ? 'Registrando...' : 'Crear Cuenta y Vincular'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* TABLA: Representantes Registrados */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Representantes Registrados en el Sistema (Global)</h3>
+                <p className="text-[11px] text-slate-500 font-medium">Total agrupados: {padresFiltrados.length}</p>
+              </div>
+              <div className="w-full sm:w-80 relative">
+                <input
+                  type="text"
+                  value={filtroTexto}
+                  onChange={(e) => setFiltroTexto(e.target.value)}
+                  placeholder="Buscar por nombre, cédula o hijo..."
+                  className="w-full pl-9 pr-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none focus:bg-white focus:border-[#4b4c99] shadow-2xs"
+                />
+                <svg className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
               </div>
             </div>
 
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-900 font-bold uppercase text-[10px]">
+                  <tr>
+                    <th className="p-3.5">Representante (Datos)</th>
+                    <th className="p-3.5">Cédula / Teléfono</th>
+                    <th className="p-3.5">Estudiantes Vinculados (Hijos)</th>
+                    <th className="p-3.5 text-center">Estado / Bloqueo</th>
+                    <th className="p-3.5 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {padresFiltrados.map((p) => {
+                    const nombreCompletoRep = `${p.apellidos || ''} ${p.nombres || ''}`.trim() || 'Representante'
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3.5">
+                          <span className="block font-bold text-slate-900">{nombreCompletoRep}</span>
+                          <span className="block text-[10px] text-slate-500">{p.email}</span>
+                        </td>
+                        <td className="p-3.5">
+                          <span className="block font-bold text-slate-800">Cédula: {p.cedula}</span>
+                          <span className="block text-slate-600 text-[11px]">Telf: {p.telefono}</span>
+                        </td>
+                        <td className="p-3.5">
+                          <ul className="space-y-1.5">
+                            {p.hijos.map((h: any) => (
+                              <li key={h.vinculo_id} className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                                <div>
+                                  <span className="font-bold text-slate-800">
+                                    {h.nombreCompleto} <span className="text-[10px] text-slate-500">({h.cursoParalelo})</span>
+                                  </span>
+                                  <span className="block text-[10px] text-[#4b4c99] font-bold">{h.institucionNombre}</span>
+                                  <span className="block text-[9px] text-slate-500 font-bold uppercase">Parentesco: {h.parentesco}</span>
+                                </div>
+                                <button
+                                  onClick={() => handleEliminarVinculo(h.vinculo_id)}
+                                  className="text-rose-500 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50 transition ml-2 cursor-pointer"
+                                  title="Eliminar este estudiante vinculado"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                                  </svg>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </td>
+                        <td className="p-3.5 text-center">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase inline-block ${
+                            p.activo !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {p.activo !== false ? 'ACTIVO' : 'INACTIVO / BLOQUEADO'}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-center space-x-1.5 whitespace-nowrap">
+                          <button
+                            onClick={() => {
+                              setEditVinculoId(p.id)
+                              setEditNombres(p.nombres || '')
+                              setEditApellidos(p.apellidos || '')
+                              setEditCedula(p.cedula || '')
+                              setEditTelefono(p.telefono || '')
+                              setModalEditarAbierto(true)
+                            }}
+                            className="px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold rounded-xl text-[11px] transition cursor-pointer"
+                            title="Editar datos"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => {
+                              setRepresentanteSeleccionadoUserId(p.user_id)
+                              setRepresentanteNombreDisplay(nombreCompletoRep)
+                              setModalVinculacionAbierto(true)
+                            }}
+                            className="px-2.5 py-1.5 bg-indigo-50 text-[#4b4c99] hover:bg-indigo-100 font-bold rounded-xl text-[11px] transition cursor-pointer"
+                            title="Vincular otro hijo"
+                          >
+                            + Hijo
+                          </button>
+                          <button
+                            onClick={() => handleToggleActivo(p.user_id, p.activo !== false)}
+                            className={`px-2.5 py-1.5 font-bold rounded-xl text-[11px] transition cursor-pointer ${
+                              p.activo !== false ? 'bg-amber-50 text-amber-800 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                            }`}
+                            title="Activar o bloquear"
+                          >
+                            {p.activo !== false ? 'Inactivar' : 'Activar'}
+                          </button>
+                          <button
+                            onClick={() => handleResetearPasswordSuperadmin(p.user_id, p.email, nombreCompletoRep)}
+                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-[11px] transition cursor-pointer inline-flex items-center gap-1"
+                            title="Resetear contraseña"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                            </svg>
+                            Reset
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {padresFiltrados.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-12 text-center text-slate-400 font-medium text-xs">
+                        No hay representantes registrados en el sistema.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        )}
 
-      </div>
+        </div>
+      )}
 
       {/* MODAL: Agregar Estudiante Adicional */}
       {modalVinculacionAbierto && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b pb-2">
-              <h2 className="text-base font-bold text-slate-800">➕ Agregar Estudiante a Representante</h2>
-              <button onClick={() => setModalVinculacionAbierto(false)} className="text-slate-400 font-bold cursor-pointer">✕</button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 space-y-4 shadow-xl border border-slate-200 font-sans">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h2 className="text-xs font-bold uppercase text-slate-900 tracking-wide">
+                Agregar Estudiante a Representante
+              </h2>
+              <button onClick={() => setModalVinculacionAbierto(false)} className="text-slate-400 font-bold hover:text-slate-600 cursor-pointer">✕</button>
             </div>
-            <form onSubmit={handleAgregarHijoExtra} className="space-y-3 text-xs">
-              <p className="text-slate-600 font-semibold">
+            <form onSubmit={handleAgregarHijoExtra} className="space-y-4 text-xs">
+              <p className="text-slate-600 font-semibold bg-slate-50 p-3 rounded-xl border border-slate-200">
                 Representante: <strong className="text-slate-900">{representanteNombreDisplay}</strong>
               </p>
               <div>
-                <label className="block text-slate-600 font-bold uppercase mb-1">Seleccionar Estudiante:</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Seleccionar Estudiante:</label>
                 <select
                   value={estudianteExtraId}
                   onChange={(e) => setEstudianteExtraId(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
+                  className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs cursor-pointer"
                 >
                   {estudiantesLista.map((est) => (
                     <option key={est.id} value={est.id}>
@@ -1362,29 +1476,30 @@ export default function SuperAdminDashboardPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-slate-600 font-bold uppercase mb-1">Parentesco:</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Parentesco:</label>
                 <select
                   value={parentescoExtra}
                   onChange={(e) => setParentescoExtra(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
+                  className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs cursor-pointer"
                 >
                   <option value="Padre">Padre</option>
                   <option value="Madre">Madre</option>
                   <option value="Tutor/Representante">Tutor / Representante</option>
                 </select>
               </div>
-              <div className="flex justify-end gap-2 border-t pt-3">
+              <div className="flex justify-end gap-2.5 border-t border-slate-100 pt-4">
                 <button
                   type="button"
                   onClick={() => setModalVinculacionAbierto(false)}
-                  className="px-4 py-2 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={cargando}
-                  className="px-5 py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow cursor-pointer"
+                  style={{ backgroundColor: '#4b4c99' }}
+                  className="px-5 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm hover:opacity-95 transition cursor-pointer"
                 >
                   Vincular Estudiante
                 </button>
@@ -1396,66 +1511,69 @@ export default function SuperAdminDashboardPage() {
 
       {/* MODAL: Editar Datos del Representante */}
       {modalEditarAbierto && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b pb-2">
-              <h2 className="text-base font-bold text-slate-800">✏️ Editar Datos del Representante</h2>
-              <button onClick={() => setModalEditarAbierto(false)} className="text-slate-400 font-bold cursor-pointer">✕</button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 space-y-4 shadow-xl border border-slate-200 font-sans">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h2 className="text-xs font-bold uppercase text-slate-900 tracking-wide">
+                Editar Datos del Representante
+              </h2>
+              <button onClick={() => setModalEditarAbierto(false)} className="text-slate-400 font-bold hover:text-slate-600 cursor-pointer">✕</button>
             </div>
-            <form onSubmit={handleGuardarEdicion} className="space-y-3 text-xs">
+            <form onSubmit={handleGuardarEdicion} className="space-y-4 text-xs">
               <div>
-                <label className="block text-slate-600 font-bold uppercase mb-1">Nombres:</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Nombres:</label>
                 <input
                   type="text"
                   required
                   value={editNombres}
                   onChange={(e) => setEditNombres(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
+                  className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs"
                 />
               </div>
               <div>
-                <label className="block text-slate-600 font-bold uppercase mb-1">Apellidos:</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Apellidos:</label>
                 <input
                   type="text"
                   required
                   value={editApellidos}
                   onChange={(e) => setEditApellidos(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
+                  className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs"
                 />
               </div>
               <div>
-                <label className="block text-slate-600 font-bold uppercase mb-1">Cédula:</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Cédula:</label>
                 <input
                   type="text"
                   required
                   maxLength={10}
                   value={editCedula}
                   onChange={(e) => setEditCedula(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
+                  className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs"
                 />
               </div>
               <div>
-                <label className="block text-slate-600 font-bold uppercase mb-1">Teléfono:</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Teléfono:</label>
                 <input
                   type="text"
                   required
                   value={editTelefono}
                   onChange={(e) => setEditTelefono(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl text-xs font-bold text-slate-800 bg-slate-50 outline-none"
+                  className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs"
                 />
               </div>
-              <div className="flex justify-end gap-2 border-t pt-3">
+              <div className="flex justify-end gap-2.5 border-t border-slate-100 pt-4">
                 <button
                   type="button"
                   onClick={() => setModalEditarAbierto(false)}
-                  className="px-4 py-2 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={cargando}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer"
+                  style={{ backgroundColor: '#4b4c99' }}
+                  className="px-5 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm hover:opacity-95 transition cursor-pointer"
                 >
                   Guardar Cambios
                 </button>
