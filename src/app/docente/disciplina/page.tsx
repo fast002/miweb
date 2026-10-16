@@ -14,8 +14,7 @@ export default function DocenteDisciplinaPage() {
   const [institucionId, setInstitucionId] = useState('')
   const [nombreInstitucion, setNombreInstitucion] = useState('')
   const [docenteId, setDocenteId] = useState('')
-  const [gradosDocente, setGradosDocente] = useState<string[]>([])
-  const [anioLectivoVigente, setAnioLectivoVigente] = useState('2026-2027')
+  const [anioLectivoVigente, setAnioLectivoVigente] = useState('')
 
   const [alertas, setAlertas] = useState<any[]>([])
   const [estudiantesActivos, setEstudiantesActivos] = useState<any[]>([])
@@ -28,7 +27,7 @@ export default function DocenteDisciplinaPage() {
   const [descripcion, setDescripcion] = useState('')
   const [fechaIncidente, setFechaIncidente] = useState(new Date().toISOString().split('T')[0])
 
-  // Filtros internos dentro del modal para búsqueda rápida
+  // Filtros internos dentro del modal
   const [modalFiltroJornada, setModalFiltroJornada] = useState('TODAS')
   const [modalFiltroGrado, setModalFiltroGrado] = useState('TODOS')
 
@@ -44,24 +43,41 @@ export default function DocenteDisciplinaPage() {
 
       setDocenteId(user.id)
 
-      const { data: doc } = await supabase
+      const { data: doc, error: docError } = await supabase
         .from('docentes')
         .select('*, instituciones(*)')
         .eq('id', user.id)
         .maybeSingle()
 
-      if (!doc?.institucion_id) return router.push('/')
+      if (docError || !doc?.institucion_id) return router.push('/')
 
-      setInstitucionId(doc.institucion_id)
+      const instId = doc.institucion_id
+      setInstitucionId(instId)
       setNombreInstitucion(doc.instituciones?.nombre_institucion || 'Unidad Educativa')
-      const grados = doc.grados_asignados || []
-      setGradosDocente(grados)
 
-      const anioActivo = doc.instituciones?.anio_lectivo_activo || '2026-2027'
+      const inst = doc.instituciones
+      const anioActivo = inst?.anio_lectivo_activo || inst?.periodos_disponibles?.[0] || '2026-2027'
       setAnioLectivoVigente(anioActivo)
 
-      await cargarAlertasDocente(user.id, doc.institucion_id, anioActivo)
-      await cargarEstudiantesPermitidos(doc.institucion_id, anioActivo, grados)
+      // 1. Obtener los grados asignados al docente desde docente_asignaciones
+      const { data: asigsDoc } = await supabase
+        .from('docente_asignaciones')
+        .select('grado_curso')
+        .eq('docente_id', user.id)
+        .eq('institucion_id', instId)
+        .eq('anio_lectivo', anioActivo)
+
+      let gradosValidos: string[] = []
+      if (asigsDoc && asigsDoc.length > 0) {
+        gradosValidos = Array.from(new Set(asigsDoc.map((a: any) => a.grado_curso).filter(Boolean)))
+      } else if (doc.grados_asignados && doc.grados_asignados.length > 0) {
+        gradosValidos = doc.grados_asignados
+      }
+
+      await Promise.all([
+        cargarAlertasDocente(user.id, instId, anioActivo),
+        cargarEstudiantesPermitidos(instId, anioActivo, gradosValidos)
+      ])
     } catch (err) {
       console.error('Error al inicializar módulo de disciplina:', err)
     } finally {
@@ -89,15 +105,23 @@ export default function DocenteDisciplinaPage() {
       .from('estudiantes')
       .select('id, nombres, apellidos, grado_curso, paralelo, jornada, anio_lectivo')
       .eq('institucion_id', instId)
-      .eq('anio_lectivo', anio)
       .eq('estado', 'activo')
 
-    if (grados.length > 0) {
+    // Filtro por año lectivo
+    if (anio) {
+      query = query.eq('anio_lectivo', anio)
+    }
+
+    // Si tiene grados específicos asignados, filtra por ellos; si no, trae los de la institución
+    if (grados && grados.length > 0) {
       query = query.in('grado_curso', grados)
     }
 
-    const { data } = await query.order('apellidos', { ascending: true })
-    if (data) setEstudiantesActivos(data)
+    const { data, error } = await query.order('apellidos', { ascending: true })
+    
+    if (!error && data) {
+      setEstudiantesActivos(data)
+    }
   }
 
   const handleCrearAlerta = async (e: React.FormEvent) => {
@@ -107,7 +131,6 @@ export default function DocenteDisciplinaPage() {
       return
     }
 
-    // Si es felicitación, guardamos gravedad como 'N/A' (No Aplica)
     const gravedadFinal = tipoAlerta === 'Felicitación / Mérito' ? 'N/A' : gravedad
 
     setProcesando(true)
@@ -122,6 +145,7 @@ export default function DocenteDisciplinaPage() {
         gravedad: gravedadFinal,
         descripcion: descripcion.trim(),
         fecha_incidente: fechaIncidente,
+        estado_notificacion: 'Pendiente de Revisión',
         anio_lectivo: anioLectivoVigente
       }])
 
@@ -139,10 +163,10 @@ export default function DocenteDisciplinaPage() {
     }
   }
 
-  const gradosModalDisponibles = Array.from(new Set(estudiantesActivos.map(e => e.grado_curso))).sort()
+  const gradosModalDisponibles = Array.from(new Set(estudiantesActivos.map(e => e.grado_curso).filter(Boolean))).sort()
 
   const estudiantesModalFiltrados = estudiantesActivos.filter(est => {
-    const matchJornada = modalFiltroJornada === 'TODAS' || (est.jornada || 'MATUTINA') === modalFiltroJornada
+    const matchJornada = modalFiltroJornada === 'TODAS' || (est.jornada || 'MATUTINA').toUpperCase() === modalFiltroJornada.toUpperCase()
     const matchGrado = modalFiltroGrado === 'TODOS' || est.grado_curso === modalFiltroGrado
     return matchJornada && matchGrado
   })
@@ -260,7 +284,9 @@ export default function DocenteDisciplinaPage() {
               
               {/* FILTROS RÁPIDOS DE JORNADA Y AÑO DE BÁSICA */}
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
-                <span className="text-[10px] font-bold uppercase text-[#4b4c99] block">Filtrar Estudiante (Año Lectivo: {anioLectivoVigente})</span>
+                <span className="text-[10px] font-bold uppercase text-[#4b4c99] block">
+                  Filtrar Estudiante (Periodo: {anioLectivoVigente})
+                </span>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-slate-700 font-bold uppercase mb-1 text-[10px]">Jornada</label>
@@ -298,7 +324,11 @@ export default function DocenteDisciplinaPage() {
                     onChange={(e) => setEstudianteId(e.target.value)}
                     className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs cursor-pointer"
                   >
-                    <option value="">Selecciona un estudiante ({estudiantesModalFiltrados.length} disponibles)...</option>
+                    <option value="">
+                      {estudiantesModalFiltrados.length === 0
+                        ? 'No se encontraron estudiantes para los filtros'
+                        : `Selecciona un estudiante (${estudiantesModalFiltrados.length} disponibles)...`}
+                    </option>
                     {estudiantesModalFiltrados.map((est) => (
                       <option key={est.id} value={est.id}>
                         {est.apellidos} {est.nombres} ({est.grado_curso} "{est.paralelo}" - {est.jornada || 'MATUTINA'})

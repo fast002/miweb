@@ -20,7 +20,7 @@ export default function CalificacionesRepresentantePage() {
   const [nombreInstitucion, setNombreInstitucion] = useState('')
   const [anioLectivoVigente, setAnioLectivoVigente] = useState('')
 
-  // Hijos vinculados al padre logueado
+  // Hijos vinculados al representante
   const [hijosVinculados, setHijosVinculados] = useState<any[]>([])
   const [estudianteSeleccionadoId, setEstudianteSeleccionadoId] = useState('')
 
@@ -89,6 +89,7 @@ export default function CalificacionesRepresentantePage() {
 
   const estudianteActual = hijosVinculados.find(h => h.id === estudianteSeleccionadoId)
 
+  // Autodetectar subnivel y cargar asignaturas exactas de su año, paralelo y jornada
   useEffect(() => {
     if (!estudianteActual) return
     const gradoStr = estudianteActual.grado_curso || ''
@@ -96,14 +97,16 @@ export default function CalificacionesRepresentantePage() {
       setSubnivel('Básica Elemental')
     } else if (['5to Grado EGB', '6to Grado EGB', '7mo Grado EGB'].includes(gradoStr)) {
       setSubnivel('Básica Media')
-    } else if (['8vo EGB', '9no EGB', '10mo EGB'].includes(gradoStr)) {
+    } else if (['8vo EGB', '9no EGB', '10mo EGB'].includes(gradoStr) || gradoStr.includes('8vo') || gradoStr.includes('9no') || gradoStr.includes('10mo')) {
       setSubnivel('Básica Superior')
     } else {
       setSubnivel('Bachillerato')
     }
 
     async function cargarAsignaturasHijo() {
-      const { data: asigData } = await supabase
+      const jornadaHijo = estudianteActual.jornada ? estudianteActual.jornada.trim().toUpperCase() : 'MATUTINA'
+
+      let query = supabase
         .from('docente_asignaciones')
         .select('asignatura')
         .eq('institucion_id', estudianteActual.institucion_id)
@@ -111,7 +114,13 @@ export default function CalificacionesRepresentantePage() {
         .eq('paralelo', estudianteActual.paralelo || 'A')
         .eq('anio_lectivo', anioLectivoVigente)
 
-      const unicas = Array.from(new Set((asigData || []).map(a => a.asignatura)))
+      if (estudianteActual.jornada) {
+        query = query.eq('jornada', jornadaHijo)
+      }
+
+      const { data: asigData } = await query
+
+      const unicas = Array.from(new Set((asigData || []).map((a: any) => a.asignatura.trim())))
       setAsignaturasEstudiante(unicas)
       if (unicas.length > 0) {
         setAsignaturaSeleccionada(unicas[0])
@@ -122,38 +131,52 @@ export default function CalificacionesRepresentantePage() {
     cargarAsignaturasHijo()
   }, [estudianteSeleccionadoId, anioLectivoVigente])
 
+  // Carga estricta de insumos: Solo de su año de básica, paralelo y jornada tal como se ven en el calificador docente
   useEffect(() => {
     async function cargarCalificacionesHijo() {
       if (!estudianteActual || !asignaturaSeleccionada || !anioLectivoVigente) return
 
       try {
-        const { data: asignacionDoc } = await supabase
+        const jornadaHijo = estudianteActual.jornada ? estudianteActual.jornada.trim().toUpperCase() : 'MATUTINA'
+        const gradoHijo = estudianteActual.grado_curso
+        const paraleloHijo = estudianteActual.paralelo || 'A'
+
+        // 1. Obtener el docente asignado específicamente a ese curso, paralelo y jornada
+        let queryAsig = supabase
           .from('docente_asignaciones')
           .select('docente_id')
           .eq('institucion_id', estudianteActual.institucion_id)
-          .eq('grado_curso', estudianteActual.grado_curso)
-          .eq('paralelo', estudianteActual.paralelo || 'A')
+          .eq('grado_curso', gradoHijo)
+          .eq('paralelo', paraleloHijo)
           .ilike('asignatura', asignaturaSeleccionada.trim())
           .eq('anio_lectivo', anioLectivoVigente)
-          .maybeSingle()
 
-        if (!asignacionDoc) {
-          setColumnasInsumos([])
-          setNotasInsumosMap({})
-          return
+        if (estudianteActual.jornada) {
+          queryAsig = queryAsig.eq('jornada', jornadaHijo)
         }
 
-        const docenteId = asignacionDoc.docente_id
+        const { data: asignacionDoc } = await queryAsig.maybeSingle()
+        const docenteId = asignacionDoc?.docente_id
 
-        const { data: insumosData } = await supabase
+        // 2. Consulta idéntica al calificador docente:
+        // Filtra obligatoriamente por grado_curso, paralelo, jornada, trimestre y anio_lectivo
+        let queryInsumos = supabase
           .from('configuracion_insumos')
           .select('*')
-          .eq('docente_id', docenteId)
+          .eq('grado_curso', gradoHijo)
+          .eq('paralelo', paraleloHijo)
+          .eq('jornada', jornadaHijo)
           .ilike('asignatura', asignaturaSeleccionada.trim())
           .eq('trimestre', trimestre)
-          .order('numero', { ascending: true })
+          .eq('anio_lectivo', anioLectivoVigente)
 
-        const colsCargadas: ColumnaInsumo[] = (insumosData || []).map((item) => ({
+        if (docenteId) {
+          queryInsumos = queryInsumos.eq('docente_id', docenteId)
+        }
+
+        const { data: insumosData } = await queryInsumos.order('numero', { ascending: true })
+
+        const colsCargadas: ColumnaInsumo[] = (insumosData || []).map((item: any) => ({
           id: item.id,
           categoria: item.categoria as CategoriaInsumo,
           numero: item.numero,
@@ -161,26 +184,31 @@ export default function CalificacionesRepresentantePage() {
         }))
         setColumnasInsumos(colsCargadas)
 
-        const { data: calData } = await supabase
+        // 3. Cargar las calificaciones del estudiante para esa materia y trimestre
+        let queryCal = supabase
           .from('calificaciones')
           .select('*')
           .eq('estudiante_id', estudianteActual.id)
-          .eq('docente_id', docenteId)
           .ilike('asignatura', asignaturaSeleccionada.trim())
           .eq('trimestre', trimestre)
           .eq('anio_lectivo', anioLectivoVigente)
-          .maybeSingle()
+
+        if (docenteId) {
+          queryCal = queryCal.eq('docente_id', docenteId)
+        }
+
+        const { data: calData } = await queryCal.maybeSingle()
 
         const mapaNotas: { [colId: string]: number } = {}
         colsCargadas.forEach((col, index) => {
-          mapaNotas[col.id] = calData ? (calData[`insumo_${index + 1}` as keyof typeof calData] || 0) : 0
+          mapaNotas[col.id] = calData ? Number(calData[`insumo_${index + 1}` as keyof typeof calData] || 0) : 0
         })
         setNotasInsumosMap(mapaNotas)
 
         setNotasAdicionales({
-          refuerzo_pedagogico: calData?.refuerzo_pedagogico || 0,
-          proyecto_interdisciplinar: calData?.proyecto_interdisciplinar || 0,
-          evaluacion_estructurada: calData?.evaluacion_estructurada || 0
+          refuerzo_pedagogico: Number(calData?.refuerzo_pedagogico || 0),
+          proyecto_interdisciplinar: Number(calData?.proyecto_interdisciplinar || 0),
+          evaluacion_estructurada: Number(calData?.evaluacion_estructurada || 0)
         })
 
       } catch (err) {
@@ -204,6 +232,7 @@ export default function CalificacionesRepresentantePage() {
     return { categoria: cat, count: cols.length, cols }
   }).filter((g) => g.count > 0)
 
+  // Cálculo idéntico a la sábana del docente
   const calcularNotaFinal = () => {
     const notasInsumosDinamicos: number[] = []
     columnasInsumos.forEach((col) => {
@@ -211,7 +240,9 @@ export default function CalificacionesRepresentantePage() {
       if (val > 0) notasInsumosDinamicos.push(val)
     })
 
-    if (notasAdicionales.refuerzo_pedagogico > 0) notasInsumosDinamicos.push(notasAdicionales.refuerzo_pedagogico)
+    if (notasAdicionales.refuerzo_pedagogico > 0) {
+      notasInsumosDinamicos.push(notasAdicionales.refuerzo_pedagogico)
+    }
 
     if (subnivel === 'Básica Elemental') {
       const todasLasNotas = [...notasInsumosDinamicos]
@@ -250,9 +281,9 @@ export default function CalificacionesRepresentantePage() {
   const getHeaderColor = (cat: CategoriaInsumo) => {
     switch (cat) {
       case 'Deberes / Indiv.': return 'bg-[#4b4c99] text-white'
-      case 'Tareas en Clase': return 'bg-indigo-800 text-white'
-      case 'Actividades Grupales': return 'bg-sky-800 text-white'
-      case 'Lecciones': return 'bg-teal-800 text-white'
+      case 'Tareas en Clase': return 'bg-indigo-700 text-white'
+      case 'Actividades Grupales': return 'bg-[#45b3a5] text-slate-950'
+      case 'Lecciones': return 'bg-teal-700 text-white'
       default: return 'bg-slate-800 text-white'
     }
   }
@@ -287,7 +318,7 @@ export default function CalificacionesRepresentantePage() {
             Calificaciones del Representado
           </h1>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
-            {nombreInstitucion} • Año Lectivo: <strong className="text-slate-800">{anioLectivoVigente}</strong> ({trimestre})
+            {nombreInstitucion} • Año Lectivo: <strong className="text-slate-800">{anioLectivoVigente || 'Sin año activo'}</strong> ({trimestre})
           </p>
         </div>
 
@@ -310,7 +341,7 @@ export default function CalificacionesRepresentantePage() {
           >
             {hijosVinculados.map((hijo) => (
               <option key={hijo.id} value={hijo.id} className="text-slate-900 font-bold bg-white">
-                {hijo.apellidos} {hijo.nombres} — {hijo.grado_curso} "{hijo.paralelo || 'A'}"
+                {hijo.apellidos} {hijo.nombres} — {hijo.grado_curso} "{hijo.paralelo || 'A'}" ({hijo.jornada || 'MATUTINA'})
               </option>
             ))}
           </select>
@@ -347,13 +378,23 @@ export default function CalificacionesRepresentantePage() {
         </div>
       </div>
 
+      {/* DETALLE INFORMATIVO DEL CURSO */}
+      {estudianteActual && (
+        <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl flex flex-wrap gap-4 text-xs font-semibold text-slate-600">
+          <span>Curso: <strong className="text-slate-900">{estudianteActual.grado_curso}</strong></span>
+          <span>Paralelo: <strong className="text-slate-900">{estudianteActual.paralelo || 'A'}</strong></span>
+          <span>Jornada: <strong className="text-slate-900">{estudianteActual.jornada || 'MATUTINA'}</strong></span>
+          <span>Subnivel: <strong className="text-slate-900">{subnivel}</strong></span>
+        </div>
+      )}
+
       {/* TABLA SÁBANA EN MODO SOLO LECTURA */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         {!estudianteActual ? (
           <div className="p-12 text-center text-slate-500 font-semibold text-xs">No hay estudiantes vinculados a este usuario.</div>
         ) : !asignaturaSeleccionada ? (
           <div className="p-12 text-center text-amber-800 bg-amber-50 font-bold text-xs">
-            ⚠️ No se encontraron asignaturas registradas para este curso.
+            ⚠️ No se encontraron asignaturas registradas para este curso en el año vigente.
           </div>
         ) : (
           <div className="overflow-x-auto p-4">
@@ -365,13 +406,13 @@ export default function CalificacionesRepresentantePage() {
 
                   {gruposHeader.length === 0 ? (
                     <th className="p-3.5 text-center bg-amber-50 text-amber-900 border border-slate-300 italic" colSpan={1}>
-                      ⚠️ El docente aún no ha registrado insumos en esta asignatura
+                      ⚠️ No hay insumos registrados para {estudianteActual.grado_curso} "{estudianteActual.paralelo || 'A'}" ({estudianteActual.jornada || 'MATUTINA'}) en {trimestre}
                     </th>
                   ) : (
                     gruposHeader.map((g) => (
                       <th 
                         key={g.categoria} 
-                        className={`p-2.5 text-center border border-slate-300 text-xs font-black uppercase tracking-wider ${getHeaderColor(g.categoria)}`}
+                        className={`p-2.5 text-center border border-slate-300 text-xs font-bold uppercase tracking-wider ${getHeaderColor(g.categoria)}`}
                         colSpan={g.count}
                       >
                         {g.categoria}
@@ -379,16 +420,16 @@ export default function CalificacionesRepresentantePage() {
                     ))
                   )}
 
-                  <th className="p-2.5 text-center bg-amber-200 text-amber-950 border border-slate-300 font-black" rowSpan={2}>
+                  <th className="p-2.5 text-center bg-amber-50 text-amber-900 border border-slate-300 font-bold" rowSpan={2}>
                     Refuerzo Pedag.
                   </th>
 
-                  <th className="p-2.5 text-center bg-indigo-950 text-white border border-slate-300 font-black" colSpan={2}>
+                  <th className="p-2.5 text-center bg-[#4b4c99] text-white border border-slate-300 font-bold" colSpan={2}>
                     APORTES SUMATIVOS {subnivel !== 'Básica Elemental' && '(30% - ' + trimestre + ')'}
                   </th>
 
-                  <th className="p-3.5 text-center w-24 bg-slate-200 border border-slate-300 font-black" rowSpan={2}>Prom. Final</th>
-                  <th className="p-3.5 text-center w-20 bg-slate-200 border border-slate-300 font-black" rowSpan={2}>Escala</th>
+                  <th className="p-3.5 text-center w-24 bg-slate-100 border border-slate-300 font-bold" rowSpan={2}>Prom. Final</th>
+                  <th className="p-3.5 text-center w-20 bg-slate-100 border border-slate-300 font-bold" rowSpan={2}>Escala</th>
                 </tr>
 
                 <tr className="bg-slate-50 text-slate-800 text-[9px] font-bold">
@@ -397,7 +438,7 @@ export default function CalificacionesRepresentantePage() {
                   ) : (
                     columnasOrdenadas.map((col) => (
                       <th key={col.id} className="p-2 text-center border border-slate-300 min-w-22.5 bg-white">
-                        <span className="block font-black text-slate-900">INSUMO {col.numero}</span>
+                        <span className="block font-bold text-slate-900">INSUMO {col.numero}</span>
                         <span className="block text-[8px] font-medium text-slate-500 truncate" title={col.descripcion}>
                           {col.descripcion}
                         </span>
@@ -405,8 +446,8 @@ export default function CalificacionesRepresentantePage() {
                     ))
                   )}
 
-                  <th className="p-2 text-center bg-indigo-50 border border-slate-300 min-w-27.5 font-bold text-indigo-950">Proy. Interdisciplinar</th>
-                  <th className="p-2 text-center bg-indigo-50 border border-slate-300 min-w-30 font-bold text-indigo-950">Ev. Base Estructurada</th>
+                  <th className="p-1.5 text-center bg-indigo-50/50 border border-slate-300 min-w-27.5 font-bold text-indigo-950">Proy. Interdisciplinar</th>
+                  <th className="p-1.5 text-center bg-indigo-50/50 border border-slate-300 min-w-30 font-bold text-indigo-950">Ev. Base Estructurada</th>
                 </tr>
               </thead>
 
@@ -425,46 +466,47 @@ export default function CalificacionesRepresentantePage() {
                         <input
                           type="number"
                           disabled={true}
-                          value={notasInsumosMap[col.id] > 0 ? notasInsumosMap[col.id] : ''}
-                          className="w-14 p-1.5 text-center border border-slate-300 rounded-xl font-bold text-slate-800 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
+                          value={notasInsumosMap[col.id] > 0 ? notasInsumosMap[col.id].toFixed(2) : ''}
+                          className="w-14 p-1.5 text-center border border-slate-300 rounded-lg font-semibold text-slate-800 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
                         />
                       </td>
                     ))
                   )}
 
-                  <td className="p-1.5 text-center bg-amber-50/30 border border-slate-300">
+                  <td className="p-1.5 text-center bg-amber-50/20 border border-slate-300">
                     <input
                       type="number"
                       disabled={true}
-                      value={notasAdicionales.refuerzo_pedagogico > 0 ? notasAdicionales.refuerzo_pedagogico : ''}
-                      className="w-14 p-1.5 text-center border border-amber-300 rounded-xl font-bold text-amber-900 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
+                      value={notasAdicionales.refuerzo_pedagogico > 0 ? notasAdicionales.refuerzo_pedagogico.toFixed(2) : ''}
+                      placeholder="Opt."
+                      className="w-14 p-1.5 text-center border border-amber-300 rounded-lg font-semibold text-amber-900 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
                     />
                   </td>
 
-                  <td className="p-1.5 text-center bg-indigo-50/30 border border-slate-300">
+                  <td className="p-1.5 text-center bg-indigo-50/20 border border-slate-300">
                     <input
                       type="number"
                       disabled={true}
-                      value={notasAdicionales.proyecto_interdisciplinar > 0 ? notasAdicionales.proyecto_interdisciplinar : ''}
-                      className="w-16 p-1.5 text-center border border-indigo-300 rounded-xl font-bold text-indigo-950 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
+                      value={notasAdicionales.proyecto_interdisciplinar > 0 ? notasAdicionales.proyecto_interdisciplinar.toFixed(2) : ''}
+                      className="w-16 p-1.5 text-center border border-indigo-200 rounded-lg font-semibold text-indigo-950 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
                     />
                   </td>
 
-                  <td className="p-1.5 text-center bg-indigo-50/30 border border-slate-300">
+                  <td className="p-1.5 text-center bg-indigo-50/20 border border-slate-300">
                     <input
                       type="number"
                       disabled={true}
-                      value={notasAdicionales.evaluacion_estructurada > 0 ? notasAdicionales.evaluacion_estructurada : ''}
-                      className="w-16 p-1.5 text-center border border-indigo-300 rounded-xl font-bold text-indigo-950 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
+                      value={notasAdicionales.evaluacion_estructurada > 0 ? notasAdicionales.evaluacion_estructurada.toFixed(2) : ''}
+                      className="w-16 p-1.5 text-center border border-indigo-200 rounded-lg font-semibold text-indigo-950 bg-slate-100 shadow-2xs cursor-not-allowed mx-auto"
                     />
                   </td>
 
-                  <td className="p-3 text-center bg-slate-100 font-black text-sm text-slate-900 border border-slate-300">
+                  <td className="p-3 text-center bg-slate-50 font-bold text-sm text-slate-900 border border-slate-300">
                     {promFinal.toFixed(2)}
                   </td>
 
-                  <td className="p-3 text-center bg-slate-100 border border-slate-300">
-                    <span className={`px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase shadow-2xs ${cuali.color}`}>
+                  <td className="p-3 text-center bg-slate-50 border border-slate-300">
+                    <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase ${cuali.color} shadow-2xs inline-block`}>
                       {cuali.label}
                     </span>
                   </td>

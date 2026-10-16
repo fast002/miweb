@@ -31,7 +31,8 @@ export default function SupletoriosPage() {
   // Asignaciones del Rector filtradas desde 8vo en adelante para el año vigente
   const [asignacionesValidas, setAsignacionesValidas] = useState<any[]>([])
   
-  // Filtros seleccionados
+  // Filtros seleccionados (Incluyendo Jornada)
+  const [jornadaSeleccionada, setJornadaSeleccionada] = useState('MATUTINA')
   const [gradoSeleccionado, setGradoSeleccionado] = useState('')
   const [paraleloSeleccionado, setParaleloSeleccionado] = useState('')
   const [asignaturaSeleccionada, setAsignaturaSeleccionada] = useState('')
@@ -48,7 +49,7 @@ export default function SupletoriosPage() {
     if (gradoSeleccionado && paraleloSeleccionado && institucionId && anioLectivoVigente) {
       cargarEstudiantesYCalificaciones()
     }
-  }, [gradoSeleccionado, paraleloSeleccionado, asignaturaSeleccionada, anioLectivoVigente, institucionId])
+  }, [gradoSeleccionado, paraleloSeleccionado, asignaturaSeleccionada, jornadaSeleccionada, anioLectivoVigente, institucionId])
 
   // Validar si el grado pertenece a Básica Superior o Bachillerato (8vo en adelante)
   const esGradoValidoParaSupletorios = (grado: string) => {
@@ -147,6 +148,8 @@ export default function SupletoriosPage() {
             setAsignacionesValidas(filtradas)
 
             if (filtradas.length > 0) {
+              const primeraJornada = filtradas[0].jornada || 'MATUTINA'
+              setJornadaSeleccionada(primeraJornada)
               setGradoSeleccionado(filtradas[0].grado_curso)
               setParaleloSeleccionado(filtradas[0].paralelo)
               setAsignaturaSeleccionada(filtradas[0].asignatura)
@@ -167,7 +170,7 @@ export default function SupletoriosPage() {
 
   const cargarEstudiantesYCalificaciones = async () => {
     try {
-      const { data: estData } = await supabase
+      let queryEst = supabase
         .from('estudiantes')
         .select('*')
         .eq('institucion_id', institucionId)
@@ -175,7 +178,13 @@ export default function SupletoriosPage() {
         .eq('paralelo', paraleloSeleccionado)
         .eq('anio_lectivo', anioLectivoVigente)
         .eq('estado', 'activo')
-        .order('apellidos', { ascending: true })
+
+      // Filtrar por jornada si la columna existe en el registro
+      if (jornadaSeleccionada) {
+        queryEst = queryEst.or(`jornada.eq.${jornadaSeleccionada},jornada.is.null`)
+      }
+
+      const { data: estData } = await queryEst.order('apellidos', { ascending: true })
 
       if (estData) {
         setEstudiantes(estData)
@@ -340,7 +349,7 @@ export default function SupletoriosPage() {
       doc.setFontSize(10)
       doc.text(`REGISTRO DE EXÁMENES SUPLETORIOS`, pageWidth / 2, 41, { align: 'center' })
 
-      // Datos informativos
+      // Datos informativos (incluyendo jornada)
       autoTable(doc, {
         startY: 45,
         theme: 'grid',
@@ -348,7 +357,7 @@ export default function SupletoriosPage() {
         bodyStyles: { fontSize: 8 },
         body: [
           [`Asignatura: ${asignaturaSeleccionada || 'N/A'}`, `Grado / Curso: ${gradoSeleccionado || 'N/A'}`],
-          [`Paralelo: ${paraleloSeleccionado || 'N/A'} (MATUTINA)`, `Docente: ${nombreDocente || 'N/D'}`],
+          [`Paralelo: ${paraleloSeleccionado || 'N/A'} (${jornadaSeleccionada || 'MATUTINA'})`, `Docente: ${nombreDocente || 'N/D'}`],
           [`Autoridad: ${autoridadActual.nombre} (${autoridadActual.cargo})`, `Total Estudiantes: ${estudiantes.length}`]
         ]
       })
@@ -417,7 +426,7 @@ export default function SupletoriosPage() {
       doc.text('DOCENTE DE LA ASIGNATURA', 55, finalY + 8, { align: 'center' })
       doc.text(autoridadActual.cargo, pageWidth - 55, finalY + 8, { align: 'center' })
 
-      const nombreArchivo = `Supletorios-${gradoSeleccionado}-${asignaturaSeleccionada}`.replace(/\s+/g, '-').toUpperCase() + '.pdf'
+      const nombreArchivo = `Supletorios-${gradoSeleccionado}-${paraleloSeleccionado}-${asignaturaSeleccionada}`.replace(/\s+/g, '-').toUpperCase() + '.pdf'
       doc.save(nombreArchivo)
     } catch (e: any) {
       console.error(e)
@@ -468,9 +477,13 @@ export default function SupletoriosPage() {
     )
   }
 
-  const gradosUnicos = Array.from(new Set(asignacionesValidas.map(a => a.grado_curso)))
-  const paralelosPermitidos = Array.from(new Set(asignacionesValidas.filter(a => a.grado_curso === gradoSeleccionado).map(a => a.paralelo)))
-  const asignaturasPermitidas = Array.from(new Set(asignacionesValidas.filter(a => a.grado_curso === gradoSeleccionado && a.paralelo === paraleloSeleccionado).map(a => a.asignatura)))
+  // Extracción de listas únicas y filtrado en cascada por Jornada
+  const jornadasDisponibles = Array.from(new Set(asignacionesValidas.map(a => a.jornada || 'MATUTINA')))
+  const asignacionesPorJornada = asignacionesValidas.filter(a => (a.jornada || 'MATUTINA') === jornadaSeleccionada)
+  
+  const gradosUnicos = Array.from(new Set((asignacionesPorJornada.length > 0 ? asignacionesPorJornada : asignacionesValidas).map(a => a.grado_curso)))
+  const paralelosPermitidos = Array.from(new Set((asignacionesPorJornada.length > 0 ? asignacionesPorJornada : asignacionesValidas).filter(a => a.grado_curso === gradoSeleccionado).map(a => a.paralelo)))
+  const asignaturasPermitidas = Array.from(new Set((asignacionesPorJornada.length > 0 ? asignacionesPorJornada : asignacionesValidas).filter(a => a.grado_curso === gradoSeleccionado && a.paralelo === paraleloSeleccionado).map(a => a.asignatura)))
 
   return (
     <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans">
@@ -539,8 +552,30 @@ export default function SupletoriosPage() {
           </div>
         )}
 
-        {/* SELECTORES DE FILTRO */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
+        {/* SELECTORES DE FILTRO: JORNADA, GRADO, PARALELO Y ASIGNATURA */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 text-xs">
+          <div>
+            <label className="block text-slate-700 font-bold uppercase mb-1.5">Jornada:</label>
+            <select
+              value={jornadaSeleccionada}
+              onChange={(e) => {
+                const nuevaJornada = e.target.value
+                setJornadaSeleccionada(nuevaJornada)
+                const asigsJornada = asignacionesValidas.filter(a => (a.jornada || 'MATUTINA') === nuevaJornada)
+                if (asigsJornada.length > 0) {
+                  setGradoSeleccionado(asigsJornada[0].grado_curso)
+                  setParaleloSeleccionado(asigsJornada[0].paralelo)
+                  setAsignaturaSeleccionada(asigsJornada[0].asignatura)
+                }
+              }}
+              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
+            >
+              {(jornadasDisponibles.length > 0 ? jornadasDisponibles : ['MATUTINA', 'VESPERTINA', 'NOCTURNA']).map(j => (
+                <option key={j} value={j} className="text-slate-900 font-bold bg-white">{j}</option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label className="block text-slate-700 font-bold uppercase mb-1.5">Grado / Curso:</label>
             <select
@@ -548,7 +583,8 @@ export default function SupletoriosPage() {
               onChange={(e) => {
                 const nuevoGrado = e.target.value
                 setGradoSeleccionado(nuevoGrado)
-                const par = asignacionesValidas.find(a => a.grado_curso === nuevoGrado)?.paralelo || 'A'
+                const asigsFiltro = asignacionesPorJornada.length > 0 ? asignacionesPorJornada : asignacionesValidas
+                const par = asigsFiltro.find(a => a.grado_curso === nuevoGrado)?.paralelo || 'A'
                 setParaleloSeleccionado(par)
               }}
               className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] shadow-2xs cursor-pointer"
@@ -586,11 +622,11 @@ export default function SupletoriosPage() {
           </div>
         </div>
 
-        {/* TABLA DE SUPLEMENTORIOS */}
+        {/* TABLA DE SUPLETORIOS */}
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs font-bold uppercase text-slate-900">
+          <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs font-bold uppercase text-slate-900 flex-wrap gap-2">
             <span>
-              Materia: {asignaturaSeleccionada || 'Seleccione materia'} • {gradoSeleccionado} "{paraleloSeleccionado}" ({anioLectivoVigente || 'Sin año activo'})
+              Materia: {asignaturaSeleccionada || 'Seleccione materia'} • {gradoSeleccionado} "{paraleloSeleccionado}" ({jornadaSeleccionada}) • {anioLectivoVigente || 'Sin año activo'}
             </span>
             {!esAnioCerrado && anioLectivoVigente && (
               <button

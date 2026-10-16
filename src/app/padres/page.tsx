@@ -20,6 +20,11 @@ export default function PadreDashboardPage() {
   const [calificaciones, setCalificaciones] = useState<any[]>([])
   const [asistencias, setAsistencias] = useState<any[]>([])
 
+  // Insumos creados por el docente
+  const [insumosDocente, setInsumosDocente] = useState<any[]>([])
+  const [trimestreInsumos, setTrimestreInsumos] = useState('Trimestre 1')
+  const [asignaturaFiltro, setAsignaturaFiltro] = useState('')
+
   // Modal / Vista de Actualización de Datos y Contraseña
   const [modalPerfilAbierto, setModalPerfilAbierto] = useState(false)
   const [nuevoTelefono, setNuevoTelefono] = useState('')
@@ -93,9 +98,11 @@ export default function PadreDashboardPage() {
       if (anioCerrado) {
         setCalificaciones([])
         setAsistencias([])
+        setInsumosDocente([])
         return
       }
 
+      // 1. Cargar Calificaciones
       const { data: calData, error: calError } = await supabase
         .from('calificaciones')
         .select('*')
@@ -105,6 +112,7 @@ export default function PadreDashboardPage() {
       if (calError) console.error('Error al cargar calificaciones:', calError)
       setCalificaciones(calData || [])
 
+      // 2. Cargar Asistencias
       const { data: asisData, error: asisError } = await supabase
         .from('asistencias')
         .select('*')
@@ -113,6 +121,24 @@ export default function PadreDashboardPage() {
 
       if (asisError) console.error('Error al cargar asistencias:', asisError)
       setAsistencias(asisData || [])
+
+      // 3. Cargar Insumos Creados por los Docentes para el curso, paralelo y jornada del hijo
+      const estudiante = hijos.find(h => h.id === estudianteId)
+      if (estudiante) {
+        const jornadaHijo = estudiante.jornada ? estudiante.jornada.trim().toUpperCase() : 'MATUTINA'
+        
+        const { data: insumosData, error: insumosError } = await supabase
+          .from('configuracion_insumos')
+          .select('*')
+          .eq('grado_curso', estudiante.grado_curso)
+          .eq('paralelo', estudiante.paralelo || 'A')
+          .eq('jornada', jornadaHijo)
+          .eq('anio_lectivo', anioLectivo)
+          .order('numero', { ascending: true })
+
+        if (insumosError) console.error('Error al cargar insumos del docente:', insumosError)
+        setInsumosDocente(insumosData || [])
+      }
 
     } catch (err) {
       console.error('Error al cargar detalles académicos:', err)
@@ -172,24 +198,54 @@ export default function PadreDashboardPage() {
 
   const hijoActual = hijos.find(h => h.id === hijoSeleccionadoId)
 
+  // Filtrado de insumos según el trimestre seleccionado y asignatura (opcional)
+  const insumosFiltrados = insumosDocente.filter(ins => {
+    const coincideTrimestre = (ins.trimestre || '').toLowerCase() === trimestreInsumos.toLowerCase()
+    const coincideAsignatura = asignaturaFiltro ? ins.asignatura === asignaturaFiltro : true
+    return coincideTrimestre && coincideAsignatura
+  })
+
+  // Obtener lista de asignaturas con insumos registrados
+  const asignaturasConInsumos = Array.from(new Set(insumosDocente.map(i => i.asignatura).filter(Boolean)))
+
+  // Conteo de insumos con nota vs pendientes
   let insumosPresentados = 0
   let insumosPendientes = 0
 
-  calificaciones.forEach(c => {
-    const insumos = [c.insumo_1, c.insumo_2, c.insumo_3, c.insumo_4]
-    insumos.forEach(val => {
-      if (val !== null && val !== undefined) {
-        insumosPresentados++
-      } else {
-        insumosPendientes++
-      }
-    })
+  insumosFiltrados.forEach(ins => {
+    const calMateria = calificaciones.find(c => 
+      c.asignatura?.trim().toLowerCase() === ins.asignatura?.trim().toLowerCase() && 
+      c.trimestre?.trim().toLowerCase() === ins.trimestre?.trim().toLowerCase()
+    )
+    const insumoClave = `insumo_${ins.numero}`
+    const nota = calMateria ? calMateria[insumoClave] : null
+
+    if (nota !== null && nota !== undefined && Number(nota) > 0) {
+      insumosPresentados++
+    } else {
+      insumosPendientes++
+    }
   })
 
   const totalAsistencias = asistencias.filter(a => a.estado === 'Presente').length
   const totalAtrasos = asistencias.filter(a => a.estado === 'Atraso').length
   const totalFaltasJustificadas = asistencias.filter(a => a.estado === 'Falta Justificada').length
   const totalFaltasInjustificadas = asistencias.filter(a => a.estado === 'Falta Injustificada').length
+
+  const getCategoriaBadge = (cat: string) => {
+    switch (cat) {
+      case 'Deberes / Indiv.':
+        return 'bg-[#4b4c99]/10 text-[#4b4c99] border border-[#4b4c99]/20'
+      case 'Tareas en Clase':
+        return 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+      case 'Actividades Grupales':
+        return 'bg-teal-50 text-teal-800 border border-teal-200'
+      case 'Lecciones':
+        return 'bg-amber-50 text-amber-800 border border-amber-200'
+      default:
+        return 'bg-slate-100 text-slate-700 border border-slate-200'
+    }
+  }
 
   return (
     <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans max-w-7xl mx-auto">
@@ -253,7 +309,7 @@ export default function PadreDashboardPage() {
                     : 'bg-slate-50 text-slate-700 border border-slate-300 hover:bg-slate-100'
                 }`}
               >
-                {hijo.apellidos} {hijo.nombres} ({hijo.grado_curso} "{hijo.paralelo}")
+                {hijo.apellidos} {hijo.nombres} ({hijo.grado_curso} "{hijo.paralelo}" - {hijo.jornada || 'MATUTINA'})
               </button>
             ))}
           </div>
@@ -263,7 +319,7 @@ export default function PadreDashboardPage() {
       {/* VALIDACIÓN DE AÑO CERRADO */}
       {anioCerrado ? (
         <div className="bg-amber-50 border border-amber-200 p-8 rounded-3xl text-center space-y-3 shadow-2xs">
-          <span className="text-3xl"></span>
+          <span className="text-3xl">🔒</span>
           <h3 className="text-sm font-bold text-amber-900 uppercase">Período Lectivo Cerrado</h3>
           <p className="text-xs text-amber-700 font-medium max-w-md mx-auto">
             El año lectivo seleccionado se encuentra cerrado. Las calificaciones, asistencias y reportes no se encuentran visibles hasta que inicie un nuevo período disponible.
@@ -274,25 +330,111 @@ export default function PadreDashboardPage() {
           {/* DASHBOARDS DE RESUMEN */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* Dashboard de Insumos */}
+            {/* ESTADO DE INSUMOS CREADOS POR EL DOCENTE */}
             <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
-              <div className="flex justify-between items-center border-b border-slate-200 pb-3">
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Estado de Insumos ({hijoActual?.nombres})</h3>
-                <span style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)' }} className="text-[10px] font-bold px-2.5 py-1 rounded-xl">Actualizado</span>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 pb-3 gap-2">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                    Insumos Creados por Docentes ({hijoActual?.nombres})
+                  </h3>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    {hijoActual?.grado_curso} "{hijoActual?.paralelo}" ({hijoActual?.jornada || 'MATUTINA'})
+                  </span>
+                </div>
+                
+                {/* SELECTORES DE FILTRO: TRIMESTRE Y ASIGNATURA */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={trimestreInsumos}
+                    onChange={(e) => setTrimestreInsumos(e.target.value)}
+                    className="p-1.5 border border-slate-300 rounded-lg text-[11px] font-bold text-slate-800 bg-white outline-none cursor-pointer"
+                  >
+                    <option value="Trimestre 1">Trimestre 1</option>
+                    <option value="Trimestre 2">Trimestre 2</option>
+                    <option value="Trimestre 3">Trimestre 3</option>
+                  </select>
+
+                  {asignaturasConInsumos.length > 0 && (
+                    <select
+                      value={asignaturaFiltro}
+                      onChange={(e) => setAsignaturaFiltro(e.target.value)}
+                      className="p-1.5 border border-slate-300 rounded-lg text-[11px] font-bold text-slate-800 bg-white outline-none cursor-pointer max-w-[140px]"
+                    >
+                      <option value="">Todas las materias</option>
+                      {asignaturasConInsumos.map(asig => (
+                        <option key={asig} value={asig}>{asig}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
+
+              {/* CONTADORES RÁPIDOS */}
               <div className="grid grid-cols-2 gap-3.5">
                 <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-2xl text-center shadow-2xs">
                   <span className="block text-2xl font-black text-emerald-800">{insumosPresentados}</span>
-                  <span className="text-[10px] font-bold text-emerald-900 uppercase mt-1 block">Insumos Registrados</span>
+                  <span className="text-[10px] font-bold text-emerald-900 uppercase mt-1 block">Con Calificación</span>
                 </div>
-                <div className="bg-rose-50/60 border border-rose-200 p-4 rounded-2xl text-center shadow-2xs">
-                  <span className="block text-2xl font-black text-rose-800">{insumosPendientes}</span>
-                  <span className="text-[10px] font-bold text-rose-900 uppercase mt-1 block">Pendientes / Sin Nota</span>
+                <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-2xl text-center shadow-2xs">
+                  <span className="block text-2xl font-black text-amber-800">{insumosPendientes}</span>
+                  <span className="text-[10px] font-bold text-amber-900 uppercase mt-1 block">Pendientes / Sin Nota</span>
                 </div>
+              </div>
+
+              {/* LISTA DETALLADA DE INSUMOS REALES CREADOS POR EL DOCENTE */}
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {insumosFiltrados.length === 0 ? (
+                  <p className="text-center text-slate-400 font-medium text-xs py-6">
+                    No se han registrado insumos para {trimestreInsumos} {asignaturaFiltro ? `en ${asignaturaFiltro}` : ''}.
+                  </p>
+                ) : (
+                  insumosFiltrados.map((ins) => {
+                    const calMateria = calificaciones.find(c => 
+                      c.asignatura?.trim().toLowerCase() === ins.asignatura?.trim().toLowerCase() && 
+                      c.trimestre?.trim().toLowerCase() === ins.trimestre?.trim().toLowerCase()
+                    )
+                    const insumoClave = `insumo_${ins.numero}`
+                    const notaValor = calMateria ? calMateria[insumoClave] : null
+                    const tieneNota = notaValor !== null && notaValor !== undefined && Number(notaValor) > 0
+
+                    return (
+                      <div 
+                        key={ins.id} 
+                        className="bg-slate-50/80 p-3 rounded-2xl border border-slate-200 flex justify-between items-center text-xs shadow-2xs hover:bg-slate-100/70 transition"
+                      >
+                        <div className="space-y-1 pr-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-black text-slate-900">
+                              {ins.asignatura}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase ${getCategoriaBadge(ins.categoria)}`}>
+                              {ins.categoria} #{ins.numero}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 font-medium line-clamp-1" title={ins.descripcion}>
+                            {ins.descripcion || `Insumo ${ins.numero}`}
+                          </p>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          {tieneNota ? (
+                            <span className="inline-block px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-black text-xs shadow-2xs">
+                              {Number(notaValor).toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="inline-block px-2 py-1 bg-slate-100 text-slate-500 rounded-xl font-bold text-[10px]">
+                              Pendiente
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
 
-            {/* Dashboard de Asistencias */}
+            {/* CONTROL DE ASISTENCIA */}
             <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
               <div className="flex justify-between items-center border-b border-slate-200 pb-3">
                 <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Control de Asistencia ({hijoActual?.nombres})</h3>
@@ -316,35 +458,30 @@ export default function PadreDashboardPage() {
                   <span className="text-[9px] font-bold text-rose-900 uppercase mt-1 block">F. Injustificadas</span>
                 </div>
               </div>
-            </div>
 
-          </div>
-
-          {/* HISTORIAL RECIENTE DE ASISTENCIAS DETALLADAS */}
-          <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide border-b border-slate-200 pb-3">
-              Historial de Asistencia Detallado ({hijoActual?.nombres})
-            </h3>
-            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
-              {asistencias.map((a) => (
-                <div key={a.id} className="flex justify-between items-center bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200 text-xs shadow-2xs">
-                  <div>
-                    <span className="font-bold text-slate-800 block">{a.fecha}</span>
-                    <span className="text-[10px] text-slate-500 font-semibold">{a.asignatura || 'General'}</span>
+              {/* HISTORIAL RECIENTE DE ASISTENCIAS */}
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {asistencias.map((a) => (
+                  <div key={a.id} className="flex justify-between items-center bg-slate-50/80 p-3 rounded-2xl border border-slate-200 text-xs shadow-2xs">
+                    <div>
+                      <span className="font-bold text-slate-800 block">{a.fecha}</span>
+                      <span className="text-[10px] text-slate-500 font-semibold">{a.asignatura || 'General'}</span>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-xl text-[10px] font-bold uppercase shadow-2xs ${
+                      a.estado === 'Presente' ? 'bg-emerald-100 text-emerald-800' :
+                      a.estado === 'Atraso' ? 'bg-blue-100 text-blue-800' :
+                      a.estado === 'Falta Justificada' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {a.estado}
+                    </span>
                   </div>
-                  <span className={`px-3 py-1 rounded-xl text-[10px] font-bold uppercase shadow-2xs ${
-                    a.estado === 'Presente' ? 'bg-emerald-100 text-emerald-800' :
-                    a.estado === 'Atraso' ? 'bg-blue-100 text-blue-800' :
-                    a.estado === 'Falta Justificada' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
-                  }`}>
-                    {a.estado}
-                  </span>
-                </div>
-              ))}
-              {asistencias.length === 0 && (
-                <p className="text-center text-slate-400 font-medium text-xs py-8">No hay registros de asistencia recientes para este estudiante.</p>
-              )}
+                ))}
+                {asistencias.length === 0 && (
+                  <p className="text-center text-slate-400 font-medium text-xs py-6">No hay registros de asistencia recientes para este estudiante.</p>
+                )}
+              </div>
             </div>
+
           </div>
         </>
       )}
