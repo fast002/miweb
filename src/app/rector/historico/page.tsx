@@ -721,7 +721,7 @@ export default function HistoricoAcademicoPage() {
             style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
             className="px-5 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
-            <span>📥</span> {generandoPdf ? 'Generando PDF...' : 'Descargar PDF Oficial'}
+            <span></span> {generandoPdf ? 'Generando PDF...' : 'Descargar PDF Oficial'}
           </button>
           <button
             onClick={() => router.push('/rector')}

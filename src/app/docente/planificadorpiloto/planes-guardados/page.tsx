@@ -392,7 +392,7 @@ export default function PlanesGuardadosPage() {
                   onClick={() => descargarPlanPDF(planSeleccionado)}
                   className="px-5 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 transition"
                 >
-                  🖨️ Descargar PDF
+                Descargar PDF
                 </button>
               </div>
             </div>

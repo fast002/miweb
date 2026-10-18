@@ -318,20 +318,20 @@ export default function VistaOficialMinisterioPage() {
               onClick={() => window.print()}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5"
             >
-              🖨️ Imprimir Formato Oficial
+              Imprimir Formato Oficial
             </button>
             <button
               onClick={descargarWord}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5"
             >
-              📄 Descargar Word (.doc)
+              Descargar Word (.doc)
             </button>
             <button
               onClick={descargarPDFOficial}
               disabled={generandoPdf}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5"
             >
-              {generandoPdf ? 'Generando PDF...' : '📥 Descargar PDF Oficial'}
+              {generandoPdf ? 'Generando PDF...' : 'Descargar PDF Oficial'}
             </button>
           </div>
         </div>

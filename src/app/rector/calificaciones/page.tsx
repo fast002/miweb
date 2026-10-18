@@ -40,7 +40,10 @@ export default function RegistroCalificacionesRectorPage() {
 
   const [columnasInsumos, setColumnasInsumos] = useState<ColumnaInsumo[]>([])
   const [estudiantes, setEstudiantes] = useState<any[]>([])
-  const [notasMap, setNotasMap] = useState<{ [estudianteId: string]: { [colId: string]: number } }>({})
+  
+  // Mapas de notas exactas por ID (calificaciones_detalle y sumativas)
+  const [notasMap, setNotasMap] = useState<{ [estudianteId: string]: { [insumoId: string]: number } }>({})
+  const [sumativasMap, setSumativasMap] = useState<{ [estudianteId: string]: { refuerzo_pedagogico: number; proyecto_interdisciplinar: number; evaluacion_estructurada: number } }>({})
 
   useEffect(() => {
     async function initRector() {
@@ -104,6 +107,7 @@ export default function RegistroCalificacionesRectorPage() {
     initRector()
   }, [router])
 
+  // Cargar asignaciones del docente seleccionado en el año lectivo activo
   useEffect(() => {
     async function cargarAsignacionesDocente() {
       if (!docenteSeleccionadoId || !anioLectivoVigente) return
@@ -116,7 +120,8 @@ export default function RegistroCalificacionesRectorPage() {
 
       if (asignacionesData && asignacionesData.length > 0) {
         setAsignacionesDocente(asignacionesData)
-        setJornadaActual(asignacionesData[0].jornada || 'MATUTINA')
+        const jInicial = asignacionesData[0].jornada || 'MATUTINA'
+        setJornadaActual(jInicial)
         setGrado(asignacionesData[0].grado_curso)
         setParalelo(asignacionesData[0].paralelo)
         setAsignatura(asignacionesData[0].asignatura)
@@ -169,71 +174,102 @@ export default function RegistroCalificacionesRectorPage() {
     }
   }
 
+  // Carga sincronizada idéntica al calificador: estudiantes, insumos, detalles individuales y notas sumativas
   useEffect(() => {
     async function cargarEstructuraYNotasRector() {
       if (!institucionId || !docenteSeleccionadoId || !grado || !paralelo || !asignatura || !anioLectivoVigente) return
 
       try {
-        let query = supabase
+        // 1. Estudiantes del curso y jornada
+        const { data: estDataRaw } = await supabase
           .from('estudiantes')
           .select('*')
           .eq('institucion_id', institucionId)
           .eq('grado_curso', grado)
           .eq('paralelo', paralelo)
           .eq('estado', 'activo')
-
-        const { data: estDataRaw } = await query.order('apellidos', { ascending: true })
+          .order('apellidos', { ascending: true })
 
         const estData = (estDataRaw || []).filter(e => {
           const jEst = e.jornada ? e.jornada.trim().toUpperCase() : 'MATUTINA'
           return jEst === jornadaActual.trim().toUpperCase()
         })
 
-        if (estData) {
-          setEstudiantes(estData)
-          const ids = estData.map((e) => e.id)
+        setEstudiantes(estData)
+        const idsEstudiantes = estData.map((e) => e.id)
 
-          const { data: insumosData } = await supabase
-            .from('configuracion_insumos')
+        // 2. Insumos del docente para este curso, materia y trimestre
+        const { data: insumosData } = await supabase
+          .from('configuracion_insumos')
+          .select('*')
+          .eq('docente_id', docenteSeleccionadoId)
+          .eq('asignatura', asignatura.trim())
+          .eq('trimestre', trimestre)
+          .eq('grado_curso', grado)
+          .eq('paralelo', paralelo)
+          .eq('jornada', jornadaActual)
+          .eq('anio_lectivo', anioLectivoVigente)
+          .order('created_at', { ascending: true })
+
+        const colsCargadas: ColumnaInsumo[] = (insumosData || []).map((item, idx) => ({
+          id: item.id,
+          categoria: item.categoria as CategoriaInsumo,
+          numero: idx + 1,
+          descripcion: item.descripcion
+        }))
+        setColumnasInsumos(colsCargadas)
+
+        const insumosIds = colsCargadas.map(c => c.id)
+
+        // 3. Calificaciones individuales desde calificaciones_detalle
+        let detallesNotas: any[] = []
+        if (insumosIds.length > 0 && idsEstudiantes.length > 0) {
+          const { data: detData } = await supabase
+            .from('calificaciones_detalle')
             .select('*')
-            .eq('docente_id', docenteSeleccionadoId)
-            .ilike('asignatura', asignatura.trim())
-            .eq('trimestre', trimestre)
-            .order('numero', { ascending: true })
+            .in('configuracion_insumo_id', insumosIds)
+            .in('estudiante_id', idsEstudiantes)
 
-          const colsCargadas: ColumnaInsumo[] = (insumosData || []).map((item) => ({
-            id: item.id,
-            categoria: item.categoria as CategoriaInsumo,
-            numero: item.numero,
-            descripcion: item.descripcion
-          }))
-          setColumnasInsumos(colsCargadas)
+          detallesNotas = detData || []
+        }
 
-          const { data: calData } = await supabase
+        // 4. Aportes sumativos desde la tabla calificaciones
+        let calResumen: any[] = []
+        if (idsEstudiantes.length > 0) {
+          const { data: resData } = await supabase
             .from('calificaciones')
             .select('*')
-            .in('estudiante_id', ids.length > 0 ? ids : ['none'])
+            .in('estudiante_id', idsEstudiantes)
             .eq('docente_id', docenteSeleccionadoId)
-            .ilike('asignatura', asignatura.trim())
+            .eq('asignatura', asignatura.trim())
             .eq('trimestre', trimestre)
             .eq('anio_lectivo', anioLectivoVigente)
 
-          const mapa: any = {}
-          estData.forEach((est) => {
-            const cal = calData?.find((c) => c.estudiante_id === est.id)
-            mapa[est.id] = {
-              refuerzo_pedagogico: cal?.refuerzo_pedagogico || 0,
-              proyecto_interdisciplinar: cal?.proyecto_interdisciplinar || 0,
-              evaluacion_estructurada: cal?.evaluacion_estructurada || 0,
-            }
-            
-            colsCargadas.forEach((col, index) => {
-              const valorCol = cal ? (cal[`insumo_${index + 1}` as keyof typeof cal] || 0) : 0
-              mapa[est.id][col.id] = valorCol
-            })
-          })
-          setNotasMap(mapa)
+          calResumen = resData || []
         }
+
+        // 5. Mapear notas de forma inmutable por ID
+        const mapaNotas: { [estId: string]: { [insId: string]: number } } = {}
+        const mapaSum: { [estId: string]: any } = {}
+
+        estData.forEach((est) => {
+          mapaNotas[est.id] = {}
+          colsCargadas.forEach((c) => {
+            const registroNota = detallesNotas.find(d => d.estudiante_id === est.id && d.configuracion_insumo_id === c.id)
+            mapaNotas[est.id][c.id] = registroNota ? Number(registroNota.nota) : 0
+          })
+
+          const regSum = calResumen.find(r => r.estudiante_id === est.id)
+          mapaSum[est.id] = {
+            refuerzo_pedagogico: regSum ? Number(regSum.refuerzo_pedagogico || 0) : 0,
+            proyecto_interdisciplinar: regSum ? Number(regSum.proyecto_interdisciplinar || 0) : 0,
+            evaluacion_estructurada: regSum ? Number(regSum.evaluacion_estructurada || 0) : 0
+          }
+        })
+
+        setNotasMap(mapaNotas)
+        setSumativasMap(mapaSum)
+
       } catch (err) {
         console.error('Error al sincronizar datos para el rector:', err)
       }
@@ -242,7 +278,9 @@ export default function RegistroCalificacionesRectorPage() {
     cargarEstructuraYNotasRector()
   }, [institucionId, docenteSeleccionadoId, grado, paralelo, asignatura, trimestre, jornadaActual, anioLectivoVigente])
 
+  // Ordenamiento visual por categorías
   const ordenCategorias: CategoriaInsumo[] = ['Deberes / Indiv.', 'Tareas en Clase', 'Actividades Grupales', 'Lecciones']
+
   const columnasOrdenadas = [...columnasInsumos].sort((a, b) => {
     const idxA = ordenCategorias.indexOf(a.categoria)
     const idxB = ordenCategorias.indexOf(b.categoria)
@@ -259,41 +297,54 @@ export default function RegistroCalificacionesRectorPage() {
     }
   }).filter((g) => g.count > 0)
 
-  const calcularNotaFinal = (n: any) => {
-    if (!n) return 0
-    const notasInsumosDinamicos: number[] = []
-    columnasInsumos.forEach((col) => {
-      const val = n[col.id] || 0
-      if (val > 0) notasInsumosDinamicos.push(val)
-    })
+  // =========================================================================
+  // CÁLCULO DE PROMEDIO: TAREAS EN BLANCO COMPUTAN CON 0.00
+  // =========================================================================
+  const calcularNotaFinal = (estId: string) => {
+    const notasIns = notasMap[estId] || {}
+    const sum = sumativasMap[estId] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
 
-    if (n.refuerzo_pedagogico > 0) notasInsumosDinamicos.push(n.refuerzo_pedagogico)
+    // Verificar si el estudiante tiene alguna calificación ingresada
+    const tieneAlgunaNotaInsumos = columnasInsumos.some(col => (notasIns[col.id] || 0) > 0)
+    const tieneAlgunaNotaSumativa = (sum.refuerzo_pedagogico > 0) || (sum.proyecto_interdisciplinar > 0) || (sum.evaluacion_estructurada > 0)
 
-    if (subnivel === 'Básica Elemental') {
-      const todasLasNotas = [...notasInsumosDinamicos]
-      if (n.proyecto_interdisciplinar > 0) todasLasNotas.push(n.proyecto_interdisciplinar)
-      if (n.evaluacion_estructurada > 0) todasLasNotas.push(n.evaluacion_estructurada)
-
-      if (todasLasNotas.length === 0) return 0
-      const sumaTotal = todasLasNotas.reduce((a, b) => a + b, 0)
-      return parseFloat((sumaTotal / todasLasNotas.length).toFixed(2))
+    if (!tieneAlgunaNotaInsumos && !tieneAlgunaNotaSumativa) {
+      return 0
     }
 
-    const promFormativo = notasInsumosDinamicos.length > 0
-      ? notasInsumosDinamicos.reduce((a, b) => a + b, 0) / notasInsumosDinamicos.length
+    // Casilleros en blanco computan con 0.00
+    let valoresInsumos: number[] = columnasInsumos.map(col => Number(notasIns[col.id] || 0))
+
+    // Refuerzo Pedagógico reemplaza la nota formativa más baja
+    if (sum.refuerzo_pedagogico > 0 && valoresInsumos.length > 0) {
+      const minNota = Math.min(...valoresInsumos)
+      if (sum.refuerzo_pedagogico > minNota) {
+        const minIndex = valoresInsumos.indexOf(minNota)
+        valoresInsumos[minIndex] = sum.refuerzo_pedagogico
+      }
+    }
+
+    if (subnivel === 'Básica Elemental') {
+      const todas = [...valoresInsumos]
+      todas.push(Number(sum.proyecto_interdisciplinar || 0))
+      todas.push(Number(sum.evaluacion_estructurada || 0))
+
+      if (todas.length === 0) return 0
+      const suma = todas.reduce((a, b) => a + b, 0)
+      return parseFloat((suma / todas.length).toFixed(2))
+    }
+
+    const promFormativo = valoresInsumos.length > 0
+      ? valoresInsumos.reduce((a, b) => a + b, 0) / valoresInsumos.length
       : 0
-    const aporteFormativo70 = promFormativo * 0.70
+    const aporte70 = promFormativo * 0.70
 
-    const notasSumativas = []
-    if (n.proyecto_interdisciplinar > 0) notasSumativas.push(n.proyecto_interdisciplinar)
-    if (n.evaluacion_estructurada > 0) notasSumativas.push(n.evaluacion_estructurada)
+    const notaProy = Number(sum.proyecto_interdisciplinar || 0)
+    const notaEv = Number(sum.evaluacion_estructurada || 0)
+    const promSumativo = (notaProy + notaEv) / 2
+    const aporte30 = promSumativo * 0.30
 
-    const promSumativo = notasSumativas.length > 0
-      ? notasSumativas.reduce((a, b) => a + b, 0) / notasSumativas.length
-      : 0
-    const aporteSumativo30 = promSumativo * 0.30
-
-    return parseFloat((aporteFormativo70 + aporteSumativo30).toFixed(2))
+    return parseFloat((aporte70 + aporte30).toFixed(2))
   }
 
   const obtenerEscalaCualitativa = (prom: number) => {
@@ -518,25 +569,27 @@ export default function RegistroCalificacionesRectorPage() {
                   <th className="p-2 text-center text-slate-400 border border-slate-200">Sin Insumos</th>
                 ) : (
                   columnasOrdenadas.map((col) => (
-                    <th key={col.id} className="p-2 text-center border border-slate-200 min-w-22.5 bg-white">
-                      <span className="block font-bold text-slate-900">INSUMO {col.numero}</span>
-                      <span className="block text-[8px] font-medium text-slate-500 truncate" title={col.descripcion}>
+                    <th key={col.id} className="p-2 text-center border border-slate-200 min-w-28 bg-white">
+                      <span className="block font-bold text-slate-900 truncate" title={col.descripcion}>
                         {col.descripcion}
+                      </span>
+                      <span className="block text-[8px] font-medium text-slate-500">
+                        {col.categoria} #{col.numero}
                       </span>
                     </th>
                   ))
                 )}
 
-                <th className="p-1.5 text-center bg-indigo-50 border border-slate-200 min-w-27.5">Proy. Interdisciplinar</th>
-                <th className="p-1.5 text-center bg-indigo-50 border border-slate-200 min-w-30">Ev. Base Estructurada</th>
+                <th className="p-1.5 text-center bg-indigo-50 border border-slate-200 min-w-28">Proy. Interdisciplinar</th>
+                <th className="p-1.5 text-center bg-indigo-50 border border-slate-200 min-w-28">Ev. Base Estructurada</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-200">
               {estudiantes.map((est, idx) => {
-                const n = notasMap[est.id] || {}
-                const promFinal = calcularNotaFinal(n)
+                const promFinal = calcularNotaFinal(est.id)
                 const cuali = obtenerEscalaCualitativa(promFinal)
+                const sum = sumativasMap[est.id] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
 
                 return (
                   <tr key={est.id} className="hover:bg-slate-50/80 transition-colors">
@@ -553,8 +606,9 @@ export default function RegistroCalificacionesRectorPage() {
                           <input
                             type="number"
                             disabled={true}
-                            value={n[col.id] > 0 ? n[col.id] : ''}
-                            className="w-14 p-1 text-center border border-slate-300 rounded-xl font-semibold text-slate-800 bg-slate-100 cursor-not-allowed shadow-2xs"
+                            value={notasMap[est.id]?.[col.id] > 0 ? notasMap[est.id][col.id] : ''}
+                            placeholder="0.00"
+                            className="w-14 p-1 text-center border border-slate-300 rounded-xl font-semibold text-slate-800 bg-slate-100 cursor-not-allowed shadow-2xs placeholder:text-slate-400"
                           />
                         </td>
                       ))
@@ -564,8 +618,9 @@ export default function RegistroCalificacionesRectorPage() {
                       <input
                         type="number"
                         disabled={true}
-                        value={n.refuerzo_pedagogico > 0 ? n.refuerzo_pedagogico : ''}
-                        className="w-14 p-1 text-center border border-amber-300 rounded-xl font-semibold text-amber-900 bg-slate-100 cursor-not-allowed shadow-2xs"
+                        value={sum.refuerzo_pedagogico > 0 ? sum.refuerzo_pedagogico : ''}
+                        placeholder="Opt."
+                        className="w-14 p-1 text-center border border-amber-300 rounded-xl font-semibold text-amber-900 bg-slate-100 cursor-not-allowed shadow-2xs placeholder:text-slate-400"
                       />
                     </td>
 
@@ -573,8 +628,9 @@ export default function RegistroCalificacionesRectorPage() {
                       <input
                         type="number"
                         disabled={true}
-                        value={n.proyecto_interdisciplinar > 0 ? n.proyecto_interdisciplinar : ''}
-                        className="w-16 p-1 text-center border border-indigo-300 rounded-xl font-semibold text-indigo-900 bg-slate-100 cursor-not-allowed shadow-2xs"
+                        value={sum.proyecto_interdisciplinar > 0 ? sum.proyecto_interdisciplinar : ''}
+                        placeholder="0.00"
+                        className="w-16 p-1 text-center border border-indigo-300 rounded-xl font-semibold text-indigo-900 bg-slate-100 cursor-not-allowed shadow-2xs placeholder:text-slate-400"
                       />
                     </td>
 
@@ -582,8 +638,9 @@ export default function RegistroCalificacionesRectorPage() {
                       <input
                         type="number"
                         disabled={true}
-                        value={n.evaluacion_estructurada > 0 ? n.evaluacion_estructurada : ''}
-                        className="w-16 p-1 text-center border border-indigo-300 rounded-xl font-semibold text-indigo-900 bg-slate-100 cursor-not-allowed shadow-2xs"
+                        value={sum.evaluacion_estructurada > 0 ? sum.evaluacion_estructurada : ''}
+                        placeholder="0.00"
+                        className="w-16 p-1 text-center border border-indigo-300 rounded-xl font-semibold text-indigo-900 bg-slate-100 cursor-not-allowed shadow-2xs placeholder:text-slate-400"
                       />
                     </td>
 

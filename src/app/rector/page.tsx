@@ -330,7 +330,7 @@ export default function RectorDashboardPage() {
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* SELECTOR Y GESTOR UNIFICADO DE AÑOS LECTIVOS INSTITUCIONALES */}
           <div className="bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-300 flex items-center gap-2 shadow-2xs">
-            <span className="text-[10px] font-bold text-slate-500 uppercase">📅 Periodo:</span>
+            <span className="text-[10px] font-bold text-slate-500 uppercase">Periodo:</span>
             {periodosDisponibles.length === 0 ? (
               <span className="text-xs font-bold text-amber-700 italic">Sin años creados</span>
             ) : (
@@ -359,7 +359,7 @@ export default function RectorDashboardPage() {
             style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
             className="px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 shadow-2xs"
           >
-            <span>⏳ Licencia:</span> <strong className="font-bold">{licenciaVence}</strong>
+            <span>Licencia:</span> <strong className="font-bold">{licenciaVence}</strong>
           </div>
 
           <button
@@ -377,7 +377,7 @@ export default function RectorDashboardPage() {
           style={{ backgroundColor: 'rgba(222, 88, 96, 0.08)', borderColor: 'rgba(222, 88, 96, 0.3)', color: '#9b2c2c' }}
           className="border p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-2xs"
         >
-          <span>🔒 Este periodo lectivo ({anioLectivo}) se encuentra cerrado y bloqueado. Las calificaciones y asignaciones de este año son de solo lectura.</span>
+          <span>Este periodo lectivo ({anioLectivo}) se encuentra cerrado y bloqueado. Las calificaciones y asignaciones de este año son de solo lectura.</span>
           <span className="bg-rose-200/80 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-900">Modo Archivo</span>
         </div>
       )}
@@ -502,7 +502,7 @@ export default function RectorDashboardPage() {
               style={{ backgroundColor: '#de5860' }}
               className="px-4 py-3 text-white font-bold text-xs rounded-xl transition shadow-sm flex items-center gap-1.5 border border-rose-500/40 cursor-pointer hover:opacity-90"
             >
-              <span>🔒</span> Cerrar Periodo
+              <span></span> Cerrar Periodo
             </button>
           )}
           <button
@@ -511,7 +511,7 @@ export default function RectorDashboardPage() {
             style={{ backgroundColor: '#f6c358', color: '#1e293b' }}
             className="px-5 py-3 font-bold text-xs rounded-xl transition shadow-sm flex items-center gap-2 border border-amber-400/40 cursor-pointer hover:opacity-90"
           >
-            <span>🔄</span> Ejecutar Promoción Anual
+            <span></span> Ejecutar Promoción Anual
           </button>
         </div>
       </div>
@@ -521,7 +521,7 @@ export default function RectorDashboardPage() {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-slate-200 font-sans">
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-              📅 Crear Nuevo Año Lectivo
+              Crear Nuevo Año Lectivo
             </h3>
             <p className="text-xs text-slate-600 font-medium">
               Ingresa el formato del nuevo periodo escolar para tu institución (Ejemplo: <strong className="text-[#4b4c99]">2026-2027</strong>).
@@ -563,7 +563,7 @@ export default function RectorDashboardPage() {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 font-sans">
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-              ⚠️ Confirmar Cierre y Promoción Anual
+              Confirmar Cierre y Promoción Anual
             </h3>
             <p className="text-xs text-slate-600 font-medium leading-relaxed">
               Estás a punto de iniciar la transición para el periodo escolar. El sistema evaluará automáticamente las notas finales y los supletorios de los alumnos de 8vo en adelante para validar su promoción.
@@ -572,7 +572,7 @@ export default function RectorDashboardPage() {
               style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
               className="border p-3.5 rounded-2xl text-xs font-bold shadow-2xs"
             >
-              💡 Si existen estudiantes con promedios menores a 7.00 que no han aprobado el examen supletorio, el sistema detendrá el proceso e indicará quiénes son.
+              Si existen estudiantes con promedios menores a 7.00 que no han aprobado el examen supletorio, el sistema detendrá el proceso e indicará quiénes son.
             </div>
             <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
               <button

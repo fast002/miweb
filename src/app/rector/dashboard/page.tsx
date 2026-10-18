@@ -413,7 +413,7 @@ export default function AutoridadPage() {
         {/* COLUMNA 1: CREAR DOCENTE */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4 h-fit">
           <h2 className="font-bold text-slate-900 text-xs uppercase tracking-wide">
-            👤 Registrar Nuevo Docente
+            Registrar Nuevo Docente
           </h2>
           
           <form onSubmit={handleCrearDocente} className="space-y-3.5 text-xs">
@@ -454,7 +454,7 @@ export default function AutoridadPage() {
             </div>
 
             <div className="bg-indigo-50/60 border border-indigo-200/80 p-3 rounded-xl space-y-1">
-              <p className="text-[11px] font-bold text-indigo-900">🔒 Requisitos de Seguridad:</p>
+              <p className="text-[11px] font-bold text-indigo-900">Requisitos de Seguridad:</p>
               <ul className="text-[10px] text-indigo-800/90 list-disc list-inside space-y-0.5 font-medium">
                 <li>Contraseña inicial por defecto: <strong className="font-mono">123456</strong></li>
                 <li>Se le exigirá actualizarla obligatoriamente en su primer inicio de sesión.</li>

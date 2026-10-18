@@ -488,7 +488,7 @@ export default function ImprimirPlanificacionesPage() {
               disabled={planificacionesFiltradas.length === 0}
               className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow transition disabled:opacity-50"
             >
-              🖨️ Imprimir Selección PDF
+              Imprimir Selección PDF
             </button>
           </div>
         </div>

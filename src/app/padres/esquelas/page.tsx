@@ -262,7 +262,7 @@ export default function EsquelasRepresentantePage() {
                         onClick={() => imprimirEsquela(item, index)}
                         className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition text-[11px] cursor-pointer border border-slate-300 shadow-2xs"
                       >
-                        🖨️ Ver / Imprimir
+                      Ver / Imprimir
                       </button>
                     </td>
                   </tr>

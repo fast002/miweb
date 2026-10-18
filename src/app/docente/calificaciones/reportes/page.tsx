@@ -4,250 +4,251 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-export default function HistoricoAcademicoPage() {
+export default function ReportesAcademicosPage() {
   const router = useRouter()
   const [cargando, setCargando] = useState(true)
-  const [autorizado, setAutorizado] = useState(false)
-  
+  const [generandoPdf, setGenerandoPdf] = useState(false)
+
   const [institucionId, setInstitucionId] = useState('')
   const [nombreInstitucion, setNombreInstitucion] = useState('UNIDAD EDUCATIVA')
   const [institucionLogo, setInstitucionLogo] = useState('')
   const [codigoAmie, setCodigoAmie] = useState('03H00278')
-  const [nombreAutoridad, setNombreAutoridad] = useState('')
-  const [cargoAutoridad, setCargoAutoridad] = useState('RECTOR(A)')
+  const [docenteId, setDocenteId] = useState('')
+  const [nombreDocente, setNombreDocente] = useState('')
 
-  // Control Dinámico de Años Lectivos Propios de la Institución
-  const [aniosDisponibles, setAniosDisponibles] = useState<string[]>([])
-  const [anioSeleccionado, setAnioSeleccionado] = useState('')
-  const [anioActivoInstitucion, setAnioActivoInstitucion] = useState('')
+  // Control de Autoridades de la Misma Institución y sus Cargos
+  const [autoridadesDisponibles, setAutoridadesDisponibles] = useState<{ nombre: string; cargo: string }[]>([])
+  const [autoridadSeleccionadaIndex, setAutoridadSeleccionadaIndex] = useState(0)
 
-  // Tipo de Reporte Directivo ('consolidado' vs 'reporte_final')
-  const [tipoReporteDirectivo, setTipoReporteDirectivo] = useState<'consolidado' | 'reporte_final'>('reporte_final')
+  // Control Dinámico de Años Lectivos
+  const [anioLectivoVigente, setAnioLectivoVigente] = useState('')
+  const [periodosDisponibles, setPeriodosDisponibles] = useState<string[]>([])
+  const [anosCerrados, setAnosCerrados] = useState<string[]>([])
 
-  // Filtros de búsqueda directiva
-  const [jornadaSeleccionada, setJornadaSeleccionada] = useState('MATUTINA')
-  const [gradoSeleccionado, setGradoSeleccionado] = useState('8vo EGB')
-  const [paraleloSeleccionado, setParaleloSeleccionado] = useState('A')
-  const [asignaturaSeleccionada, setAsignaturaSeleccionada] = useState('')
+  // Asignaciones EXCLUSIVAS del docente autenticado
+  const [misAsignaciones, setMisAsignaciones] = useState<any[]>([])
+  
+  // Filtros
+  const [grado, setGrado] = useState('')
+  const [paralelo, setParalelo] = useState('')
+  const [jornadaActual, setJornadaActual] = useState('MATUTINA')
+  const [tipoReporte, setTipoReporte] = useState<'Trimestre 1' | 'Trimestre 2' | 'Trimestre 3' | 'Anual'>('Trimestre 1')
+  const [estudiantes, setEstudiantes] = useState<any[]>([])
   const [estudianteSeleccionadoId, setEstudianteSeleccionadoId] = useState('')
 
-  // Periodo para libreta individual
-  const [tipoTrimestreReporte, setTipoTrimestreReporte] = useState<'Trimestre 1' | 'Trimestre 2' | 'Trimestre 3' | 'Anual'>('Trimestre 1')
-
-  // Listas de datos
-  const [materiasInstitucion, setMateriasInstitucion] = useState<any[]>([])
+  // Listado dinámico de asignaturas reales asignadas al docente en este curso
   const [asignaturasDelCurso, setAsignaturasDelCurso] = useState<string[]>([])
-  const [registrosHistoricos, setRegistrosHistoricos] = useState<any[]>([])
-  const [estudiantesCurso, setEstudiantesCurso] = useState<any[]>([])
-  
-  // Notas y complementarios del estudiante seleccionado
-  const [calificacionesEstudianteActual, setCalificacionesEstudianteActual] = useState<any[]>([])
+
+  // Datos de calificaciones y acompañamiento
+  const [calificacionesEstudiante, setCalificacionesEstudiante] = useState<any[]>([])
   const [complementariosEstudiante, setComplementariosEstudiante] = useState<any>({})
-  
-  const [modalImpresionHistorico, setModalImpresionHistorico] = useState(false)
 
-  const gradosEGB = [
-    '2do Grado EGB', '3ro Grado EGB', '4to Grado EGB',
-    '5to Grado EGB', '6to Grado EGB', '7mo Grado EGB',
-    '8vo EGB', '9no EGB', '10mo EGB',
-    '1er Año BGU', '2do Año BGU', '3er Año BGU',
-    '1ro BGU', '2do BGU', '3ro BGU'
-  ]
-  const paralelos = ['A', 'B', 'C', 'D', 'E']
-  const jornadas = ['MATUTINA', 'VESPERTINA', 'NOCTURNA']
-
-  useEffect(() => {
-    verificarSeguridadYCargarDatos()
-  }, [])
-
-  const verificarSeguridadYCargarDatos = async () => {
-    try {
-      setCargando(true)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/')
-        return
-      }
-
-      const { data: doc } = await supabase
-        .from('docentes')
-        .select('*, instituciones(*)')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      if (!doc) {
-        router.push('/')
-        return
-      }
-
-      const rolUser = (doc.rol || '').toLowerCase()
-      const esAutoridad = rolUser.includes('rector') || rolUser.includes('vicerrector') || rolUser.includes('director') || rolUser.includes('autoridad') || rolUser.includes('superadmin')
-
-      if (!esAutoridad) {
-        router.push('/docente')
-        return
-      }
-
-      setAutorizado(true)
-      if (doc?.institucion_id) {
-        const instId = doc.institucion_id
-        setInstitucionId(instId)
-        setNombreInstitucion(doc.instituciones?.nombre_institucion || 'Unidad Educativa')
-        setInstitucionLogo(doc.instituciones?.logo_url || '')
-        setCodigoAmie(doc.instituciones?.codigo_amie || '03H00278')
-        setNombreAutoridad(`${doc.nombres || ''} ${doc.apellidos || ''}`.trim().toUpperCase())
-        setCargoAutoridad((doc.rol || 'RECTOR(A)').toUpperCase())
-
-        const periodosInst = doc.instituciones?.periodos_disponibles || []
-        setAniosDisponibles(periodosInst)
-
-        let anioInicial = ''
-        if (doc.instituciones?.anio_lectivo_activo && periodosInst.includes(doc.instituciones.anio_lectivo_activo)) {
-          anioInicial = doc.instituciones.anio_lectivo_activo
-        } else if (periodosInst.length > 0) {
-          anioInicial = periodosInst[0]
-        }
-
-        setAnioActivoInstitucion(doc.instituciones?.anio_lectivo_activo || anioInicial)
-        setAnioSeleccionado(anioInicial)
-
-        const { data: mats } = await supabase.from('asignaturas').select('*')
-        if (mats) setMateriasInstitucion(mats)
-      }
-    } catch (err) {
-      console.error(err)
-      router.push('/')
-    } finally {
-      setCargando(false)
-    }
+  const normalizar = (texto: string = '') => {
+    return texto
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim()
   }
 
-  // Cargar materias reales configuradas en la institución
+  const coincidenMaterias = (mat1: string = '', mat2: string = '') => {
+    const n1 = normalizar(mat1)
+    const n2 = normalizar(mat2)
+    return n1 === n2 || n1.includes(n2) || n2.includes(n1)
+  }
+
   useEffect(() => {
-    async function cargarMateriasCurso() {
-      if (!institucionId || !gradoSeleccionado || !anioSeleccionado) return
+    async function init() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/'); return; }
+        setDocenteId(user.id)
 
-      const { data: asigsDoc } = await supabase
-        .from('docente_asignaciones')
-        .select('asignatura')
-        .eq('institucion_id', institucionId)
-        .eq('grado_curso', gradoSeleccionado)
-        .eq('paralelo', paraleloSeleccionado)
-        .eq('anio_lectivo', anioSeleccionado)
+        const { data: doc } = await supabase
+          .from('docentes')
+          .select('*, instituciones(*)')
+          .eq('id', user.id)
+          .maybeSingle()
+        
+        let anioActivo = ''
+        let periodosList: string[] = []
+        let cerradosList: string[] = []
+        let instId = ''
 
-      if (asigsDoc && asigsDoc.length > 0) {
-        const unicas = Array.from(new Set(asigsDoc.map((a: any) => a.asignatura.trim().toUpperCase())))
-        setAsignaturasDelCurso(unicas)
-        setAsignaturaSeleccionada(unicas[0])
-      } else {
-        const base = [
-          'LENGUA Y LITERATURA',
-          'MATEMÁTICAS',
-          'ESTUDIOS SOCIALES',
-          'CIENCIAS NATURALES',
-          'INGLÉS',
-          'EDUCACIÓN FÍSICA',
-          'EDUCACIÓN CULTURAL Y ARTÍSTICA'
-        ]
-        setAsignaturasDelCurso(base)
-        setAsignaturaSeleccionada(base[0])
+        if (doc) {
+          setNombreInstitucion(doc.instituciones?.nombre_institucion || 'Unidad Educativa')
+          setInstitucionLogo(doc.instituciones?.logo_url || '')
+          setCodigoAmie(doc.instituciones?.codigo_amie || '03H00278')
+          setNombreDocente(`${doc.nombres || ''} ${doc.apellidos || ''}`.trim())
+          if (doc.institucion_id) {
+            instId = doc.institucion_id
+            setInstitucionId(instId)
+          }
+
+          const inst = doc.instituciones
+          if (inst) {
+            periodosList = inst.periodos_disponibles || []
+            setPeriodosDisponibles(periodosList)
+
+            if (inst.anio_lectivo_activo && periodosList.includes(inst.anio_lectivo_activo)) {
+              anioActivo = inst.anio_lectivo_activo
+            } else if (periodosList.length > 0) {
+              anioActivo = periodosList[0]
+            }
+
+            setAnioLectivoVigente(anioActivo)
+
+            if (inst.anos_cerrados) {
+              cerradosList = inst.anos_cerrados
+              setAnosCerrados(cerradosList)
+            }
+          }
+        }
+
+        if (instId && user.id) {
+          // 1. Cargar autoridades de la institución para la firma
+          const { data: autoridadesData } = await supabase
+            .from('docentes')
+            .select('nombres, apellidos, rol')
+            .eq('institucion_id', instId)
+            
+          if (autoridadesData) {
+            const filtrados = autoridadesData.filter(d => {
+              const r = (d.rol || '').toLowerCase()
+              return r.includes('rector') || r.includes('vicerrector') || r.includes('director')
+            })
+
+            const listaAutoridades = filtrados.map(d => ({
+              nombre: `${d.nombres || ''} ${d.apellidos || ''}`.trim().toUpperCase(),
+              cargo: (d.rol || 'RECTOR(A)').toUpperCase()
+            }))
+            
+            if (listaAutoridades.length > 0) {
+              setAutoridadesDisponibles(listaAutoridades)
+              setAutoridadSeleccionadaIndex(0)
+            } else {
+              setAutoridadesDisponibles([{ nombre: 'LIC. MARIALETI ORELLANA A.', cargo: 'RECTORA' }])
+              setAutoridadSeleccionadaIndex(0)
+            }
+          }
+
+          // 2. CORRECCIÓN CLAVE: Cargar ÚNICAMENTE las asignaciones del DOCENTE AUTENTICADO
+          if (anioActivo) {
+            const { data: asigsDoc } = await supabase
+              .from('docente_asignaciones')
+              .select('*')
+              .eq('institucion_id', instId)
+              .eq('docente_id', user.id)
+              .eq('anio_lectivo', anioActivo)
+
+            if (asigsDoc && asigsDoc.length > 0) {
+              setMisAsignaciones(asigsDoc)
+              const primeraJornada = asigsDoc[0].jornada || 'MATUTINA'
+              setJornadaActual(primeraJornada)
+              
+              const primerGrado = asigsDoc.find(a => (a.jornada || 'MATUTINA') === primeraJornada)?.grado_curso || asigsDoc[0].grado_curso
+              setGrado(primerGrado)
+
+              const primerParalelo = asigsDoc.find(a => (a.jornada || 'MATUTINA') === primeraJornada && a.grado_curso === primerGrado)?.paralelo || asigsDoc[0].paralelo
+              setParalelo(primerParalelo)
+            } else {
+              setMisAsignaciones([])
+              setGrado('')
+              setParalelo('')
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error al inicializar datos:', err)
+      } finally {
+        setCargando(false)
       }
     }
-    cargarMateriasCurso()
-  }, [institucionId, gradoSeleccionado, paraleloSeleccionado, anioSeleccionado])
+    init()
+  }, [router])
 
-  // Cargar estudiantes del curso seleccionado
-  const cargarRegistrosYEstudiantes = useCallback(async () => {
-    if (!institucionId || !anioSeleccionado || !gradoSeleccionado || !paraleloSeleccionado) return
+  // Jornadas únicas del DOCENTE
+  const jornadasDisponibles = Array.from(new Set(misAsignaciones.map(a => a.jornada || 'MATUTINA')))
 
-    try {
-      const { data: estData } = await supabase
+  // Cursos únicos del DOCENTE en la jornada actual
+  const gradosDisponiblesPorJornada = Array.from(new Set(
+    misAsignaciones
+      .filter(a => (a.jornada || 'MATUTINA') === jornadaActual)
+      .map(a => a.grado_curso)
+  ))
+
+  // Paralelos únicos del DOCENTE en ese grado y jornada
+  const paralelosDisponibles = Array.from(new Set(
+    misAsignaciones
+      .filter(a => (a.jornada || 'MATUTINA') === jornadaActual && a.grado_curso === grado)
+      .map(a => a.paralelo)
+  ))
+
+  // Cargar estudiantes y materias asignadas a este docente en este curso
+  useEffect(() => {
+    async function cargarEstudiantesYAsignaturas() {
+      if (!institucionId || !grado || !paralelo || !anioLectivoVigente || !docenteId) return
+      
+      // Asignaturas reales que el docente tiene en este grado y paralelo
+      const asigsPropias = misAsignaciones
+        .filter(a => (a.jornada || 'MATUTINA') === jornadaActual && a.grado_curso === grado && a.paralelo === paralelo)
+        .map(a => a.asignatura.trim().toUpperCase())
+
+      if (asigsPropias.length > 0) {
+        setAsignaturasDelCurso(Array.from(new Set(asigsPropias)))
+      } else {
+        setAsignaturasDelCurso(['EDUCACIÓN CULTURAL Y ARTÍSTICA (ECA)'])
+      }
+
+      // Estudiantes del curso
+      const { data } = await supabase
         .from('estudiantes')
         .select('*')
         .eq('institucion_id', institucionId)
-        .eq('anio_lectivo', anioSeleccionado)
-        .eq('grado_curso', gradoSeleccionado)
-        .eq('paralelo', paraleloSeleccionado)
+        .eq('grado_curso', grado)
+        .eq('paralelo', paralelo)
+        .eq('anio_lectivo', anioLectivoVigente)
         .eq('estado', 'activo')
         .order('apellidos', { ascending: true })
 
-      let estFiltradosJornada: any[] = []
-      if (estData) {
-        estFiltradosJornada = estData.filter(e => {
-          const jEst = e.jornada ? e.jornada.trim().toUpperCase() : 'MATUTINA'
-          return jEst === jornadaSeleccionada.trim().toUpperCase()
+      if (data && data.length > 0) {
+        const filtradosPorJornada = data.filter(e => {
+          if (!e.jornada) return true
+          return e.jornada.trim().toUpperCase() === jornadaActual.trim().toUpperCase()
         })
 
-        setEstudiantesCurso(estFiltradosJornada)
-        if (estFiltradosJornada.length > 0) {
-          if (!estudianteSeleccionadoId || !estFiltradosJornada.some(e => e.id === estudianteSeleccionadoId)) {
-            setEstudianteSeleccionadoId(estFiltradosJornada[0].id)
-          }
-        } else {
-          setEstudianteSeleccionadoId('')
-        }
-      }
+        const listaFinal = filtradosPorJornada.length > 0 ? filtradosPorJornada : data
 
-      // Si es año cerrado o histórico, intenta leer historico_academico
-      const { data: histData } = await supabase
-        .from('historico_academico')
-        .select('*, estudiantes(id, nombres, apellidos, cedula)')
-        .eq('institucion_id', institucionId)
-        .eq('anio_lectivo', anioSeleccionado)
-        .eq('grado_curso', gradoSeleccionado)
-        .eq('paralelo', paraleloSeleccionado)
-
-      if (histData && histData.length > 0) {
-        setRegistrosHistoricos(histData)
+        setEstudiantes(listaFinal)
+        setEstudianteSeleccionadoId(prev => (prev && listaFinal.some(e => e.id === prev) ? prev : listaFinal[0].id))
       } else {
-        // Año vigente o sin tabla histórica: Lee directamente de calificaciones institucionales
-        const estIds = estFiltradosJornada.map(e => e.id)
-        const { data: calData } = await supabase
-          .from('calificaciones')
-          .select('*')
-          .eq('institucion_id', institucionId)
-          .eq('anio_lectivo', anioSeleccionado)
-          .in('estudiante_id', estIds.length > 0 ? estIds : ['none'])
-
-        const consolidadoSimulado = estFiltradosJornada.map(est => ({
-          estudiante_id: est.id,
-          estudiantes: est,
-          calificaciones_detalle: calData?.filter(c => c.estudiante_id === est.id) || []
-        }))
-        setRegistrosHistoricos(consolidadoSimulado)
+        setEstudiantes([])
+        setEstudianteSeleccionadoId('')
       }
-    } catch (err) {
-      console.error('Error cargando estudiantes y registros:', err)
     }
-  }, [institucionId, anioSeleccionado, gradoSeleccionado, paraleloSeleccionado, jornadaSeleccionada, estudianteSeleccionadoId])
+    cargarEstudiantesYAsignaturas()
+  }, [institucionId, grado, paralelo, jornadaActual, anioLectivoVigente, misAsignaciones, docenteId])
 
-  useEffect(() => {
-    if (institucionId && autorizado && anioSeleccionado) {
-      cargarRegistrosYEstudiantes()
-    }
-  }, [institucionId, autorizado, anioSeleccionado, jornadaSeleccionada, gradoSeleccionado, paraleloSeleccionado, cargarRegistrosYEstudiantes])
-
-  // Cargar notas completas del estudiante seleccionado para el reporte/libreta
-  const cargarNotasEstudianteEspecifico = useCallback(async () => {
-    if (!estudianteSeleccionadoId || !anioSeleccionado) return
-
+  const cargarDatosEstudiante = useCallback(async () => {
+    if (!estudianteSeleccionadoId || !anioLectivoVigente) return
+    setCargando(true)
     try {
       const { data: calData } = await supabase
         .from('calificaciones')
         .select('*')
         .eq('estudiante_id', estudianteSeleccionadoId)
-        .eq('anio_lectivo', anioSeleccionado)
+        .eq('anio_lectivo', anioLectivoVigente)
 
-      setCalificacionesEstudianteActual(calData || [])
+      setCalificacionesEstudiante(calData || [])
 
       const { data: compData } = await supabase
         .from('acompanamiento_integral')
         .select('*')
         .eq('estudiante_id', estudianteSeleccionadoId)
-        .eq('anio_lectivo', anioSeleccionado)
+        .eq('anio_lectivo', anioLectivoVigente)
 
       const compMap: any = {}
-      compData?.forEach((item: any) => {
+      compData?.forEach(item => {
         compMap[item.item] = {
           t1: item.t1, t2: item.t2, t3: item.t3,
           rec_t1: item.rec_t1, rec_t2: item.rec_t2, rec_t3: item.rec_t3, rec_anual: item.rec_anual
@@ -255,17 +256,18 @@ export default function HistoricoAcademicoPage() {
       })
       setComplementariosEstudiante(compMap)
     } catch (err) {
-      console.error('Error cargando notas individuales:', err)
+      console.error(err)
+    } finally {
+      setCargando(false)
     }
-  }, [estudianteSeleccionadoId, anioSeleccionado])
+  }, [estudianteSeleccionadoId, anioLectivoVigente])
 
   useEffect(() => {
-    if (estudianteSeleccionadoId && autorizado && anioSeleccionado) {
-      cargarNotasEstudianteEspecifico()
-    }
-  }, [estudianteSeleccionadoId, anioSeleccionado, autorizado, cargarNotasEstudianteEspecifico])
+    cargarDatosEstudiante()
+  }, [cargarDatosEstudiante])
 
-  // Subnivel educativo
+  const esAnioCerrado = anosCerrados.includes(anioLectivoVigente)
+
   const obtenerNombreSubnivel = (gradoStr: string) => {
     if (!gradoStr) return ''
     if (['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB'].includes(gradoStr)) {
@@ -280,7 +282,7 @@ export default function HistoricoAcademicoPage() {
     return ''
   }
 
-  const subnivelActual = obtenerNombreSubnivel(gradoSeleccionado)
+  const subnivelActual = obtenerNombreSubnivel(grado)
   const esBasicaElemental = subnivelActual === 'Básica Elemental'
   const esSuperiorOBachillerato = subnivelActual === 'Básica Superior' || subnivelActual === 'Bachillerato'
 
@@ -306,9 +308,33 @@ export default function HistoricoAcademicoPage() {
     return 'NAAR'
   }
 
+  const estudianteActual = estudiantes.find(e => e.id === estudianteSeleccionadoId)
+
+  const handleJornadaChange = (nuevaJornada: string) => {
+    setJornadaActual(nuevaJornada)
+    const primerGradoJornada = misAsignaciones.find(a => (a.jornada || 'MATUTINA') === nuevaJornada)?.grado_curso || ''
+    if (primerGradoJornada) {
+      setGrado(primerGradoJornada)
+      const primerParalelo = misAsignaciones.find(a => (a.jornada || 'MATUTINA') === nuevaJornada && a.grado_curso === primerGradoJornada)?.paralelo || 'A'
+      setParalelo(primerParalelo)
+    }
+  }
+
+  const handleGradoChange = (nuevoGrado: string) => {
+    setGrado(nuevoGrado)
+    const asigMatch = misAsignaciones.find(a => (a.jornada || 'MATUTINA') === jornadaActual && a.grado_curso === nuevoGrado)
+    if (asigMatch) {
+      setParalelo(asigMatch.paralelo || 'A')
+    }
+  }
+
+  const handlePrint = () => {
+    window.print()
+  }
+
   const obtenerRecomendacionTexto = () => {
-    if (tipoTrimestreReporte !== 'Anual') {
-      const campoKey = tipoTrimestreReporte === 'Trimestre 1' ? 'rec_t1' : tipoTrimestreReporte === 'Trimestre 2' ? 'rec_t2' : 'rec_t3'
+    if (tipoReporte !== 'Anual') {
+      const campoKey = tipoReporte === 'Trimestre 1' ? 'rec_t1' : tipoReporte === 'Trimestre 2' ? 'rec_t2' : 'rec_t3'
       for (const itemKey of Object.keys(complementariosEstudiante)) {
         const val = complementariosEstudiante[itemKey]?.[campoKey]
         if (val && val.trim() !== '') return val
@@ -323,62 +349,230 @@ export default function HistoricoAcademicoPage() {
     }
   }
 
-  // Cálculos para el Consolidado
-  let totalAprobados = 0
-  let totalSupletorios = 0
+  const autoridadActual = autoridadesDisponibles[autoridadSeleccionadaIndex] || { nombre: 'LIC. MARIALETI ORELLANA A.', cargo: 'RECTOR(A)' }
 
-  const filasHistoricasProcesadas = estudiantesCurso.map(est => {
-    const regEst = registrosHistoricos.find(h => h.estudiante_id === est.id || h.estudiantes?.id === est.id)
-    const detalles = Array.isArray(regEst?.calificaciones_detalle) ? regEst.calificaciones_detalle : []
-    const regMateria = detalles.find((c: any) => c.asignatura && c.asignatura.trim().toUpperCase() === asignaturaSeleccionada.trim().toUpperCase())
-    
-    const promedio = regMateria?.promedio_parcial !== undefined && regMateria?.promedio_parcial !== null ? Number(regMateria.promedio_parcial) : 0
-    const cualitativa = promedio >= 9 ? 'DAR' : promedio >= 7 ? 'AAR' : promedio >= 5 ? 'PA' : 'NAAR'
-    const esAprobado = promedio >= 7
-
-    if (promedio > 0) {
-      if (esAprobado) totalAprobados++
-      else totalSupletorios++
+  const convertirLogoABase64 = async (url: string) => {
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result)
+        reader.readAsDataURL(blob)
+      })
+    } catch (e) {
+      return null
     }
-
-    return {
-      estudiante: est,
-      promedio,
-      cualitativa,
-      esAprobado,
-      detallesMateria: regMateria
-    }
-  })
-
-  const estudianteActualObj = estudiantesCurso.find(e => e.id === estudianteSeleccionadoId)
-  const totalEvaluados = totalAprobados + totalSupletorios
-  const porcentajeAprobados = totalEvaluados > 0 ? Math.round((totalAprobados / totalEvaluados) * 100) : 0
-  const porcentajeSupletorios = totalEvaluados > 0 ? 100 - porcentajeAprobados : 0
-
-  const nombrePdfDinamico = tipoReporteDirectivo === 'consolidado' 
-    ? `CONSOLIDADO-RECTORADO-${anioSeleccionado}-${gradoSeleccionado}-${asignaturaSeleccionada}`.replace(/\s+/g, '-').replace(/°/g, '').toUpperCase()
-    : `LIBRETA-RECTORAL-${anioSeleccionado}-${gradoSeleccionado}-${estudianteActualObj?.apellidos || 'ESTUDIANTE'}`.replace(/\s+/g, '-').replace(/°/g, '').toUpperCase()
-
-  const handlePrint = () => {
-    document.title = nombrePdfDinamico
-    window.print()
   }
 
-  if (cargando || !autorizado) {
+  // DESCARGA DIRECTA PDF
+  const handleDescargarPdfDirecto = async () => {
+    if (!estudianteActual || !anioLectivoVigente) {
+      alert('Seleccione un estudiante válido para generar el PDF.')
+      return
+    }
+
+    setGenerandoPdf(true)
+    try {
+      const { jsPDF } = await import('jspdf')
+      const autoTable = (await import('jspdf-autotable')).default
+
+      const doc = new jsPDF('p', 'mm', 'a4')
+      const pageWidth = doc.internal.pageSize.getWidth()
+
+      let logoBase64 = null
+      if (institucionLogo) {
+        logoBase64 = await convertirLogoABase64(institucionLogo)
+      }
+
+      doc.setLineWidth(0.4)
+      doc.rect(14, 12, pageWidth - 28, 22)
+      doc.line(45, 12, 45, 34)
+      doc.line(pageWidth - 45, 12, pageWidth - 45, 34)
+
+      if (logoBase64) {
+        doc.addImage(logoBase64 as string, 'PNG', 16, 13, 20, 20)
+      }
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.text(nombreInstitucion.toUpperCase(), pageWidth / 2, 18, { align: 'center' })
+      doc.setFontSize(8)
+      doc.text(`CÓDIGO AMIE: ${codigoAmie} • Azogues - Ecuador`, pageWidth / 2, 24, { align: 'center' })
+      doc.setTextColor(75, 76, 153)
+      doc.text(`AÑO LECTIVO: ${anioLectivoVigente}`, pageWidth / 2, 30, { align: 'center' })
+      doc.setTextColor(0, 0, 0)
+
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(8)
+      doc.text('LIBRETA DE NOTAS', pageWidth - 24, 23, { align: 'center' })
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.text(`RENDIMIENTO ACADÉMICO - ${tipoReporte.toUpperCase()} (${subnivelActual.toUpperCase()})`, pageWidth / 2, 40, { align: 'center' })
+
+      autoTable(doc, {
+        startY: 44,
+        theme: 'grid',
+        headStyles: { fillColor: [75, 76, 153], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+        body: [
+          [`Estudiante: ${estudianteActual?.apellidos || ''} ${estudianteActual?.nombres || ''}`, `Cédula: ${estudianteActual?.cedula || 'S/N'}`],
+          [`Grado / Curso: ${grado} "${paralelo}"`, `Jornada: ${jornadaActual}`],
+          [`Docente Tutor: ${nombreDocente}`, `Año Lectivo: ${anioLectivoVigente}`]
+        ]
+      })
+
+      if (tipoReporte !== 'Anual') {
+        const headers = esBasicaElemental
+          ? ['Asignaturas', 'Calificación', 'Escala', 'Equivalencia']
+          : ['Asignaturas', 'Ev. Formativa', '70%', 'Ev. Sumativa', '30%', 'Promedio', 'Cualitativo']
+
+        const body = asignaturasDelCurso.map((asig) => {
+          const reg = calificacionesEstudiante.find(c => 
+            coincidenMaterias(c.asignatura, asig) && (c.trimestre || '').toLowerCase() === tipoReporte.toLowerCase()
+          )
+
+          const prom = reg?.promedio_parcial !== undefined && reg?.promedio_parcial !== null ? Number(reg.promedio_parcial) : 0
+          const formativo = reg?.insumo_1 !== undefined && reg?.insumo_1 !== null ? (Number(reg.insumo_1) + Number(reg.insumo_2 || 0)) / 2 : prom
+          const formativo70 = Number((formativo * 0.70).toFixed(2))
+          const sumativo = Number(reg?.proyecto_interdisciplinar || reg?.evaluacion_estructurada || prom)
+          const sumativo30 = Number((sumativo * 0.30).toFixed(2))
+
+          if (esBasicaElemental) {
+            return [
+              asig,
+              prom > 0 ? prom.toFixed(2) : '0.00',
+              obtenerEscalaElemental(prom),
+              prom >= 7 ? 'Destreza alcanzada' : prom >= 4.01 ? 'En proceso' : 'Iniciada'
+            ]
+          }
+
+          return [
+            asig,
+            formativo > 0 ? formativo.toFixed(2) : '0.00',
+            formativo70 > 0 ? formativo70.toFixed(2) : '0.00',
+            sumativo > 0 ? sumativo.toFixed(2) : '0.00',
+            sumativo30 > 0 ? sumativo30.toFixed(2) : '0.00',
+            prom > 0 ? prom.toFixed(2) : '0.00',
+            obtenerEscalaCuantitativaCualitativa(prom)
+          ]
+        })
+
+        autoTable(doc, {
+          startY: (doc as any).lastAutoTable.finalY + 4,
+          theme: 'grid',
+          head: [headers],
+          body: body,
+          headStyles: { fillColor: [75, 76, 153], fontSize: 8, halign: 'center' },
+          bodyStyles: { fontSize: 7.5 }
+        })
+      } else {
+        const headers = esSuperiorOBachillerato
+          ? ['Asignaturas', '1er Trim', '2do Trim', '3er Trim', 'Supletorio', 'Prom. Anual', 'Cualitativa']
+          : ['Asignaturas', '1er Trim', '2do Trim', '3er Trim', 'Prom. Anual', 'Cualitativa']
+
+        const body = asignaturasDelCurso.map((asig) => {
+          const regT1 = calificacionesEstudiante.find(c => coincidenMaterias(c.asignatura, asig) && (c.trimestre || '').includes('Trimestre 1'))
+          const regT2 = calificacionesEstudiante.find(c => coincidenMaterias(c.asignatura, asig) && (c.trimestre || '').includes('Trimestre 2'))
+          const regT3 = calificacionesEstudiante.find(c => coincidenMaterias(c.asignatura, asig) && (c.trimestre || '').includes('Trimestre 3'))
+          const regSupletorio = calificacionesEstudiante.find(c => coincidenMaterias(c.asignatura, asig) && (c.trimestre || '').includes('SUPLETORIO'))
+
+          const p1 = Number(regT1?.promedio_parcial || 0)
+          const p2 = Number(regT2?.promedio_parcial || 0)
+          const p3 = Number(regT3?.promedio_parcial || 0)
+          
+          let promAnual = Number(((p1 + p2 + p3) / (p1 && p2 && p3 ? 3 : (p1 || p2 || p3 ? 1 : 1))).toFixed(2))
+          const supletorioVal = regSupletorio?.examen_supletorio ? Number(regSupletorio.examen_supletorio) : 0
+
+          if (esSuperiorOBachillerato && supletorioVal > 0) {
+            promAnual = Number(((promAnual + supletorioVal) / 2).toFixed(2))
+          }
+
+          if (esSuperiorOBachillerato) {
+            return [
+              asig,
+              p1 > 0 ? p1.toFixed(2) : '0.00',
+              p2 > 0 ? p2.toFixed(2) : '0.00',
+              p3 > 0 ? p3.toFixed(2) : '0.00',
+              supletorioVal > 0 ? supletorioVal.toFixed(2) : '-',
+              promAnual > 0 ? promAnual.toFixed(2) : '0.00',
+              obtenerEscalaCuantitativaCualitativa(promAnual)
+            ]
+          }
+
+          return [
+            asig,
+            p1 > 0 ? p1.toFixed(2) : '0.00',
+            p2 > 0 ? p2.toFixed(2) : '0.00',
+            p3 > 0 ? p3.toFixed(2) : '0.00',
+            promAnual > 0 ? promAnual.toFixed(2) : '0.00',
+            obtenerEscalaCuantitativaCualitativa(promAnual)
+          ]
+        })
+
+        autoTable(doc, {
+          startY: (doc as any).lastAutoTable.finalY + 4,
+          theme: 'grid',
+          head: [headers],
+          body: body,
+          headStyles: { fillColor: [75, 76, 153], fontSize: 8, halign: 'center' },
+          bodyStyles: { fontSize: 7.5 }
+        })
+      }
+
+      const finalTablaY = (doc as any).lastAutoTable.finalY + 4
+      autoTable(doc, {
+        startY: finalTablaY,
+        theme: 'grid',
+        head: [['ÁREAS DE DESARROLLO INTEGRAL', 'RECOMENDACIONES']],
+        body: [
+          [
+            `• Acompañamiento Integral: ${complementariosEstudiante['Acompañamiento integral']?.[tipoReporte === 'Trimestre 1' ? 't1' : tipoReporte === 'Trimestre 2' ? 't2' : 't3'] || '-'}\n• Animación a la Lectura: ${complementariosEstudiante['Animación a la lectura']?.[tipoReporte === 'Trimestre 1' ? 't1' : tipoReporte === 'Trimestre 2' ? 't2' : 't3'] || '-'}`,
+            obtenerRecomendacionTexto()
+          ]
+        ],
+        headStyles: { fillColor: [218, 234, 138], textColor: [30, 41, 59], fontSize: 8, fontStyle: 'bold' },
+        bodyStyles: { fontSize: 7.5 }
+      })
+
+      const finalFirmasY = (doc as any).lastAutoTable.finalY + 18
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.line(25, finalFirmasY, 85, finalFirmasY)
+      doc.line(pageWidth - 85, finalFirmasY, pageWidth - 25, finalFirmasY)
+
+      doc.text(nombreDocente, 55, finalFirmasY + 4, { align: 'center' })
+      doc.text(autoridadActual.nombre, pageWidth - 55, finalFirmasY + 4, { align: 'center' })
+
+      doc.setFont('helvetica', 'normal')
+      doc.text('DOCENTE TUTOR(A)', 55, finalFirmasY + 8, { align: 'center' })
+      doc.text(autoridadActual.cargo, pageWidth - 55, finalFirmasY + 8, { align: 'center' })
+
+      doc.save(`Libreta_${anioLectivoVigente}_${estudianteActual?.apellidos || 'Estudiante'}`.replace(/\s+/g, '_') + '.pdf')
+
+    } catch (err: any) {
+      console.error(err)
+      alert('Error al generar el PDF: ' + err.message)
+    } finally {
+      setGenerandoPdf(false)
+    }
+  }
+
+  if (cargando) {
     return (
-      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans selection:bg-[#4b4c99] selection:text-white">
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans">
         <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
           <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
-          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Módulo Rectoral...</p>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Módulo de Reportes...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans">
+    <div className="min-h-screen bg-slate-100 p-4 md:p-8 print:p-0 print:bg-white font-sans">
       
-      {/* REGLAS DE IMPRESIÓN OFICIALES A4 */}
       <style jsx global>{`
         @media print {
           @page {
@@ -414,605 +608,378 @@ export default function HistoricoAcademicoPage() {
         }
       `}</style>
 
-      {/* ENCABEZADO PRINCIPAL RECTORADO */}
-      <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+      <div className="max-w-6xl mx-auto space-y-6 print:space-y-1 print:max-w-none">
+
+        {/* CONTROLES SUPERIORES */}
+        <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-center gap-4 print:hidden">
+          <div>
             <span 
               style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
               className="font-bold text-[10px] px-3 py-1 rounded-xl uppercase tracking-wider border shadow-2xs inline-block"
             >
-              Control Rectoral General
+              Año Lectivo Vigente: {anioLectivoVigente || 'Sin año activo'}
             </span>
-            {anioSeleccionado === anioActivoInstitucion ? (
-              <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2.5 py-0.5 rounded-lg border border-emerald-200">
-                Periodo Activo Vigente ({anioSeleccionado})
-              </span>
-            ) : (
-              <span className="bg-rose-100 text-rose-800 font-bold text-[10px] px-2.5 py-0.5 rounded-lg border border-rose-200">
-                Archivo Histórico ({anioSeleccionado})
-              </span>
-            )}
-          </div>
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
-            Reportes Académicos y Archivo Histórico
-          </h1>
-          <p className="text-xs text-slate-500 font-semibold mt-0.5">
-            {nombreInstitucion} • Emisión de libretas y consolidados de cualquier año lectivo.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            onClick={() => setModalImpresionHistorico(true)}
-            disabled={estudiantesCurso.length === 0 || !anioSeleccionado}
-            style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
-            className="px-5 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-          >
-            <span>🖨️</span> Imprimir / Guardar PDF
-          </button>
-          <button
-            onClick={() => router.push('/rector')}
-            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition shadow-2xs cursor-pointer"
-          >
-            ← Volver al Panel Rectoral
-          </button>
-        </div>
-      </div>
-
-      {/* SELECTOR DE TIPO DE DOCUMENTO */}
-      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4 flex-wrap print:hidden">
-        <span className="text-xs font-bold uppercase text-slate-700">Formato del Documento:</span>
-        <div className="flex gap-2.5 flex-wrap">
-          <button
-            onClick={() => setTipoReporteDirectivo('reporte_final')}
-            style={tipoReporteDirectivo === 'reporte_final' ? { backgroundColor: '#4b4c99' } : {}}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
-              tipoReporteDirectivo === 'reporte_final' ? 'text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Libreta de Calificaciones por Estudiante (Oficial)
-          </button>
-          <button
-            onClick={() => setTipoReporteDirectivo('consolidado')}
-            style={tipoReporteDirectivo === 'consolidado' ? { backgroundColor: '#4b4c99' } : {}}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
-              tipoReporteDirectivo === 'consolidado' ? 'text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Consolidado General por Materia
-          </button>
-        </div>
-      </div>
-
-      {/* FILTROS DE BÚSQUEDA DIRECTIVA */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-5 gap-3.5 text-xs print:hidden">
-        <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Año Lectivo (Cualquiera):</label>
-          <select
-            value={anioSeleccionado}
-            onChange={(e) => setAnioSeleccionado(e.target.value)}
-            style={{ color: '#4b4c99' }}
-            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold bg-slate-50 outline-none cursor-pointer shadow-2xs"
-          >
-            {aniosDisponibles.map(anio => (
-              <option key={anio} value={anio} className="text-slate-900 font-bold bg-white">
-                {anio} {anio === anioActivoInstitucion ? '• (Vigente Activo)' : '• (Histórico)'}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Jornada:</label>
-          <select
-            value={jornadaSeleccionada}
-            onChange={(e) => setJornadaSeleccionada(e.target.value)}
-            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs cursor-pointer"
-          >
-            {jornadas.map(j => <option key={j} value={j}>{j}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Grado / Curso:</label>
-          <select
-            value={gradoSeleccionado}
-            onChange={(e) => setGradoSeleccionado(e.target.value)}
-            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs cursor-pointer"
-          >
-            {gradosEGB.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Paralelo:</label>
-          <select
-            value={paraleloSeleccionado}
-            onChange={(e) => setParaleloSeleccionado(e.target.value)}
-            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs cursor-pointer"
-          >
-            {paralelos.map(p => <option key={p} value={p}>Paralelo {p}</option>)}
-          </select>
-        </div>
-
-        {tipoReporteDirectivo === 'consolidado' ? (
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Asignatura:</label>
-            <select
-              value={asignaturaSeleccionada}
-              onChange={(e) => setAsignaturaSeleccionada(e.target.value)}
-              className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs cursor-pointer"
-            >
-              {asignaturasDelCurso.map(mat => <option key={mat} value={mat}>{mat}</option>)}
-            </select>
-          </div>
-        ) : (
-          <div>
-            <label className="block text-[10px] font-bold text-[#4b4c99] uppercase mb-1.5">Estudiante:</label>
-            <select
-              value={estudianteSeleccionadoId}
-              onChange={(e) => setEstudianteSeleccionadoId(e.target.value)}
-              className="w-full p-3 border-2 border-indigo-300 rounded-xl text-xs font-bold text-indigo-950 bg-indigo-50/50 outline-none shadow-2xs cursor-pointer"
-            >
-              {estudiantesCurso.length === 0 ? (
-                <option value="">Sin estudiantes en este curso</option>
-              ) : (
-                estudiantesCurso.map(est => (
-                  <option key={est.id} value={est.id}>
-                    {est.apellidos} {est.nombres}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-        )}
-      </div>
-
-      {tipoReporteDirectivo === 'reporte_final' && (
-        <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-4 print:hidden">
-          <span className="text-xs font-bold uppercase text-slate-700">Periodo de la Libreta:</span>
-          <select
-            value={tipoTrimestreReporte}
-            onChange={(e: any) => setTipoTrimestreReporte(e.target.value)}
-            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.05)', borderColor: 'rgba(75, 76, 153, 0.3)' }}
-            className="p-2.5 border-2 rounded-xl text-xs font-bold outline-none shadow-2xs cursor-pointer"
-          >
-            <option value="Trimestre 1">1er Trimestre</option>
-            <option value="Trimestre 2">2do Trimestre</option>
-            <option value="Trimestre 3">3er Trimestre</option>
-            <option value="Anual">Reporte Final (Anual)</option>
-          </select>
-        </div>
-      )}
-
-      {/* VISTA EN PANTALLA */}
-      {tipoReporteDirectivo === 'consolidado' ? (
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs font-bold uppercase text-slate-900 flex-wrap gap-2">
-            <span>
-              Consolidado General • {anioSeleccionado} • {asignaturaSeleccionada} ({gradoSeleccionado} "{paraleloSeleccionado}" - {jornadaSeleccionada})
-            </span>
-            <span className="text-[10px] text-slate-500">{estudiantesCurso.length} Alumnos</span>
+            <h1 className="text-xl md:text-2xl font-bold text-slate-900 mt-2 tracking-tight">
+              Generador Reportes Académicos
+            </h1>
+            <p className="text-xs text-slate-500 font-semibold mt-0.5">
+              {nombreInstitucion} • Emisión oficial y descarga directa en PDF
+            </p>
           </div>
 
-          <div className="overflow-x-auto p-4">
-            <table className="w-full text-xs text-left border-collapse border border-slate-200">
-              <thead className="bg-slate-50 text-slate-900 font-bold uppercase text-[10px]">
-                <tr>
-                  <th className="p-3 border border-slate-200 text-center w-12">Nro</th>
-                  <th className="p-3 border border-slate-200 w-32">Cédula</th>
-                  <th className="p-3 border border-slate-200">Apellidos y Nombres</th>
-                  <th className="p-3 border border-slate-200 text-center w-28">Promedio Anual</th>
-                  <th className="p-3 border border-slate-200 text-center w-24">Escala</th>
-                  <th className="p-3 border border-slate-200 text-center w-36">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filasHistoricasProcesadas.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-12 text-center text-slate-500 font-medium">
-                      No hay estudiantes registrados en este curso para el periodo {anioSeleccionado}.
-                    </td>
-                  </tr>
-                ) : (
-                  filasHistoricasProcesadas.map(({ estudiante, promedio, cualitativa, esAprobado }, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 border border-slate-200 text-center font-bold text-slate-400">{idx + 1}</td>
-                      <td className="p-3 border border-slate-200 text-slate-600 font-mono">{estudiante?.cedula || 'S/N'}</td>
-                      <td className="p-3 border border-slate-200 font-bold text-slate-800 uppercase">
-                        {estudiante?.apellidos} {estudiante?.nombres}
-                      </td>
-                      <td className="p-3 border border-slate-200 text-center font-bold text-slate-900 bg-slate-50">
-                        {promedio > 0 ? promedio.toFixed(2) : '0.00'}
-                      </td>
-                      <td className="p-3 border border-slate-200 text-center font-semibold text-slate-700">
-                        {promedio > 0 ? cualitativa : '-'}
-                      </td>
-                      <td className={`p-3 border border-slate-200 text-center font-bold text-[10px] uppercase ${
-                        promedio === 0 ? 'bg-slate-50 text-slate-400' :
-                        esAprobado ? 'bg-indigo-50 text-indigo-800' : 'bg-amber-50 text-amber-800'
-                      }`}>
-                        {promedio === 0 ? 'Sin calificación' : esAprobado ? 'Aprobado' : 'Supletorio'}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-4">
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs font-bold uppercase text-slate-900 flex-wrap gap-2">
-            <span>
-              Vista Previa Libreta • {anioSeleccionado} ({tipoTrimestreReporte}) • {estudianteActualObj ? `${estudianteActualObj.apellidos} ${estudianteActualObj.nombres}` : 'Estudiante'}
-            </span>
-            <button
-              onClick={() => setModalImpresionHistorico(true)}
+          <div className="flex gap-2.5 flex-wrap items-center">
+            {/* SELECTOR DE FIRMANTE DINÁMICO */}
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 px-3 py-2 rounded-xl shadow-2xs">
+              <label className="text-[10px] font-bold text-slate-700 uppercase">Firma:</label>
+              <select
+                value={autoridadSeleccionadaIndex}
+                onChange={(e) => setAutoridadSeleccionadaIndex(Number(e.target.value))}
+                className="text-xs font-bold text-slate-900 bg-transparent outline-none cursor-pointer"
+              >
+                {autoridadesDisponibles.map((aut, idx) => (
+                  <option key={idx} value={idx}>{aut.nombre} ({aut.cargo})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* BOTÓN DESCARGA DIRECTA PDF JSW/AUTOTABLE */}
+            <button 
+              onClick={handleDescargarPdfDirecto} 
+              disabled={generandoPdf || !anioLectivoVigente || !estudianteActual}
               style={{ backgroundColor: '#4b4c99' }}
-              className="px-4 py-1.5 text-white font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer"
+              className="px-4 py-2.5 font-bold text-xs text-white rounded-xl shadow-2xs transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
             >
-              Abrir Documento Imprimible
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>{generandoPdf ? 'Generando...' : 'Descargar PDF Oficial'}</span>
+            </button>
+
+            {/* BOTÓN IMPRIMIR / CUADRO NATIVO */}
+            <button 
+              onClick={handlePrint} 
+              disabled={!anioLectivoVigente} 
+              style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
+              className="px-4 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+            >
+              <span></span> Imprimir
             </button>
           </div>
+        </div>
 
-          <div className="overflow-x-auto p-4">
-            <table className="w-full text-xs text-left border-collapse border border-slate-200">
-              <thead className="bg-slate-50 text-slate-900 font-bold uppercase text-[10px]">
-                <tr>
-                  <th className="p-3 border border-slate-200 text-center w-12">Nro</th>
-                  <th className="p-3 border border-slate-200">Asignatura</th>
-                  <th className="p-3 border border-slate-200 text-center w-28">Promedio</th>
-                  <th className="p-3 border border-slate-200 text-center w-24">Escala</th>
-                  <th className="p-3 border border-slate-200 text-center w-36">Estado</th>
+        {/* AVISO SI NO HAY AÑO ACTIVO */}
+        {!anioLectivoVigente && (
+          <div 
+            style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
+            className="border p-4 rounded-2xl text-xs font-bold shadow-2xs print:hidden"
+          >
+            La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
+          </div>
+        )}
+
+        {/* AVISO SI EL PERIODO VIGENTE ESTÁ CERRADO */}
+        {esAnioCerrado && anioLectivoVigente && (
+          <div 
+            style={{ backgroundColor: 'rgba(222, 88, 96, 0.08)', borderColor: 'rgba(222, 88, 96, 0.3)', color: '#9b2c2c' }}
+            className="border p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-2xs print:hidden"
+          >
+            <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. Los reportes están en modo de solo lectura.</span>
+            <span className="bg-rose-200/80 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-900">Periodo Cerrado</span>
+          </div>
+        )}
+
+        {/* FILTROS DE SELECCIÓN */}
+        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-5 gap-3.5 print:hidden">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Jornada</label>
+            <select
+              value={jornadaActual}
+              onChange={(e) => handleJornadaChange(e.target.value)}
+              disabled={jornadasDisponibles.length <= 1}
+              className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none disabled:bg-slate-100 disabled:cursor-not-allowed shadow-2xs"
+            >
+              {jornadasDisponibles.map(j => <option key={j} value={j}>{j}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Grado / Curso</label>
+            <select value={grado} onChange={(e) => handleGradoChange(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs cursor-pointer">
+              {gradosDisponiblesPorJornada.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Paralelo</label>
+            <select value={paralelo} onChange={(e) => setParalelo(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs cursor-pointer">
+              {paralelosDisponibles.map(p => <option key={p} value={p}>Paralelo {p}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Estudiante</label>
+            <select value={estudianteSeleccionadoId} onChange={(e) => setEstudianteSeleccionadoId(e.target.value)} className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs cursor-pointer">
+              {estudiantes.map(est => <option key={est.id} value={est.id}>{est.apellidos} {est.nombres}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-[#4b4c99] uppercase mb-1.5">Tipo de Reporte</label>
+            <select 
+              value={tipoReporte} 
+              onChange={(e: any) => setTipoReporte(e.target.value)} 
+              style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.05)', borderColor: 'rgba(75, 76, 153, 0.3)' }}
+              className="w-full p-2.5 border-2 rounded-xl text-xs font-bold outline-none shadow-2xs cursor-pointer"
+            >
+              <option value="Trimestre 1">Trimestre 1</option>
+              <option value="Trimestre 2">Trimestre 2</option>
+              <option value="Trimestre 3">Trimestre 3</option>
+              <option value="Anual">Reporte Final (Anual)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* DOCUMENTO OFICIAL IDÉNTICO A LA VISTA PREVIA */}
+        <div id="printable-report-area" className="bg-white p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-4 print:border-none print:shadow-none print:p-3 print:w-full text-slate-900">
+          
+          {/* ENCABEZADO CON LOGO INSTITUCIONAL */}
+          <div className="border-b-2 border-slate-900 pb-3 flex justify-between items-center">
+            <div className="flex items-center gap-4 text-left">
+              {institucionLogo ? (
+                <img src={institucionLogo} alt="Logo Institución" className="w-20 h-20 object-contain" />
+              ) : null}
+              <div>
+                <h2 className="text-sm font-black uppercase text-slate-900">{nombreInstitucion}</h2>
+                <p className="text-[11px] font-bold text-slate-700">CÓDIGO AMIE: {codigoAmie} • Azogues - Ecuador</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="whitespace-nowrap text-[10px] font-black uppercase bg-slate-100 px-2.5 py-1 border border-slate-800 rounded text-slate-900 shadow-2xs">
+                RENDIMIENTO ACADÉMICO - {tipoReporte.toUpperCase()} ({anioLectivoVigente || 'Sin año activo'}) {subnivelActual ? `(${subnivelActual.toUpperCase()})` : ''}
+              </span>
+            </div>
+          </div>
+
+          {/* DATOS INFORMATIVOS */}
+          <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs border border-slate-800 p-3 bg-slate-50/60 rounded-xl font-bold text-slate-900">
+            <div><strong>REFERENCIA:</strong> 1</div>
+            <div><strong>PARALELO:</strong> {paralelo}</div>
+            <div><strong>GRADO/CURSO:</strong> {grado}</div>
+            <div><strong>JORNADA:</strong> {jornadaActual}</div>
+            <div><strong>DOCENTE TUTOR:</strong> {nombreDocente}</div>
+            <div><strong>CÉDULA:</strong> {estudianteActual?.cedula || 'S/N'}</div>
+            <div className="col-span-2 uppercase font-black text-slate-950 pt-1 border-t border-slate-300 mt-1">
+              <strong>ESTUDIANTE:</strong> {estudianteActual?.apellidos} {estudianteActual?.nombres}
+            </div>
+          </div>
+
+          {/* TABLA PRINCIPAL DE ASIGNATURAS */}
+          {!anioLectivoVigente ? (
+            <div className="p-12 text-center text-amber-800 font-bold text-xs bg-amber-50 border border-amber-300 rounded-xl">
+              No hay un año lectivo activo configurado en la institución para generar este reporte.
+            </div>
+          ) : tipoReporte !== 'Anual' ? (
+            <table className="w-full text-xs border-collapse border border-slate-800 text-slate-900 font-semibold">
+              <thead>
+                <tr className="bg-slate-200 text-slate-950 font-black uppercase text-[10px] text-center">
+                  <th className="p-2 border border-slate-800 w-1/3">ASIGNATURAS</th>
+                  {esBasicaElemental ? (
+                    <>
+                      <th className="p-2 border border-slate-800">CALIFICACIÓN</th>
+                      <th className="p-2 border border-slate-800">ESCALA</th>
+                      <th className="p-2 border border-slate-800">EQUIVALENCIA</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="p-2 border border-slate-800">EVALUACIÓN FORMATIVA</th>
+                      <th className="p-2 border border-slate-800">70%</th>
+                      <th className="p-2 border border-slate-800">EVALUACIÓN SUMATIVA</th>
+                      <th className="p-2 border border-slate-800">30%</th>
+                      <th className="p-2 border border-slate-800">PROM. TRIMESTRE</th>
+                      <th className="p-2 border border-slate-800">CALIFICACIÓN CUALITATIVA</th>
+                    </>
+                  )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
-                {asignaturasDelCurso.map((asig, idx) => {
-                  const reg = calificacionesEstudianteActual.find(c => {
-                    const dbAsig = (c.asignatura || '').trim().toUpperCase()
-                    const target = asig.trim().toUpperCase()
-                    const matchNombre = dbAsig === target || dbAsig.includes(target) || target.includes(dbAsig)
-                    const matchPeriodo = tipoTrimestreReporte === 'Anual' ? true : (c.trimestre || '').trim().toLowerCase() === tipoTrimestreReporte.trim().toLowerCase()
-                    return matchNombre && matchPeriodo
+              <tbody className="divide-y divide-slate-800">
+                {asignaturasDelCurso.map((asig) => {
+                  const reg = calificacionesEstudiante.find(c => {
+                    const coincideNombre = coincidenMaterias(c.asignatura, asig)
+                    const coincidePeriodo = (c.trimestre || '').trim().toLowerCase() === tipoReporte.trim().toLowerCase()
+                    return coincideMateria(c, asig, coincideNombre) && coincidePeriodo
                   })
 
+                  function coincideMateria(c: any, asig: string, coincideNombre: boolean) {
+                    return coincideNombre
+                  }
+
                   const prom = reg?.promedio_parcial !== undefined && reg?.promedio_parcial !== null ? Number(reg.promedio_parcial) : 0
-                  const cual = obtenerEscalaCuantitativaCualitativa(prom)
-                  const aprobado = prom >= 7
+                  const formativo = reg?.insumo_1 !== undefined && reg?.insumo_1 !== null ? (Number(reg.insumo_1) + Number(reg.insumo_2 || 0)) / 2 : prom
+                  const formativo70 = Number((formativo * 0.70).toFixed(2))
+                  const sumativo = Number(reg?.proyecto_interdisciplinar || reg?.evaluacion_estructurada || prom)
+                  const sumativo30 = Number((sumativo * 0.30).toFixed(2))
 
                   return (
-                    <tr key={asig} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 border border-slate-200 text-center font-bold text-slate-400">{idx + 1}</td>
-                      <td className="p-3 border border-slate-200 font-bold text-slate-800 uppercase">{asig}</td>
-                      <td className="p-3 border border-slate-200 text-center font-bold text-slate-900 bg-slate-50">{prom > 0 ? prom.toFixed(2) : '0.00'}</td>
-                      <td className="p-3 border border-slate-200 text-center font-semibold text-slate-700">{prom > 0 ? cual : '-'}</td>
-                      <td className={`p-3 border border-slate-200 text-center font-bold text-[10px] uppercase ${prom === 0 ? 'text-slate-400' : aprobado ? 'text-indigo-800 bg-indigo-50' : 'text-amber-800 bg-amber-50'}`}>
-                        {prom === 0 ? 'Sin notas' : aprobado ? 'Aprobado' : 'Supletorio'}
-                      </td>
+                    <tr key={asig} className="text-center font-bold text-slate-900">
+                      <td className="p-2 border border-slate-800 text-left font-black">{asig}</td>
+                      {esBasicaElemental ? (
+                        <>
+                          <td className="p-2 border border-slate-800">{prom > 0 ? prom.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-800 font-black">{obtenerEscalaElemental(prom)}</td>
+                          <td className="p-2 border border-slate-800 text-left text-[10px] font-bold">
+                            {prom >= 7 ? 'Destreza o aprendizaje alcanzado' : prom >= 4.01 ? 'Destreza o aprendizaje en proceso de desarrollo' : 'Destreza o aprendizaje iniciado'}
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="p-2 border border-slate-800">{formativo > 0 ? formativo.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-800">{formativo70 > 0 ? formativo70.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-800">{sumativo > 0 ? sumativo.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-800">{sumativo30 > 0 ? sumativo30.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-800 font-black">{prom > 0 ? prom.toFixed(2) : '0.00'}</td>
+                          <td className="p-2 border border-slate-800 font-black text-[#4b4c99]">{obtenerEscalaCuantitativaCualitativa(prom)}</td>
+                        </>
+                      )}
                     </tr>
                   )
                 })}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
+          ) : (
+            <table className="w-full text-xs border-collapse border border-slate-800 text-slate-900 font-semibold">
+              <thead>
+                <tr className="bg-slate-200 text-slate-950 font-black uppercase text-[10px] text-center">
+                  <th className="p-2 border border-slate-800 w-1/3" rowSpan={2}>ASIGNATURAS</th>
+                  <th className="p-2 border border-slate-800" colSpan={esSuperiorOBachillerato ? 6 : 5}>PROMEDIO ANUAL ({anioLectivoVigente})</th>
+                </tr>
+                <tr className="bg-slate-100 text-slate-950 text-[9px] text-center font-black">
+                  <th className="p-1 border border-slate-800">1er TRIM</th>
+                  <th className="p-1 border border-slate-800">2do TRIM</th>
+                  <th className="p-1 border border-slate-800">3er TRIM</th>
+                  {esSuperiorOBachillerato && <th className="p-1 border border-slate-800 bg-amber-50 font-black">SUPLETORIO</th>}
+                  <th className="p-1 border border-slate-800">PROM. ANUAL</th>
+                  <th className="p-1 border border-slate-800">CALIF. CUALITATIVA</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {asignaturasDelCurso.map((asig) => {
+                  const regT1 = calificacionesEstudiante.find(c => coincidenMaterias(c.asignatura, asig) && (c.trimestre || '').includes('Trimestre 1'))
+                  const regT2 = calificacionesEstudiante.find(c => coincidenMaterias(c.asignatura, asig) && (c.trimestre || '').includes('Trimestre 2'))
+                  const regT3 = calificacionesEstudiante.find(c => coincidenMaterias(c.asignatura, asig) && (c.trimestre || '').includes('Trimestre 3'))
+                  const regSupletorio = calificacionesEstudiante.find(c => coincidenMaterias(c.asignatura, asig) && (c.trimestre || '').includes('SUPLETORIO'))
 
-      {/* ================= MODAL / VENTANA DE IMPRESIÓN OFICIAL ================= */}
-      {modalImpresionHistorico && anioSeleccionado && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs z-50 flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static print:inset-auto">
-          <div className="bg-white rounded-3xl max-w-5xl w-full p-8 space-y-6 shadow-xl border border-slate-200 relative print:shadow-none print:p-2 print:max-w-none font-sans">
-            
-            {/* BARRA SUPERIOR DE ACCIÓN */}
-            <div className="flex justify-between items-center border-b border-slate-100 pb-4 print:hidden">
-              <div>
-                <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                  {tipoReporteDirectivo === 'consolidado' ? 'Consolidado General Rectoral' : 'Libreta de Calificaciones Oficial'} • Periodo {anioSeleccionado}
-                </h2>
-                <p className="text-xs text-slate-500 font-medium">Documento oficial adaptado para impresión directa en A4 ({nombrePdfDinamico}).</p>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <button
-                  onClick={handlePrint}
-                  style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
-                  className="px-5 py-2.5 font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span>🖨️</span> Imprimir / Guardar PDF
-                </button>
-                <button
-                  onClick={() => setModalImpresionHistorico(false)}
-                  className="px-4 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-200 transition cursor-pointer"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
+                  const p1 = Number(regT1?.promedio_parcial || 0)
+                  const p2 = Number(regT2?.promedio_parcial || 0)
+                  const p3 = Number(regT3?.promedio_parcial || 0)
+                  
+                  let promAnual = Number(((p1 + p2 + p3) / (p1 && p2 && p3 ? 3 : (p1 || p2 || p3 ? 1 : 1))).toFixed(2))
+                  const supletorioVal = regSupletorio?.examen_supletorio ? Number(regSupletorio.examen_supletorio) : 0
 
-            {/* CONTENIDO DEL REPORTE IMPRIMIBLE */}
-            <div id="printable-report-area" className="space-y-4 print:space-y-2 text-slate-900">
-              
-              {/* ENCABEZADO MEMBRETADO */}
-              <div className="border-b-2 border-slate-900 pb-3 flex justify-between items-center">
-                <div className="flex items-center gap-4 text-left">
-                  {institucionLogo ? (
-                    <img src={institucionLogo} alt="Logo" className="w-20 h-20 object-contain" />
-                  ) : null}
-                  <div>
-                    <h2 className="text-sm font-black uppercase text-slate-900">{nombreInstitucion}</h2>
-                    <p className="text-[11px] font-bold text-slate-700">CÓDIGO AMIE: {codigoAmie} • Azogues - Ecuador</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="whitespace-nowrap text-[10px] font-black uppercase bg-slate-100 px-2.5 py-1 border border-slate-800 rounded text-slate-900 shadow-2xs">
-                    {tipoReporteDirectivo === 'consolidado' 
-                      ? `CONSOLIDADO ACADÉMICO - (${anioSeleccionado})`
-                      : `RENDIMIENTO ACADÉMICO - ${tipoTrimestreReporte.toUpperCase()} (${anioSeleccionado}) ${subnivelActual ? `(${subnivelActual.toUpperCase()})` : ''}`
+                  if (esSuperiorOBachillerato && supletorioVal > 0) {
+                    promAnual = Number(((promAnual + supletorioVal) / 2).toFixed(2))
+                  }
+
+                  return (
+                    <tr key={asig} className="text-center font-bold text-slate-900">
+                      <td className="p-2 border border-slate-800 text-left font-black">{asig}</td>
+                      <td className="p-2 border border-slate-800">{p1 > 0 ? p1.toFixed(2) : '0.00'}</td>
+                      <td className="p-2 border border-slate-800">{p2 > 0 ? p2.toFixed(2) : '0.00'}</td>
+                      <td className="p-2 border border-slate-800">{p3 > 0 ? p3.toFixed(2) : '0.00'}</td>
+                      {esSuperiorOBachillerato && (
+                        <td className="p-2 border border-slate-800 bg-amber-50/50 font-black">{supletorioVal > 0 ? supletorioVal.toFixed(2) : '-'}</td>
+                      )}
+                      <td className="p-2 border border-slate-800 font-black">{promAnual > 0 ? promAnual.toFixed(2) : '0.00'}</td>
+                      <td className="p-2 border border-slate-800 font-black text-[#4b4c99]">{obtenerEscalaCuantitativaCualitativa(promAnual)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+
+          {/* SECCIONES COMPLEMENTARIAS */}
+          <div className="grid grid-cols-2 gap-4 pt-2 font-bold text-slate-900">
+            <div className="border border-slate-800 text-xs rounded-xl overflow-hidden">
+              <div className="bg-slate-200 text-slate-950 p-2 font-black uppercase border-b border-slate-800 text-[10px]">ÁREAS DE DESARROLLO INTEGRAL</div>
+              <div className="p-3 space-y-1.5">
+                <div className="flex justify-between border-b border-slate-200 pb-1">
+                  <span>Acompañamiento Integral:</span>
+                  <span className="font-black">
+                    {tipoReporte !== 'Anual' 
+                      ? (complementariosEstudiante['Acompañamiento integral']?.[tipoReporte === 'Trimestre 1' ? 't1' : tipoReporte === 'Trimestre 2' ? 't2' : 't3'] || '-')
+                      : (
+                          <span>
+                            T1: {complementariosEstudiante['Acompañamiento integral']?.t1 || '-'} | {' '}
+                            T2: {complementariosEstudiante['Acompañamiento integral']?.t2 || '-'} | {' '}
+                            T3: {complementariosEstudiante['Acompañamiento integral']?.t3 || '-'}
+                          </span>
+                        )
                     }
                   </span>
                 </div>
-              </div>
-
-              {/* DATOS INFORMATIVOS */}
-              {tipoReporteDirectivo === 'consolidado' ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-1 text-xs border border-slate-800 p-3 bg-slate-50/60 rounded-xl font-bold text-slate-900">
-                  <div><strong>ASIGNATURA:</strong> {asignaturaSeleccionada}</div>
-                  <div><strong>PARALELO:</strong> {paraleloSeleccionado}</div>
-                  <div><strong>GRADO/CURSO:</strong> {gradoSeleccionado}</div>
-                  <div><strong>JORNADA:</strong> {jornadaSeleccionada}</div>
-                  <div className="col-span-2"><strong>AUTORIDAD:</strong> {nombreAutoridad} ({cargoAutoridad})</div>
-                  <div className="col-span-2"><strong>AÑO LECTIVO:</strong> {anioSeleccionado}</div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs border border-slate-800 p-3 bg-slate-50/60 rounded-xl font-bold text-slate-900">
-                  <div><strong>REFERENCIA:</strong> RECTORAL</div>
-                  <div><strong>PARALELO:</strong> {paraleloSeleccionado}</div>
-                  <div><strong>GRADO/CURSO:</strong> {gradoSeleccionado}</div>
-                  <div><strong>JORNADA:</strong> {jornadaSeleccionada}</div>
-                  <div><strong>AUTORIDAD:</strong> {nombreAutoridad}</div>
-                  <div><strong>CÉDULA:</strong> {estudianteActualObj?.cedula || 'S/N'}</div>
-                  <div className="col-span-2 uppercase font-black text-slate-950 pt-1 border-t border-slate-300 mt-1">
-                    <strong>ESTUDIANTE:</strong> {estudianteActualObj?.apellidos} {estudianteActualObj?.nombres}
-                  </div>
-                </div>
-              )}
-
-              {/* TABLAS SEGÚN FORMATO */}
-              {tipoReporteDirectivo === 'consolidado' ? (
-                <table className="w-full text-xs border-collapse border border-slate-800 text-slate-900 font-semibold">
-                  <thead>
-                    <tr className="bg-slate-200 text-slate-950 font-black uppercase text-[10px] text-center">
-                      <th className="p-2 border border-slate-800 w-12">Nro</th>
-                      <th className="p-2 border border-slate-800 w-28">Cédula</th>
-                      <th className="p-2 border border-slate-800 text-left">Apellidos y Nombres</th>
-                      <th className="p-2 border border-slate-800 w-24">PROM. ANUAL</th>
-                      <th className="p-2 border border-slate-800 w-20">ESCALA</th>
-                      <th className="p-2 border border-slate-800 w-32">OBSERVACIÓN</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {filasHistoricasProcesadas.map(({ estudiante, promedio, cualitativa, esAprobado }, idx) => (
-                      <tr key={idx} className="text-center font-bold">
-                        <td className="p-2 border border-slate-800 text-slate-500">{idx + 1}</td>
-                        <td className="p-2 border border-slate-800 font-mono text-[11px]">{estudiante?.cedula || 'S/N'}</td>
-                        <td className="p-2 border border-slate-800 text-left font-bold uppercase">{estudiante?.apellidos} {estudiante?.nombres}</td>
-                        <td className="p-2 border border-slate-800 font-bold">{promedio > 0 ? promedio.toFixed(2) : '0.00'}</td>
-                        <td className="p-2 border border-slate-800">{promedio > 0 ? cualitativa : '-'}</td>
-                        <td className={`p-2 border border-slate-800 font-bold text-[10px] uppercase ${esAprobado ? 'text-indigo-900 bg-indigo-50' : 'text-amber-800 bg-amber-50'}`}>
-                          {promedio === 0 ? 'Sin notas' : esAprobado ? 'Aprobado' : 'Supletorio'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : tipoTrimestreReporte !== 'Anual' ? (
-                /* LIBRETA OFICIAL TRIMESTRAL */
-                <table className="w-full text-xs border-collapse border border-slate-800 text-slate-900 font-semibold">
-                  <thead>
-                    <tr className="bg-slate-200 text-slate-950 font-black uppercase text-[10px] text-center">
-                      <th className="p-2 border border-slate-800 w-1/3">ASIGNATURAS</th>
-                      {esBasicaElemental ? (
-                        <>
-                          <th className="p-2 border border-slate-800">CALIFICACIÓN</th>
-                          <th className="p-2 border border-slate-800">ESCALA</th>
-                          <th className="p-2 border border-slate-800">EQUIVALENCIA</th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="p-2 border border-slate-800">EVALUACIÓN FORMATIVA</th>
-                          <th className="p-2 border border-slate-800">70%</th>
-                          <th className="p-2 border border-slate-800">EVALUACIÓN SUMATIVA</th>
-                          <th className="p-2 border border-slate-800">30%</th>
-                          <th className="p-2 border border-slate-800">PROM. TRIMESTRE</th>
-                          <th className="p-2 border border-slate-800">CALIFICACIÓN CUALITATIVA</th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {asignaturasDelCurso.map((asig) => {
-                      const reg = calificacionesEstudianteActual.find(c => {
-                        const dbAsig = (c.asignatura || '').trim().toUpperCase()
-                        const targetAsig = asig.trim().toUpperCase()
-                        const coincideMateria = dbAsig === targetAsig || dbAsig.includes(targetAsig) || targetAsig.includes(dbAsig)
-                        const coincideTrimestre = (c.trimestre || '').trim().toLowerCase() === tipoTrimestreReporte.trim().toLowerCase()
-                        return coincideMateria && coincideTrimestre
-                      })
-
-                      const prom = reg?.promedio_parcial !== undefined && reg?.promedio_parcial !== null ? Number(reg.promedio_parcial) : 0
-                      const formativo = reg?.insumo_1 !== undefined && reg?.insumo_1 !== null ? (Number(reg.insumo_1) + Number(reg.insumo_2 || 0)) / 2 : prom
-                      const formativo70 = Number((formativo * 0.70).toFixed(2))
-                      const sumativo = Number(reg?.proyecto_interdisciplinar || reg?.evaluacion_estructurada || prom)
-                      const sumativo30 = Number((sumativo * 0.30).toFixed(2))
-
-                      return (
-                        <tr key={asig} className="text-center font-bold text-slate-900">
-                          <td className="p-2 border border-slate-800 text-left font-black">{asig}</td>
-                          {esBasicaElemental ? (
-                            <>
-                              <td className="p-2 border border-slate-800">{prom > 0 ? prom.toFixed(2) : '0.00'}</td>
-                              <td className="p-2 border border-slate-800 font-black">{obtenerEscalaElemental(prom)}</td>
-                              <td className="p-2 border border-slate-800 text-left text-[10px] font-bold">
-                                {prom >= 7 ? 'Destreza o aprendizaje alcanzado' : prom >= 4.01 ? 'Destreza o aprendizaje en proceso de desarrollo' : 'Destreza o aprendizaje iniciado'}
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="p-2 border border-slate-800">{formativo > 0 ? formativo.toFixed(2) : '0.00'}</td>
-                              <td className="p-2 border border-slate-800">{formativo70 > 0 ? formativo70.toFixed(2) : '0.00'}</td>
-                              <td className="p-2 border border-slate-800">{sumativo > 0 ? sumativo.toFixed(2) : '0.00'}</td>
-                              <td className="p-2 border border-slate-800">{sumativo30 > 0 ? sumativo30.toFixed(2) : '0.00'}</td>
-                              <td className="p-2 border border-slate-800 font-black">{prom > 0 ? prom.toFixed(2) : '0.00'}</td>
-                              <td className="p-2 border border-slate-800 font-black text-[#4b4c99]">{obtenerEscalaCuantitativaCualitativa(prom)}</td>
-                            </>
-                          )}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              ) : (
-                /* LIBRETA OFICIAL ANUAL CON SUPLETORIOS */
-                <table className="w-full text-xs border-collapse border border-slate-800 text-slate-900 font-semibold">
-                  <thead>
-                    <tr className="bg-slate-200 text-slate-950 font-black uppercase text-[10px] text-center">
-                      <th className="p-2 border border-slate-800 w-1/3" rowSpan={2}>ASIGNATURAS</th>
-                      <th className="p-2 border border-slate-800" colSpan={esSuperiorOBachillerato ? 6 : 5}>PROMEDIO ANUAL ({anioSeleccionado})</th>
-                    </tr>
-                    <tr className="bg-slate-100 text-slate-950 text-[9px] text-center font-black">
-                      <th className="p-1 border border-slate-800">1er TRIM</th>
-                      <th className="p-1 border border-slate-800">2do TRIM</th>
-                      <th className="p-1 border border-slate-800">3er TRIM</th>
-                      {esSuperiorOBachillerato && <th className="p-1 border border-slate-800 bg-amber-50 font-black">SUPLETORIO</th>}
-                      <th className="p-1 border border-slate-800">PROM. ANUAL</th>
-                      <th className="p-1 border border-slate-800">CALIF. CUALITATIVA</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {asignaturasDelCurso.map((asig) => {
-                      const regT1 = calificacionesEstudianteActual.find(c => (c.asignatura || '').trim().toUpperCase().includes(asig) && (c.trimestre || '').includes('Trimestre 1'))
-                      const regT2 = calificacionesEstudianteActual.find(c => (c.asignatura || '').trim().toUpperCase().includes(asig) && (c.trimestre || '').includes('Trimestre 2'))
-                      const regT3 = calificacionesEstudianteActual.find(c => (c.asignatura || '').trim().toUpperCase().includes(asig) && (c.trimestre || '').includes('Trimestre 3'))
-                      const regSupletorio = calificacionesEstudianteActual.find(c => (c.asignatura || '').trim().toUpperCase().includes(asig) && (c.trimestre || '').includes('SUPLETORIO'))
-
-                      const p1 = Number(regT1?.promedio_parcial || 0)
-                      const p2 = Number(regT2?.promedio_parcial || 0)
-                      const p3 = Number(regT3?.promedio_parcial || 0)
-                      
-                      let promAnual = Number(((p1 + p2 + p3) / (p1 && p2 && p3 ? 3 : (p1 || p2 || p3 ? 1 : 1))).toFixed(2))
-                      const supletorioVal = regSupletorio?.examen_supletorio ? Number(regSupletorio.examen_supletorio) : 0
-
-                      if (esSuperiorOBachillerato && supletorioVal > 0) {
-                        promAnual = Number(((promAnual + supletorioVal) / 2).toFixed(2))
-                      }
-
-                      return (
-                        <tr key={asig} className="text-center font-bold text-slate-900">
-                          <td className="p-2 border border-slate-800 text-left font-black">{asig}</td>
-                          <td className="p-2 border border-slate-800">{p1 > 0 ? p1.toFixed(2) : '0.00'}</td>
-                          <td className="p-2 border border-slate-800">{p2 > 0 ? p2.toFixed(2) : '0.00'}</td>
-                          <td className="p-2 border border-slate-800">{p3 > 0 ? p3.toFixed(2) : '0.00'}</td>
-                          {esSuperiorOBachillerato && (
-                            <td className="p-2 border border-slate-800 bg-amber-50/50 font-black">{supletorioVal > 0 ? supletorioVal.toFixed(2) : '-'}</td>
-                          )}
-                          <td className="p-2 border border-slate-800 font-black">{promAnual > 0 ? promAnual.toFixed(2) : '0.00'}</td>
-                          <td className="p-2 border border-slate-800 font-black text-[#4b4c99]">{obtenerEscalaCuantitativaCualitativa(promAnual)}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              )}
-
-              {/* SECCIÓN DE ACOMPAÑAMIENTO INTEGRAL Y RECOMENDACIÓN (SOLO LIBRETA INDIVIDUAL) */}
-              {tipoReporteDirectivo === 'reporte_final' && (
-                <div className="grid grid-cols-2 gap-4 pt-2 font-bold text-slate-900">
-                  <div className="border border-slate-800 text-xs rounded-xl overflow-hidden">
-                    <div className="bg-slate-200 text-slate-950 p-2 font-black uppercase border-b border-slate-800 text-[10px]">ÁREAS DE DESARROLLO INTEGRAL</div>
-                    <div className="p-3 space-y-1.5">
-                      <div className="flex justify-between border-b border-slate-200 pb-1">
-                        <span>Acompañamiento Integral:</span>
-                        <span className="font-black">
-                          {tipoTrimestreReporte !== 'Anual' 
-                            ? (complementariosEstudiante['Acompañamiento integral']?.[tipoTrimestreReporte === 'Trimestre 1' ? 't1' : tipoTrimestreReporte === 'Trimestre 2' ? 't2' : 't3'] || '-')
-                            : (
-                                <span>
-                                  T1: {complementariosEstudiante['Acompañamiento integral']?.t1 || '-'} | {' '}
-                                  T2: {complementariosEstudiante['Acompañamiento integral']?.t2 || '-'} | {' '}
-                                  T3: {complementariosEstudiante['Acompañamiento integral']?.t3 || '-'}
-                                </span>
-                              )
-                          }
-                        </span>
-                      </div>
-                      <div className="flex justify-between border-b border-slate-200 pb-1">
-                        <span>Animación a la lectura:</span>
-                        <span className="font-black">
-                          {tipoTrimestreReporte !== 'Anual' 
-                            ? (complementariosEstudiante['Animación a la lectura']?.[tipoTrimestreReporte === 'Trimestre 1' ? 't1' : tipoTrimestreReporte === 'Trimestre 2' ? 't2' : 't3'] || '-')
-                            : (
-                                <span>
-                                  T1: {complementariosEstudiante['Animación a la lectura']?.t1 || '-'} | {' '}
-                                  T2: {complementariosEstudiante['Animación a la lectura']?.t2 || '-'} | {' '}
-                                  T3: {complementariosEstudiante['Animación a la lectura']?.t3 || '-'}
-                                </span>
-                              )
-                          }
-                        </span>
-                      </div>
-                      {esSuperiorOBachillerato && (
-                        <div className="flex justify-between">
-                          <span>Orientación Vocacional:</span>
-                          <span className="font-black">
-                            {tipoTrimestreReporte !== 'Anual' 
-                              ? (complementariosEstudiante['Orientación vocacional']?.[tipoTrimestreReporte === 'Trimestre 1' ? 't1' : tipoTrimestreReporte === 'Trimestre 2' ? 't2' : 't3'] || '-')
-                              : (
-                                  <span>
-                                    T1: {complementariosEstudiante['Orientación vocacional']?.t1 || '-'} | {' '}
-                                    T2: {complementariosEstudiante['Orientación vocacional']?.t2 || '-'} | {' '}
-                                    T3: {complementariosEstudiante['Orientación vocacional']?.t3 || '-'}
-                                  </span>
-                                )
-                            }
+                <div className="flex justify-between border-b border-slate-200 pb-1">
+                  <span>Animación a la lectura:</span>
+                  <span className="font-black">
+                    {tipoReporte !== 'Anual' 
+                      ? (complementariosEstudiante['Animación a la lectura']?.[tipoReporte === 'Trimestre 1' ? 't1' : tipoReporte === 'Trimestre 2' ? 't2' : 't3'] || '-')
+                      : (
+                          <span>
+                            T1: {complementariosEstudiante['Animación a la lectura']?.t1 || '-'} | {' '}
+                            T2: {complementariosEstudiante['Animación a la lectura']?.t2 || '-'} | {' '}
+                            T3: {complementariosEstudiante['Animación a la lectura']?.t3 || '-'}
                           </span>
-                        </div>
-                      )}
-                    </div>
+                        )
+                    }
+                  </span>
+                </div>
+                {esSuperiorOBachillerato && (
+                  <div className="flex justify-between">
+                    <span>Orientación Vocacional:</span>
+                    <span className="font-black">
+                      {tipoReporte !== 'Anual' 
+                        ? (complementariosEstudiante['Orientación vocacional']?.[tipoReporte === 'Trimestre 1' ? 't1' : tipoReporte === 'Trimestre 2' ? 't2' : 't3'] || '-')
+                        : (
+                            <span>
+                              T1: {complementariosEstudiante['Orientación vocacional']?.t1 || '-'} | {' '}
+                              T2: {complementariosEstudiante['Orientación vocacional']?.t2 || '-'} | {' '}
+                              T3: {complementariosEstudiante['Orientación vocacional']?.t3 || '-'}
+                            </span>
+                          )
+                      }
+                    </span>
                   </div>
-
-                  <div className="border border-slate-800 text-xs rounded-xl overflow-hidden">
-                    <div className="bg-slate-200 text-slate-950 p-2 font-black uppercase border-b border-slate-800 text-[10px]">RECOMENDACIONES</div>
-                    <div className="p-3 space-y-2">
-                      <div className="text-[11px] pt-1">
-                        <strong>Recomendación:</strong>{' '}
-                        <span className="italic font-semibold text-slate-700">
-                          {obtenerRecomendacionTexto()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* FIRMAS DE RESPONSABILIDAD INSTITUCIONAL */}
-              <div className="grid grid-cols-2 pt-12 text-center text-xs text-slate-900 font-bold">
-                <div className="space-y-1">
-                  <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-black uppercase">SECRETARÍA GENERAL</div>
-                  <div className="font-black text-[11px]">SECRETARIO(A)</div>
-                </div>
-                <div className="space-y-1">
-                  <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-black uppercase">{nombreAutoridad}</div>
-                  <div className="font-black text-[11px]">{cargoAutoridad}</div>
-                </div>
+                )}
               </div>
-
             </div>
 
+            <div className="border border-slate-800 text-xs rounded-xl overflow-hidden">
+              <div className="bg-slate-200 text-slate-950 p-2 font-black uppercase border-b border-slate-800 text-[10px]">RECOMENDACIONES</div>
+              <div className="p-3 space-y-2">
+                <div className="text-[11px] pt-1">
+                  <strong>Recomendación:</strong>{' '}
+                  <span className="italic font-semibold text-slate-700">
+                    {obtenerRecomendacionTexto()}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
 
+          {/* FIRMAS DE RESPONSABILIDAD */}
+          <div className="grid grid-cols-2 pt-12 text-center text-xs text-slate-900 font-bold">
+            <div className="space-y-1">
+              <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-black">{nombreDocente}</div>
+              <div className="font-black">DOCENTE TUTOR</div>
+            </div>
+            <div className="space-y-1">
+              <div className="border-t-2 border-slate-900 w-64 mx-auto pt-1 font-black">{autoridadActual.nombre}</div>
+              <div className="font-black">{autoridadActual.cargo}</div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
     </div>
   )
 }

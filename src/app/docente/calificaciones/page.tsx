@@ -44,10 +44,10 @@ export default function RegistroCalificacionesPage() {
   const [nuevaDesc, setNuevaDesc] = useState('')
 
   const [estudiantes, setEstudiantes] = useState<any[]>([])
-  const [notasMap, setNotasMap] = useState<{ [estudianteId: string]: { [colId: string]: number } }>({})
+  const [notasMap, setNotasMap] = useState<{ [estudianteId: string]: { [insumoId: string]: number } }>({})
+  const [sumativasMap, setSumativasMap] = useState<{ [estudianteId: string]: { refuerzo_pedagogico: number; proyecto_interdisciplinar: number; evaluacion_estructurada: number } }>({})
   const [nombresDocente, setNombresDocente] = useState('')
 
-  // Carga inicial sincronizada con periodos_disponibles y anio_lectivo_activo de la institución
   useEffect(() => {
     async function init() {
       try {
@@ -107,17 +107,10 @@ export default function RegistroCalificacionesPage() {
             setParalelo(asignacionesData[0].paralelo)
             setAsignatura(asignacionesData[0].asignatura)
             detectarSubnivel(asignacionesData[0].grado_curso)
-          } else {
-            setMisAsignaciones([])
-            setGrado('')
-            setParalelo('')
-            setAsignatura('')
           }
-        } else {
-          setMisAsignaciones([])
         }
       } catch (err) {
-        console.error('Error al iniciar perfil:', err)
+        console.error('Error al iniciar:', err)
       } finally {
         setCargando(false)
       }
@@ -125,12 +118,10 @@ export default function RegistroCalificacionesPage() {
     init()
   }, [router])
 
-  // Filtrado de materias oficiales según el grado/curso seleccionado
   const materiasFiltradas = materiasOficiales
     .filter(m => !m.curso_nivel || m.curso_nivel.includes(grado.split(' ')[0]))
     .map(m => m.nombre)
 
-  // Autodetectar subnivel según el grado seleccionado
   const detectarSubnivel = (gradoStr: string) => {
     if (['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB'].includes(gradoStr)) {
       setSubnivel('Básica Elemental')
@@ -143,7 +134,6 @@ export default function RegistroCalificacionesPage() {
     }
   }
 
-  // Manejar cambio de Jornada
   const handleJornadaChange = (nuevaJornada: string) => {
     setJornadaActual(nuevaJornada)
     const asigJornada = misAsignaciones.filter(a => (a.jornada || 'MATUTINA') === nuevaJornada)
@@ -155,7 +145,6 @@ export default function RegistroCalificacionesPage() {
     }
   }
 
-  // Manejar cambio de Grado desde las asignaciones
   const handleGradoChange = (nuevoGrado: string) => {
     setGrado(nuevoGrado)
     detectarSubnivel(nuevoGrado)
@@ -167,118 +156,149 @@ export default function RegistroCalificacionesPage() {
     }
   }
 
-  // Carga de Estudiantes, Insumos y Notas filtrados estrictamente por grado, paralelo, jornada y año vigente
   useEffect(() => {
-    async function cargarEstructuraYNotas() {
+    async function cargarDatosCompletos() {
       if (!institucionId || !docenteId || !grado || !paralelo || !asignatura || !anioLectivoVigente) return
 
       try {
-        let query = supabase
+        const { data: estDataRaw } = await supabase
           .from('estudiantes')
           .select('*')
           .eq('institucion_id', institucionId)
           .eq('grado_curso', grado)
           .eq('paralelo', paralelo)
           .eq('estado', 'activo')
-
-        const { data: estDataRaw } = await query.order('apellidos', { ascending: true })
+          .order('apellidos', { ascending: true })
 
         const estData = (estDataRaw || []).filter(e => {
           const jEst = e.jornada ? e.jornada.trim().toUpperCase() : 'MATUTINA'
           return jEst === jornadaActual.trim().toUpperCase()
         })
 
-        if (estData) {
-          setEstudiantes(estData)
-          const ids = estData.map((e) => e.id)
+        setEstudiantes(estData)
+        const idsEstudiantes = estData.map(e => e.id)
 
-          // Carga estricta de insumos considerando GRADO, PARALELO y JORNADA
-          const { data: insumosData } = await supabase
-            .from('configuracion_insumos')
+        const { data: insumosData } = await supabase
+          .from('configuracion_insumos')
+          .select('*')
+          .eq('docente_id', docenteId)
+          .eq('asignatura', asignatura.trim())
+          .eq('trimestre', trimestre)
+          .eq('grado_curso', grado)
+          .eq('paralelo', paralelo)
+          .eq('jornada', jornadaActual)
+          .eq('anio_lectivo', anioLectivoVigente)
+          .order('created_at', { ascending: true })
+
+        const cols: ColumnaInsumo[] = (insumosData || []).map((item, idx) => ({
+          id: item.id,
+          categoria: item.categoria as CategoriaInsumo,
+          numero: idx + 1,
+          descripcion: item.descripcion
+        }))
+        setColumnasInsumos(cols)
+
+        const insumosIds = cols.map(c => c.id)
+
+        let detallesNotas: any[] = []
+        if (insumosIds.length > 0 && idsEstudiantes.length > 0) {
+          const { data: detData } = await supabase
+            .from('calificaciones_detalle')
             .select('*')
-            .eq('docente_id', docenteId)
-            .eq('asignatura', asignatura.trim())
-            .eq('trimestre', trimestre)
-            .eq('grado_curso', grado)
-            .eq('paralelo', paralelo)
-            .eq('jornada', jornadaActual)
-            .eq('anio_lectivo', anioLectivoVigente)
-            .order('numero', { ascending: true })
+            .in('configuracion_insumo_id', insumosIds)
+            .in('estudiante_id', idsEstudiantes)
 
-          const colsCargadas: ColumnaInsumo[] = (insumosData || []).map((item) => ({
-            id: item.id,
-            categoria: item.categoria as CategoriaInsumo,
-            numero: item.numero,
-            descripcion: item.descripcion
-          }))
-          setColumnasInsumos(colsCargadas)
+          detallesNotas = detData || []
+        }
 
-          const { data: calData } = await supabase
+        let calResumen: any[] = []
+        if (idsEstudiantes.length > 0) {
+          const { data: resData } = await supabase
             .from('calificaciones')
             .select('*')
-            .in('estudiante_id', ids.length > 0 ? ids : ['none'])
+            .in('estudiante_id', idsEstudiantes)
             .eq('docente_id', docenteId)
             .eq('asignatura', asignatura.trim())
             .eq('trimestre', trimestre)
             .eq('anio_lectivo', anioLectivoVigente)
 
-          const mapa: any = {}
-          estData.forEach((est) => {
-            const cal = calData?.find((c) => c.estudiante_id === est.id)
-            mapa[est.id] = {
-              refuerzo_pedagogico: cal?.refuerzo_pedagogico || 0,
-              proyecto_interdisciplinar: cal?.proyecto_interdisciplinar || 0,
-              evaluacion_estructurada: cal?.evaluacion_estructurada || 0,
-            }
-            colsCargadas.forEach((col, index) => {
-              const valorCol = cal ? (cal[`insumo_${index + 1}` as keyof typeof cal] || 0) : 0
-              mapa[est.id][col.id] = valorCol
-            })
-          })
-          setNotasMap(mapa)
+          calResumen = resData || []
         }
+
+        const mapaNotas: { [estId: string]: { [insId: string]: number } } = {}
+        const mapaSum: { [estId: string]: any } = {}
+
+        estData.forEach(est => {
+          mapaNotas[est.id] = {}
+          cols.forEach(c => {
+            const registroNota = detallesNotas.find(d => d.estudiante_id === est.id && d.configuracion_insumo_id === c.id)
+            mapaNotas[est.id][c.id] = registroNota ? Number(registroNota.nota) : 0
+          })
+
+          const regSum = calResumen.find(r => r.estudiante_id === est.id)
+          mapaSum[est.id] = {
+            refuerzo_pedagogico: regSum ? Number(regSum.refuerzo_pedagogico || 0) : 0,
+            proyecto_interdisciplinar: regSum ? Number(regSum.proyecto_interdisciplinar || 0) : 0,
+            evaluacion_estructurada: regSum ? Number(regSum.evaluacion_estructurada || 0) : 0
+          }
+        })
+
+        setNotasMap(mapaNotas)
+        setSumativasMap(mapaSum)
+
       } catch (err) {
-        console.error('Error al sincronizar datos:', err)
+        console.error('Error al cargar datos de calificaciones:', err)
       }
     }
 
-    cargarEstructuraYNotas()
+    cargarDatosCompletos()
   }, [institucionId, docenteId, grado, paralelo, asignatura, trimestre, jornadaActual, anioLectivoVigente])
 
   const esAnioCerrado = anosCerrados.includes(anioLectivoVigente)
 
-  const handleNotaChange = (estudianteId: string, colId: string, valor: string) => {
+  const handleNotaDetalleChange = (estudianteId: string, insumoId: string, valor: string) => {
     if (esAnioCerrado) return
     const num = Math.min(10, Math.max(0, parseFloat(valor) || 0))
-    setNotasMap((prev) => ({
+    setNotasMap(prev => ({
       ...prev,
       [estudianteId]: {
-        ...prev[estudianteId],
-        [colId]: num
+        ...(prev[estudianteId] || {}),
+        [insumoId]: num
+      }
+    }))
+  }
+
+  const handleNotaSumativaChange = (estudianteId: string, campo: 'refuerzo_pedagogico' | 'proyecto_interdisciplinar' | 'evaluacion_estructurada', valor: string) => {
+    if (esAnioCerrado) return
+    const num = Math.min(10, Math.max(0, parseFloat(valor) || 0))
+    setSumativasMap(prev => ({
+      ...prev,
+      [estudianteId]: {
+        ...(prev[estudianteId] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }),
+        [campo]: num
       }
     }))
   }
 
   const handleAgregarColumna = async () => {
     if (esAnioCerrado) {
-      alert('🔒 Este año lectivo está cerrado. No se pueden crear nuevos insumos.')
+      alert('Este año lectivo está cerrado.')
       return
     }
     if (!nuevaDesc.trim()) return
 
-    const insumosMismaCat = columnasInsumos.filter((c) => c.categoria === nuevaCat)
-    const proximoNumero = insumosMismaCat.length + 1
-    const nuevoId = `col_${Date.now()}`
+    const nuevoId = `ins_${Date.now()}`
+    const insumosMismaCat = columnasInsumos.filter(c => c.categoria === nuevaCat)
+    const nuevoNumero = insumosMismaCat.length + 1
 
     const nuevaCol: ColumnaInsumo = {
       id: nuevoId,
       categoria: nuevaCat,
-      numero: proximoNumero,
+      numero: nuevoNumero,
       descripcion: nuevaDesc.trim()
     }
 
     try {
-      // Guardar el insumo atado rigurosamente a la jornada, grado y paralelo actual
       const { error } = await supabase.from('configuracion_insumos').insert({
         id: nuevoId,
         docente_id: docenteId,
@@ -289,39 +309,48 @@ export default function RegistroCalificacionesPage() {
         paralelo,
         jornada: jornadaActual,
         categoria: nuevaCat,
-        numero: proximoNumero,
+        numero: nuevoNumero,
         descripcion: nuevaDesc.trim(),
         anio_lectivo: anioLectivoVigente
       })
 
       if (error) throw error
 
-      setColumnasInsumos((prev) => [...prev, nuevaCol])
+      setColumnasInsumos(prev => [...prev, nuevaCol])
       setNuevaDesc('')
       setMostrarModalNuevaColumna(false)
     } catch (err: any) {
-      alert('Error al guardar el nuevo insumo: ' + err.message)
+      alert('Error al crear insumo: ' + err.message)
     }
   }
 
-  const handleEliminarColumna = async (idCol: string) => {
+  const handleEliminarColumna = async (insumoId: string) => {
     if (esAnioCerrado) {
-      alert('🔒 Este año lectivo está cerrado. No se pueden modificar registros.')
+      alert('Periodo cerrado.')
       return
     }
-    if (!confirm('¿Estás seguro de eliminar este insumo y sus notas asociadas en esta columna?')) return
+    if (!confirm('¿Eliminar este insumo y todas las notas asociadas a él?')) return
 
     try {
-      const { error } = await supabase.from('configuracion_insumos').delete().eq('id', idCol)
+      const { error } = await supabase.from('configuracion_insumos').delete().eq('id', insumoId)
       if (error) throw error
 
-      setColumnasInsumos((prev) => prev.filter((c) => c.id !== idCol))
+      setColumnasInsumos(prev => prev.filter(c => c.id !== insumoId))
+      
+      setNotasMap(prev => {
+        const copia = { ...prev }
+        Object.keys(copia).forEach(estId => {
+          if (copia[estId]) delete copia[estId][insumoId]
+        })
+        return copia
+      })
     } catch (err: any) {
       alert('Error al eliminar: ' + err.message)
     }
   }
 
   const ordenCategorias: CategoriaInsumo[] = ['Deberes / Indiv.', 'Tareas en Clase', 'Actividades Grupales', 'Lecciones']
+
   const columnasOrdenadas = [...columnasInsumos].sort((a, b) => {
     const idxA = ordenCategorias.indexOf(a.categoria)
     const idxB = ordenCategorias.indexOf(b.categoria)
@@ -329,50 +358,67 @@ export default function RegistroCalificacionesPage() {
     return a.numero - b.numero
   })
 
-  const gruposHeader = ordenCategorias.map((cat) => {
-    const cols = columnasOrdenadas.filter((c) => c.categoria === cat)
+  const gruposHeader = ordenCategorias.map(cat => {
+    const cols = columnasOrdenadas.filter(c => c.categoria === cat)
     return {
       categoria: cat,
       count: cols.length,
       cols
     }
-  }).filter((g) => g.count > 0)
+  }).filter(g => g.count > 0)
 
-  const calcularNotaFinal = (n: any) => {
-    if (!n) return 0
-    const notasInsumosDinamicos: number[] = []
-    columnasInsumos.forEach((col) => {
-      const val = n[col.id] || 0
-      if (val > 0) notasInsumosDinamicos.push(val)
-    })
+  // =========================================================================
+  // CALCULO DE PROMEDIO: TAREAS NO PRESENTADAS / EN BLANCO SE PROMEDIAN CON 0.00
+  // =========================================================================
+  const calcularNotaFinal = (estId: string) => {
+    const notasIns = notasMap[estId] || {}
+    const sum = sumativasMap[estId] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
 
-    if (n.refuerzo_pedagogico > 0) notasInsumosDinamicos.push(n.refuerzo_pedagogico)
+    // 1. Verificar si el alumno tiene al menos una actividad calificada (> 0)
+    const tieneAlgunaNotaInsumos = columnasInsumos.some(col => (notasIns[col.id] || 0) > 0)
+    const tieneAlgunaNotaSumativa = (sum.refuerzo_pedagogico > 0) || (sum.proyecto_interdisciplinar > 0) || (sum.evaluacion_estructurada > 0)
 
-    if (subnivel === 'Básica Elemental') {
-      const todasLasNotas = [...notasInsumosDinamicos]
-      if (n.proyecto_interdisciplinar > 0) todasLasNotas.push(n.proyecto_interdisciplinar)
-      if (n.evaluacion_estructurada > 0) todasLasNotas.push(n.evaluacion_estructurada)
-
-      if (todasLasNotas.length === 0) return 0
-      const sumaTotal = todasLasNotas.reduce((a, b) => a + b, 0)
-      return parseFloat((sumaTotal / todasLasNotas.length).toFixed(2))
+    // Si todas las celdas del estudiante están vacías en el trimestre, se mantiene en 0.00
+    if (!tieneAlgunaNotaInsumos && !tieneAlgunaNotaSumativa) {
+      return 0
     }
 
-    const promFormativo = notasInsumosDinamicos.length > 0
-      ? notasInsumosDinamicos.reduce((a, b) => a + b, 0) / notasInsumosDinamicos.length
+    // 2. Extraer notas de todos los insumos creados: los casilleros en blanco computan con 0.00
+    let valoresInsumos: number[] = columnasInsumos.map(col => Number(notasIns[col.id] || 0))
+
+    // 3. Aplicar Refuerzo Pedagógico (si existe, reemplaza la nota formativa más baja)
+    if (sum.refuerzo_pedagogico > 0 && valoresInsumos.length > 0) {
+      const minNota = Math.min(...valoresInsumos)
+      if (sum.refuerzo_pedagogico > minNota) {
+        const minIndex = valoresInsumos.indexOf(minNota)
+        valoresInsumos[minIndex] = sum.refuerzo_pedagogico
+      }
+    }
+
+    // 4. Modalidad Básica Elemental (Promedio simple de todas las actividades e insumos)
+    if (subnivel === 'Básica Elemental') {
+      const todas = [...valoresInsumos]
+      todas.push(Number(sum.proyecto_interdisciplinar || 0))
+      todas.push(Number(sum.evaluacion_estructurada || 0))
+
+      if (todas.length === 0) return 0
+      const suma = todas.reduce((a, b) => a + b, 0)
+      return parseFloat((suma / todas.length).toFixed(2))
+    }
+
+    // 5. Modalidad Básica Media, Superior y Bachillerato (70% Formativo + 30% Sumativo)
+    const promFormativo = valoresInsumos.length > 0
+      ? valoresInsumos.reduce((a, b) => a + b, 0) / valoresInsumos.length
       : 0
-    const aporteFormativo70 = promFormativo * 0.70
+    const aporte70 = promFormativo * 0.70
 
-    const notasSumativas = []
-    if (n.proyecto_interdisciplinar > 0) notasSumativas.push(n.proyecto_interdisciplinar)
-    if (n.evaluacion_estructurada > 0) notasSumativas.push(n.evaluacion_estructurada)
+    // Evaluaciones sumativas fijas (Proyecto Interdisciplinar + Evaluación Estructurada)
+    const notaProy = Number(sum.proyecto_interdisciplinar || 0)
+    const notaEv = Number(sum.evaluacion_estructurada || 0)
+    const promSumativo = (notaProy + notaEv) / 2
+    const aporte30 = promSumativo * 0.30
 
-    const promSumativo = notasSumativas.length > 0
-      ? notasSumativas.reduce((a, b) => a + b, 0) / notasSumativas.length
-      : 0
-    const aporteSumativo30 = promSumativo * 0.30
-
-    return parseFloat((aporteFormativo70 + aporteSumativo30).toFixed(2))
+    return parseFloat((aporte70 + aporte30).toFixed(2))
   }
 
   const obtenerEscalaCualitativa = (prom: number) => {
@@ -394,22 +440,44 @@ export default function RegistroCalificacionesPage() {
 
   const handleGuardarCalificaciones = async () => {
     if (esAnioCerrado) {
-      alert('🔒 Este año lectivo está cerrado. No se pueden guardar calificaciones.')
+      alert('Periodo cerrado.')
       return
     }
     setGuardando(true)
     setMensaje(null)
 
     try {
-      const payload = estudiantes.map((est) => {
-        const n = notasMap[est.id] || {}
-        const prom = calcularNotaFinal(n)
-        const cuali = obtenerEscalaCualitativa(prom).label
+      const payloadDetalles: any[] = []
+      estudiantes.forEach(est => {
+        columnasInsumos.forEach(col => {
+          const notaVal = notasMap[est.id]?.[col.id] || 0
+          payloadDetalles.push({
+            configuracion_insumo_id: col.id,
+            estudiante_id: est.id,
+            docente_id: docenteId,
+            nota: notaVal,
+            updated_at: new Date().toISOString()
+          })
+        })
+      })
 
-        const insumo1Val = columnasOrdenadas[0] ? (n[columnasOrdenadas[0].id] || 0) : 0
-        const insumo2Val = columnasOrdenadas[1] ? (n[columnasOrdenadas[1].id] || 0) : 0
-        const insumo3Val = columnasOrdenadas[2] ? (n[columnasOrdenadas[2].id] || 0) : 0
-        const insumo4Val = columnasOrdenadas[3] ? (n[columnasOrdenadas[3].id] || 0) : 0
+      if (payloadDetalles.length > 0) {
+        const { error: errDetalles } = await supabase
+          .from('calificaciones_detalle')
+          .upsert(payloadDetalles, { onConflict: 'configuracion_insumo_id, estudiante_id' })
+
+        if (errDetalles) throw errDetalles
+      }
+
+      const payloadResumen = estudiantes.map(est => {
+        const promFinal = calcularNotaFinal(est.id)
+        const cuali = obtenerEscalaCualitativa(promFinal).label
+        const sum = sumativasMap[est.id] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
+
+        const ins1 = columnasInsumos[0] ? (notasMap[est.id]?.[columnasInsumos[0].id] || 0) : 0
+        const ins2 = columnasInsumos[1] ? (notasMap[est.id]?.[columnasInsumos[1].id] || 0) : 0
+        const ins3 = columnasInsumos[2] ? (notasMap[est.id]?.[columnasInsumos[2].id] || 0) : 0
+        const ins4 = columnasInsumos[3] ? (notasMap[est.id]?.[columnasInsumos[3].id] || 0) : 0
 
         return {
           estudiante_id: est.id,
@@ -418,26 +486,29 @@ export default function RegistroCalificacionesPage() {
           asignatura: asignatura.trim(),
           trimestre,
           paralelo,
-          insumo_1: insumo1Val,
-          insumo_2: insumo2Val,
-          insumo_3: insumo3Val,
-          insumo_4: insumo4Val,
-          refuerzo_pedagogico: n.refuerzo_pedagogico || 0,
-          proyecto_interdisciplinar: n.proyecto_interdisciplinar || 0,
-          evaluacion_estructurada: n.evaluacion_estructurada || 0,
-          promedio_parcial: prom,
+          insumo_1: ins1,
+          insumo_2: ins2,
+          insumo_3: ins3,
+          insumo_4: ins4,
+          refuerzo_pedagogico: sum.refuerzo_pedagogico,
+          proyecto_interdisciplinar: sum.proyecto_interdisciplinar,
+          evaluacion_estructurada: sum.evaluacion_estructurada,
+          promedio_parcial: promFinal,
           cualitativa: cuali,
           anio_lectivo: anioLectivoVigente,
           updated_at: new Date().toISOString()
         }
       })
 
-      const { error } = await supabase.from('calificaciones').upsert(payload, {
-        onConflict: 'estudiante_id, asignatura, trimestre, docente_id, anio_lectivo'
-      })
+      const { error: errResumen } = await supabase
+        .from('calificaciones')
+        .upsert(payloadResumen, {
+          onConflict: 'estudiante_id, asignatura, trimestre, docente_id, anio_lectivo'
+        })
 
-      if (error) throw error
-      setMensaje({ tipo: 'exito', texto: `¡Calificaciones y estructura de ${trimestre} guardadas correctamente para el periodo ${anioLectivoVigente}!` })
+      if (errResumen) throw errResumen
+
+      setMensaje({ tipo: 'exito', texto: 'Todas las calificaciones se guardaron correctamente.' })
     } catch (err: any) {
       setMensaje({ tipo: 'error', texto: 'Error al guardar: ' + err.message })
     } finally {
@@ -445,7 +516,6 @@ export default function RegistroCalificacionesPage() {
     }
   }
 
-  // Convertir logo institucional a base64 para el PDF
   const convertirLogoABase64 = async (url: string) => {
     try {
       const response = await fetch(url)
@@ -460,10 +530,9 @@ export default function RegistroCalificacionesPage() {
     }
   }
 
-  // FUNCIÓN PARA IMPRIMIR Y GENERAR EL REPORTE PDF DE NOTAS
   const generarPdfCalificaciones = async () => {
     if (estudiantes.length === 0) {
-      alert('⚠ No hay estudiantes para generar el reporte.')
+      alert('No hay estudiantes para generar el reporte.')
       return
     }
 
@@ -472,7 +541,7 @@ export default function RegistroCalificacionesPage() {
       const { jsPDF } = await import('jspdf')
       const autoTable = (await import('jspdf-autotable')).default
 
-      const doc = new jsPDF('l', 'mm', 'a4') // Horizontal para que quepan bien las columnas
+      const doc = new jsPDF('l', 'mm', 'a4')
       const pageWidth = doc.internal.pageSize.getWidth()
 
       let logoBase64 = null
@@ -480,7 +549,6 @@ export default function RegistroCalificacionesPage() {
         logoBase64 = await convertirLogoABase64(logoUrl)
       }
 
-      // Encabezado institucional estilo membrete
       doc.setLineWidth(0.4)
       doc.rect(14, 12, pageWidth - 28, 22)
       doc.line(45, 12, 45, 34)
@@ -507,7 +575,6 @@ export default function RegistroCalificacionesPage() {
       doc.setFontSize(10)
       doc.text(`REGISTRO DE EVALUACIÓN - ${trimestre.toUpperCase()}`, pageWidth / 2, 41, { align: 'center' })
 
-      // Datos informativos del curso y docente
       autoTable(doc, {
         startY: 45,
         theme: 'grid',
@@ -520,11 +587,10 @@ export default function RegistroCalificacionesPage() {
         ]
       })
 
-      // Preparar columnas y filas para la tabla del PDF
       const headersTabla = [
         '#',
         'Apellidos y Nombres',
-        ...columnasOrdenadas.map(c => `Ins. ${c.numero} (${c.categoria.substring(0,4)})`),
+        ...columnasOrdenadas.map(c => `${c.descripcion.substring(0, 14)} (${c.categoria.substring(0, 4)})`),
         'Ref. Ped.',
         'Proy. Inter.',
         'Ev. Estruct.',
@@ -533,9 +599,9 @@ export default function RegistroCalificacionesPage() {
       ]
 
       const filasTabla = estudiantes.map((est, index) => {
-        const n = notasMap[est.id] || {}
-        const promFinal = calcularNotaFinal(n)
+        const promFinal = calcularNotaFinal(est.id)
         const cuali = obtenerEscalaCualitativa(promFinal)
+        const sum = sumativasMap[est.id] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
 
         const filaValores: any = [
           index + 1,
@@ -543,22 +609,21 @@ export default function RegistroCalificacionesPage() {
         ]
 
         columnasOrdenadas.forEach(col => {
-          filaValores.push(n[col.id] > 0 ? n[col.id].toFixed(2) : '0.00')
+          const val = notasMap[est.id]?.[col.id] || 0
+          filaValores.push(val > 0 ? val.toFixed(2) : '0.00')
         })
 
-        filaValores.push(n.refuerzo_pedagogico > 0 ? n.refuerzo_pedagogico.toFixed(2) : '-')
-        filaValores.push(n.proyecto_interdisciplinar > 0 ? n.proyecto_interdisciplinar.toFixed(2) : '0.00')
-        filaValores.push(n.evaluacion_estructurada > 0 ? n.evaluacion_estructurada.toFixed(2) : '0.00')
+        filaValores.push(sum.refuerzo_pedagogico > 0 ? sum.refuerzo_pedagogico.toFixed(2) : '-')
+        filaValores.push(sum.proyecto_interdisciplinar > 0 ? sum.proyecto_interdisciplinar.toFixed(2) : '0.00')
+        filaValores.push(sum.evaluacion_estructurada > 0 ? sum.evaluacion_estructurada.toFixed(2) : '0.00')
         filaValores.push(promFinal.toFixed(2))
         filaValores.push(cuali.label)
 
         return filaValores
       })
 
-      const tablaY = (doc as any).lastAutoTable.finalY + 4
-
       autoTable(doc, {
-        startY: tablaY,
+        startY: (doc as any).lastAutoTable.finalY + 4,
         theme: 'grid',
         head: [headersTabla],
         body: filasTabla,
@@ -570,7 +635,6 @@ export default function RegistroCalificacionesPage() {
         }
       })
 
-      // Firma de responsabilidad al pie
       const finalY = (doc as any).lastAutoTable.finalY + 20
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8)
@@ -582,7 +646,7 @@ export default function RegistroCalificacionesPage() {
       doc.save(`Calificaciones_${asignatura}_${grado}_${paralelo}_${trimestre}.pdf`)
     } catch (e: any) {
       console.error(e)
-      alert('Error al generar el PDF de calificaciones: ' + e.message)
+      alert('Error al generar PDF: ' + e.message)
     } finally {
       setGenerandoPdf(false)
     }
@@ -598,10 +662,10 @@ export default function RegistroCalificacionesPage() {
 
   if (cargando) {
     return (
-      <div className="flex h-full min-h-[60vh] items-center justify-center">
+      <div className="flex h-full min-h-[60vh] items-center justify-center font-sans">
         <div className="text-center bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
           <div className="h-8 w-8 animate-spin rounded-full border-3 border-[#4b4c99] border-t-transparent mx-auto mb-3"></div>
-          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Registro de Calificaciones...</p>
+          <p className="text-slate-700 font-bold text-xs uppercase tracking-wider">Cargando Calificaciones...</p>
         </div>
       </div>
     )
@@ -610,7 +674,7 @@ export default function RegistroCalificacionesPage() {
   return (
     <div className="space-y-6 pb-12 selection:bg-[#4b4c99]/20 selection:text-[#4b4c99] font-sans">
 
-      {/* ENCABEZADO PRINCIPAL INSTITUCIONAL */}
+      {/* ENCABEZADO */}
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <span 
@@ -623,11 +687,10 @@ export default function RegistroCalificacionesPage() {
             Registro de Calificaciones
           </h1>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
-            {nombreInstitucion} • Módulo Académico
+            {nombreInstitucion} • Ordenamiento por categorías de insumos
           </p>
         </div>
 
-        {/* BOTONES DE ACCIÓN */}
         <div className="flex gap-2.5 flex-wrap items-center">
           <button
             onClick={() => router.push('/docente/calificaciones/consolidado')}
@@ -635,30 +698,29 @@ export default function RegistroCalificacionesPage() {
           >
             Consolidado
           </button>
-          <button
-            onClick={() => router.push('/docente/estudiantes')}
-            className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 shadow-2xs transition cursor-pointer"
-          >
-            Nómina
-          </button>
           
-          {/* BOTÓN IMPRIMIR / PDF */}
           <button
             onClick={generarPdfCalificaciones}
             disabled={generandoPdf || estudiantes.length === 0}
             style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
             className="px-4 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
           >
-            <span></span> {generandoPdf ? 'Generando PDF...' : 'Imprimir / PDF'}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            {generandoPdf ? 'Generando PDF...' : 'Imprimir / PDF'}
           </button>
 
           {!esAnioCerrado && anioLectivoVigente && (
             <button
               onClick={() => setMostrarModalNuevaColumna(true)}
               style={{ backgroundColor: '#f6c358', color: '#594107' }}
-              className="px-4 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer"
+              className="px-4 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer flex items-center gap-1.5"
             >
-              + Nuevo Insumo
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+              </svg>
+              Nuevo Insumo
             </button>
           )}
 
@@ -669,34 +731,12 @@ export default function RegistroCalificacionesPage() {
               style={{ backgroundColor: '#4b4c99' }}
               className="px-5 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
             >
-              {guardando ? 'Guardando...' : 'Guardar'}
+              {guardando ? 'Guardando...' : 'Guardar Calificaciones'}
             </button>
           )}
         </div>
       </div>
 
-      {/* AVISO SI NO HAY AÑO ACTIVO */}
-      {!anioLectivoVigente && (
-        <div 
-          style={{ backgroundColor: 'rgba(246, 195, 88, 0.1)', borderColor: 'rgba(246, 195, 88, 0.4)', color: '#855d11' }}
-          className="border p-4 rounded-2xl text-xs font-bold shadow-2xs"
-        >
-          La Dirección aún no ha aperturado ni establecido un año lectivo activo en el sistema. Por favor, solicite al rector que configure y active el periodo escolar.
-        </div>
-      )}
-
-      {/* AVISO SI EL PERIODO VIGENTE ESTÁ CERRADO */}
-      {esAnioCerrado && anioLectivoVigente && (
-        <div 
-          style={{ backgroundColor: 'rgba(222, 88, 96, 0.08)', borderColor: 'rgba(222, 88, 96, 0.3)', color: '#9b2c2c' }}
-          className="border p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-2xs"
-        >
-          <span>El año lectivo vigente ({anioLectivoVigente}) ha sido cerrado y bloqueado por la Dirección. Las calificaciones están en modo de solo lectura.</span>
-          <span className="bg-rose-200/80 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-900">Periodo Cerrado</span>
-        </div>
-      )}
-
-      {/* MENSAJES */}
       {mensaje && (
         <div className={`p-4 rounded-2xl text-xs font-bold border shadow-2xs ${
           mensaje.tipo === 'exito' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-rose-50 text-rose-900 border-rose-200'
@@ -705,7 +745,7 @@ export default function RegistroCalificacionesPage() {
         </div>
       )}
 
-      {/* FILTROS DINÁMICOS */}
+      {/* FILTROS */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3.5">
         <div>
           <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Jornada</label>
@@ -720,7 +760,7 @@ export default function RegistroCalificacionesPage() {
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Subnivel Educativo</label>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Subnivel</label>
           <input
             type="text"
             disabled
@@ -737,11 +777,7 @@ export default function RegistroCalificacionesPage() {
             disabled={gradosUnicos.length <= 1}
             className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none disabled:bg-slate-100 disabled:cursor-not-allowed shadow-2xs"
           >
-            {gradosUnicos.length === 0 ? (
-              <option value="">Sin cursos en este año</option>
-            ) : (
-              gradosUnicos.map((g) => <option key={g} value={g}>{g}</option>)
-            )}
+            {gradosUnicos.map((g) => <option key={g} value={g}>{g}</option>)}
           </select>
         </div>
 
@@ -753,27 +789,23 @@ export default function RegistroCalificacionesPage() {
             disabled={paralelosDisponibles.length <= 1}
             className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none disabled:bg-slate-100 disabled:cursor-not-allowed shadow-2xs"
           >
-            {paralelosDisponibles.map((p) => (
-              <option key={p} value={p}>Paralelo {p}</option>
-            ))}
+            {paralelosDisponibles.map((p) => <option key={p} value={p}>Paralelo {p}</option>)}
           </select>
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Asignatura / Rol</label>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Asignatura</label>
           <select
             value={asignatura}
             onChange={(e) => setAsignatura(e.target.value)}
             className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none shadow-2xs"
           >
-            {asignaturasDisponibles.map((asig) => (
-              <option key={asig} value={asig}>{asig}</option>
-            ))}
+            {asignaturasDisponibles.map((asig) => <option key={asig} value={asig}>{asig}</option>)}
           </select>
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-[#4b4c99] uppercase mb-1.5">Trimestre Activo</label>
+          <label className="block text-[10px] font-bold text-[#4b4c99] uppercase mb-1.5">Trimestre</label>
           <select
             value={trimestre}
             onChange={(e) => setTrimestre(e.target.value)}
@@ -787,36 +819,26 @@ export default function RegistroCalificacionesPage() {
         </div>
       </div>
 
-      {/* TABLA SÁBANA DIGITAL */}
+      {/* TABLA PRINCIPAL DE NOTAS ORGANIZADA POR CATEGORÍAS */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-x-auto">
         {cargando ? (
           <div className="p-12 text-center text-slate-500 font-semibold text-xs">
-            Sincronizando estructura e insumos para {trimestre} ({anioLectivoVigente || 'Sin año'})...
-          </div>
-        ) : !anioLectivoVigente ? (
-          <div className="p-12 text-center text-amber-800 space-y-2 bg-amber-50/50">
-            <p className="font-bold text-sm">No hay un año lectivo activo configurado en la institución.</p>
-            <p className="text-xs text-amber-700">El registro de calificaciones requiere que la Dirección aperture un periodo lectivo.</p>
-          </div>
-        ) : misAsignaciones.length === 0 ? (
-          <div className="p-12 text-center text-amber-800 space-y-2 bg-amber-50/50">
-            <p className="font-bold text-sm">No tienes carga horaria asignada para el periodo vigente ({anioLectivoVigente}).</p>
-            <p className="text-xs text-amber-700">Verifica que la Dirección te haya asignado materias en este año.</p>
+            Cargando notas de {trimestre}...
           </div>
         ) : estudiantes.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 space-y-3">
-            <p className="font-semibold text-sm">No hay estudiantes activos en este curso ({grado} "{paralelo}" - {jornadaActual}).</p>
+          <div className="p-12 text-center text-slate-500 space-y-2">
+            <p className="font-semibold text-sm">No hay estudiantes activos en este curso ({grado} "{paralelo}").</p>
           </div>
         ) : (
           <table className="w-full text-xs text-left border-collapse border border-slate-200">
             <thead className="text-slate-900 font-bold uppercase text-[10px]">
               <tr>
                 <th className="p-3 w-10 text-center bg-slate-50 border border-slate-200" rowSpan={2}>#</th>
-                <th className="p-3 min-w-50 bg-slate-50 border border-slate-200" rowSpan={2}>Estudiante</th>
+                <th className="p-3 min-w-52 bg-slate-50 border border-slate-200" rowSpan={2}>Estudiante</th>
 
                 {gruposHeader.length === 0 ? (
                   <th className="p-3 text-center bg-amber-50 text-amber-900 border border-slate-200 italic" colSpan={1}>
-                    No hay insumos registrados en este {trimestre}
+                    Sin insumos creados. Haz clic en "+ Nuevo Insumo" para empezar.
                   </th>
                 ) : (
                   gruposHeader.map((g) => (
@@ -844,13 +866,15 @@ export default function RegistroCalificacionesPage() {
 
               <tr className="bg-slate-50 text-slate-800 text-[9px] font-bold">
                 {columnasOrdenadas.length === 0 ? (
-                  <th className="p-2 text-center text-slate-400 border border-slate-200">Sin Insumos</th>
+                  <th className="p-2 text-center text-slate-400 border border-slate-200">Pulsa "+ Nuevo Insumo"</th>
                 ) : (
                   columnasOrdenadas.map((col) => (
-                    <th key={col.id} className="p-2 text-center border border-slate-200 min-w-22.5 bg-white">
-                      <span className="block font-bold text-slate-900">INSUMO {col.numero}</span>
-                      <span className="block text-[8px] font-medium text-slate-500 truncate" title={col.descripcion}>
+                    <th key={col.id} className="p-2 text-center border border-slate-200 min-w-28 bg-white">
+                      <span className="block font-bold text-slate-900 truncate" title={col.descripcion}>
                         {col.descripcion}
+                      </span>
+                      <span className="block text-[8px] font-medium text-slate-500">
+                        {col.categoria} #{col.numero}
                       </span>
                       {!esAnioCerrado && (
                         <button
@@ -858,23 +882,23 @@ export default function RegistroCalificacionesPage() {
                           title="Eliminar este insumo"
                           className="text-rose-500 hover:text-rose-700 font-bold text-[10px] mt-0.5 cursor-pointer"
                         >
-                          ✕
+                          ✕ Quitar
                         </button>
                       )}
                     </th>
                   ))
                 )}
 
-                <th className="p-1.5 text-center bg-indigo-50/50 border border-slate-200 min-w-27.5">Proy. Interdisciplinar</th>
-                <th className="p-1.5 text-center bg-indigo-50/50 border border-slate-200 min-w-30">Ev. Base Estructurada</th>
+                <th className="p-1.5 text-center bg-indigo-50/50 border border-slate-200 min-w-28">Proy. Interdisciplinar</th>
+                <th className="p-1.5 text-center bg-indigo-50/50 border border-slate-200 min-w-28">Ev. Base Estructurada</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-slate-200">
               {estudiantes.map((est, idx) => {
-                const n = notasMap[est.id] || {}
-                const promFinal = calcularNotaFinal(n)
+                const promFinal = calcularNotaFinal(est.id)
                 const cuali = obtenerEscalaCualitativa(promFinal)
+                const sum = sumativasMap[est.id] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
 
                 return (
                   <tr key={est.id} className="hover:bg-slate-50/80 transition-colors">
@@ -894,9 +918,10 @@ export default function RegistroCalificacionesPage() {
                             min="0"
                             max="10"
                             disabled={esAnioCerrado}
-                            value={n[col.id] > 0 ? n[col.id] : ''}
-                            onChange={(e) => handleNotaChange(est.id, col.id, e.target.value)}
-                            className="w-14 p-1 text-center border border-slate-300 rounded-lg font-semibold text-slate-900 outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] bg-white disabled:bg-slate-100 shadow-2xs"
+                            value={notasMap[est.id]?.[col.id] > 0 ? notasMap[est.id][col.id] : ''}
+                            onChange={(e) => handleNotaDetalleChange(est.id, col.id, e.target.value)}
+                            placeholder="0.00"
+                            className="w-14 p-1 text-center border border-slate-300 rounded-lg font-semibold text-slate-900 outline-none focus:border-[#4b4c99] focus:ring-1 focus:ring-[#4b4c99] bg-white disabled:bg-slate-100 shadow-2xs placeholder:text-slate-300"
                           />
                         </td>
                       ))
@@ -909,8 +934,8 @@ export default function RegistroCalificacionesPage() {
                         min="0"
                         max="10"
                         disabled={esAnioCerrado}
-                        value={n.refuerzo_pedagogico > 0 ? n.refuerzo_pedagogico : ''}
-                        onChange={(e) => handleNotaChange(est.id, 'refuerzo_pedagogico', e.target.value)}
+                        value={sum.refuerzo_pedagogico > 0 ? sum.refuerzo_pedagogico : ''}
+                        onChange={(e) => handleNotaSumativaChange(est.id, 'refuerzo_pedagogico', e.target.value)}
                         placeholder="Opt."
                         className="w-14 p-1 text-center border border-amber-300 rounded-lg font-semibold text-amber-900 outline-none focus:ring-1 focus:ring-amber-500 bg-white disabled:bg-slate-100 shadow-2xs"
                       />
@@ -923,9 +948,10 @@ export default function RegistroCalificacionesPage() {
                         min="0"
                         max="10"
                         disabled={esAnioCerrado}
-                        value={n.proyecto_interdisciplinar > 0 ? n.proyecto_interdisciplinar : ''}
-                        onChange={(e) => handleNotaChange(est.id, 'proyecto_interdisciplinar', e.target.value)}
-                        className="w-16 p-1 text-center border border-indigo-200 rounded-lg font-semibold text-indigo-950 outline-none focus:ring-1 focus:ring-[#4b4c99] bg-white disabled:bg-slate-100 shadow-2xs"
+                        value={sum.proyecto_interdisciplinar > 0 ? sum.proyecto_interdisciplinar : ''}
+                        onChange={(e) => handleNotaSumativaChange(est.id, 'proyecto_interdisciplinar', e.target.value)}
+                        placeholder="0.00"
+                        className="w-16 p-1 text-center border border-indigo-200 rounded-lg font-semibold text-indigo-950 outline-none focus:ring-1 focus:ring-[#4b4c99] bg-white disabled:bg-slate-100 shadow-2xs placeholder:text-slate-300"
                       />
                     </td>
 
@@ -936,9 +962,10 @@ export default function RegistroCalificacionesPage() {
                         min="0"
                         max="10"
                         disabled={esAnioCerrado}
-                        value={n.evaluacion_estructurada > 0 ? n.evaluacion_estructurada : ''}
-                        onChange={(e) => handleNotaChange(est.id, 'evaluacion_estructurada', e.target.value)}
-                        className="w-16 p-1 text-center border border-indigo-200 rounded-lg font-semibold text-indigo-950 outline-none focus:ring-1 focus:ring-[#4b4c99] bg-white disabled:bg-slate-100 shadow-2xs"
+                        value={sum.evaluacion_estructurada > 0 ? sum.evaluacion_estructurada : ''}
+                        onChange={(e) => handleNotaSumativaChange(est.id, 'evaluacion_estructurada', e.target.value)}
+                        placeholder="0.00"
+                        className="w-16 p-1 text-center border border-indigo-200 rounded-lg font-semibold text-indigo-950 outline-none focus:ring-1 focus:ring-[#4b4c99] bg-white disabled:bg-slate-100 shadow-2xs placeholder:text-slate-300"
                       />
                     </td>
 
@@ -964,7 +991,7 @@ export default function RegistroCalificacionesPage() {
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">➕ Crear Nuevo Insumo ({trimestre})</h2>
+              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Crear Nuevo Insumo ({trimestre})</h2>
               <button onClick={() => setMostrarModalNuevaColumna(false)} className="text-slate-400 font-bold hover:text-slate-600 cursor-pointer">✕</button>
             </div>
 
@@ -974,7 +1001,7 @@ export default function RegistroCalificacionesPage() {
                 <select
                   value={nuevaCat}
                   onChange={(e: any) => setNuevaCat(e.target.value)}
-                  className="w-full p-3 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 bg-white outline-none shadow-2xs"
+                  className="w-full p-3 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 bg-white outline-none shadow-2xs cursor-pointer"
                 >
                   <option value="Deberes / Indiv.">Deberes / Actividades Individuales</option>
                   <option value="Tareas en Clase">Tareas en Clase</option>
@@ -984,12 +1011,12 @@ export default function RegistroCalificacionesPage() {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold uppercase mb-1.5">Descripción:</label>
+                <label className="block text-slate-700 font-bold uppercase mb-1.5">Nombre / Descripción del Insumo:</label>
                 <input
                   type="text"
                   value={nuevaDesc}
                   onChange={(e) => setNuevaDesc(e.target.value)}
-                  placeholder="Ej: Deber #1 - Lectura Crítica"
+                  placeholder="Ej: Taller 1 - Ecuaciones de 1er grado"
                   className="w-full p-3 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 bg-white outline-none shadow-2xs"
                 />
               </div>
@@ -1008,7 +1035,7 @@ export default function RegistroCalificacionesPage() {
                 style={{ backgroundColor: '#4b4c99' }}
                 className="px-5 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
               >
-                + Crear Insumo
+                Crear Insumo
               </button>
             </div>
           </div>

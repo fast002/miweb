@@ -398,7 +398,7 @@ export default function ReportesAcademicoPadresPage() {
               style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
               className="px-5 py-2.5 font-bold text-xs rounded-xl shadow-2xs transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
             >
-              <span>🖨️</span> Imprimir / Guardar PDF
+              <span></span> Imprimir / Guardar PDF
             </button>
           </div>
         </div>
