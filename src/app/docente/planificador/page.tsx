@@ -12,8 +12,14 @@ export default function DashboardDocentePage() {
   const [docente, setDocente] = useState<any>(null)
   const [institucion, setInstitucion] = useState<any>(null)
 
-  // Selector de Tipo de Vista
-  const [pestañaTipo, setPestañaTipo] = useState<'piloto' | 'regular' | 'todos'>('piloto')
+  // Selector de Tipo de Vista (Ahora con pestaña exclusiva 'proyectos')
+  const [pestañaTipo, setPestañaTipo] = useState<'proyectos' | 'piloto' | 'regular' | 'todos'>('proyectos')
+
+  // Proyectos Interdisciplinares (tabla 'planificaciones_microcurriculares' con asignatura = 'PROYECTO INTERDISCIPLINAR')
+  const [proyectosInterdisciplinares, setProyectosInterdisciplinares] = useState<any[]>([])
+
+  // Planificaciones Piloto Zona 6 (tabla 'planificaciones_microcurriculares' regulares de materia)
+  const [planificacionesPiloto, setPlanificacionesPiloto] = useState<any[]>([])
 
   // Planificaciones Regulares (tabla 'planificaciones')
   const [planificacionesRegulares, setPlanificacionesRegulares] = useState<any[]>([])
@@ -22,9 +28,6 @@ export default function DashboardDocentePage() {
   const [anioLectivoFiltro, setAnioLectivoFiltro] = useState<string>('')
   const [anosCerrados, setAnosCerrados] = useState<string[]>([])
   const [materiasAbiertas, setMateriasAbiertas] = useState<{ [key: string]: boolean }>({})
-
-  // Planificaciones Piloto Zona 6 (tabla 'planificaciones_microcurriculares')
-  const [planificacionesPiloto, setPlanificacionesPiloto] = useState<any[]>([])
 
   // Modal de Detalle y Exportación
   const [planSeleccionado, setPlanSeleccionado] = useState<any | null>(null)
@@ -80,7 +83,28 @@ export default function DashboardDocentePage() {
         setDocente({ nombres: user.email?.split('@')[0] || 'Docente', apellidos: '' })
       }
 
-      // 2. Cargar Planificaciones Regulares (Modelos 1 y 2)
+      // 2. Cargar Planificaciones Microcurriculares y dividir Proyectos vs Piloto
+      const { data: microcurriculares } = await supabase
+        .from('planificaciones_microcurriculares')
+        .select('*')
+        .eq('docente_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (microcurriculares) {
+        // Filtrar Proyectos Interdisciplinares
+        const proyectos = microcurriculares.filter(
+          (p: any) => p.asignatura === 'PROYECTO INTERDISCIPLINAR'
+        )
+        setProyectosInterdisciplinares(proyectos)
+
+        // Filtrar Planificaciones Piloto de materias individuales
+        const piloto = microcurriculares.filter(
+          (p: any) => p.asignatura !== 'PROYECTO INTERDISCIPLINAR'
+        )
+        setPlanificacionesPiloto(piloto)
+      }
+
+      // 3. Cargar Planificaciones Regulares (Modelos 1 y 2)
       const { data: planesRegulares } = await supabase
         .from('planificaciones')
         .select('*')
@@ -109,21 +133,73 @@ export default function DashboardDocentePage() {
         setMateriasAbiertas(initialAbiertas)
       }
 
-      // 3. Cargar Planificaciones Microcurriculares (Piloto Zona 6)
-      const { data: planesPiloto } = await supabase
-        .from('planificaciones_microcurriculares')
-        .select('*')
-        .eq('docente_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (planesPiloto) {
-        setPlanificacionesPiloto(planesPiloto)
-      }
-
     } catch (err) {
       console.error('Error al cargar el dashboard unificado:', err)
     } finally {
       setCargando(false)
+    }
+  }
+
+  // Eliminar Proyecto Interdisciplinar
+  const handleEliminarProyecto = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este Proyecto Interdisciplinar? Esta acción no se puede deshacer.')) return
+
+    try {
+      const { error } = await supabase
+        .from('planificaciones_microcurriculares')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      setProyectosInterdisciplinares(prev => prev.filter(p => p.id !== id))
+      alert('Proyecto interdisciplinar eliminado correctamente.')
+    } catch (err: any) {
+      alert('Error al eliminar: ' + err.message)
+    }
+  }
+
+  // Eliminar Planificación Piloto Zona 6
+  const handleEliminarPlanPiloto = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar esta planificación por competencias?')) return
+
+    try {
+      const { error } = await supabase
+        .from('planificaciones_microcurriculares')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      setPlanificacionesPiloto(prev => prev.filter(p => p.id !== id))
+      if (planSeleccionado?.id === id) setPlanSeleccionado(null)
+      alert('Planificación eliminada con éxito.')
+    } catch (err: any) {
+      alert('Error al eliminar: ' + err.message)
+    }
+  }
+
+  // Eliminar Planificación Regular
+  const handleEliminarPlanRegular = async (plan: any) => {
+    const anioPlan = plan.anio_lectivo || institucion?.anio_lectivo_activo || ''
+    if (anosCerrados.includes(anioPlan)) {
+      alert('Este año lectivo está cerrado. No se pueden eliminar registros del archivo histórico.')
+      return
+    }
+    if (plan.estado === 'aprobado') {
+      alert('Esta planificación ya ha sido aprobada y no se puede eliminar.')
+      return
+    }
+    if (!confirm('¿Estás seguro de eliminar esta planificación? Esta acción no se puede deshacer.')) return
+
+    try {
+      const { error } = await supabase.from('planificaciones').delete().eq('id', plan.id)
+      if (error) throw error
+
+      setPlanificacionesRegulares(prev => prev.filter(p => p.id !== plan.id))
+      if (planSeleccionado?.id === plan.id) setPlanSeleccionado(null)
+    } catch (err: any) {
+      alert('Error al eliminar: ' + err.message)
     }
   }
 
@@ -170,46 +246,6 @@ export default function DashboardDocentePage() {
     }
   }
 
-  // Eliminar Planificación Regular
-  const handleEliminarPlanRegular = async (plan: any) => {
-    const anioPlan = plan.anio_lectivo || institucion?.anio_lectivo_activo || ''
-    if (anosCerrados.includes(anioPlan)) {
-      alert('Este año lectivo está cerrado. No se pueden eliminar registros del archivo histórico.')
-      return
-    }
-    if (plan.estado === 'aprobado') {
-      alert('Esta planificación ya ha sido aprobada y no se puede eliminar.')
-      return
-    }
-    if (!confirm('¿Estás seguro de eliminar esta planificación? Esta acción no se puede deshacer.')) return
-
-    try {
-      const { error } = await supabase.from('planificaciones').delete().eq('id', plan.id)
-      if (error) throw error
-
-      setPlanificacionesRegulares(prev => prev.filter(p => p.id !== plan.id))
-      if (planSeleccionado?.id === plan.id) setPlanSeleccionado(null)
-    } catch (err: any) {
-      alert('Error al eliminar: ' + err.message)
-    }
-  }
-
-  // Eliminar Planificación Piloto Zona 6
-  const handleEliminarPlanPiloto = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar esta planificación por competencias?')) return
-
-    try {
-      const { error } = await supabase.from('planificaciones_microcurriculares').delete().eq('id', id)
-      if (error) throw error
-
-      setPlanificacionesPiloto(prev => prev.filter(p => p.id !== id))
-      if (planSeleccionado?.id === id) setPlanSeleccionado(null)
-      alert('Planificación eliminada con éxito.')
-    } catch (err: any) {
-      alert('Error al eliminar: ' + err.message)
-    }
-  }
-
   const toggleGrupo = (materia: string, tipoModelo: string) => {
     const key = `${materia}-${tipoModelo}`
     setMateriasAbiertas(prev => ({ ...prev, [key]: !prev[key] }))
@@ -229,7 +265,6 @@ export default function DashboardDocentePage() {
     }
   }
 
-  // Descargar PDF para Planificaciones Piloto Zona 6
   const descargarPlanPilotoPDF = async (plan: any) => {
     setGenerandoPdf(true)
     try {
@@ -237,7 +272,6 @@ export default function DashboardDocentePage() {
       const autoTable = (await import('jspdf-autotable')).default
 
       const doc = new jsPDF('l', 'mm', 'a4')
-      const pageWidth = doc.internal.pageSize.getWidth()
 
       let logoBase64 = null
       if (institucion?.logo_url) {
@@ -304,7 +338,7 @@ export default function DashboardDocentePage() {
       })
 
       const bodySemanas = (plan.semanas || []).map((sem: any) => [
-        `Semana ${sem.numero} · ${sem.tema || sem.temaSemana || ''}\n\n• Inicio:\n${sem.inicio || 'S/N'}\n\n• Desarrollo:\n${sem.desarrollo || 'S/N'}\n\n• Cierre:\n${sem.cierre || 'S/N'}`,
+        `Semana ${sem.numero} · ${sem.tema || sem.temaSemana || ''}\n\nInicio:\n${sem.inicio || 'S/N'}\n\nDesarrollo:\n${sem.desarrollo || 'S/N'}\n\nCierre:\n${sem.cierre || 'S/N'}`,
         sem.recursos || 'Materiales del aula',
         `Técnica: ${sem.tecnica || 'Observación'}\nInstrumento: ${sem.instrumento || 'Lista de cotejo'}`
       ])
@@ -350,6 +384,8 @@ export default function DashboardDocentePage() {
   const planesModelo1 = planesFiltradosPeriodo.filter(p => (p.tipo_modelo || 'trimestral_disciplinar') === 'trimestral_disciplinar')
   const planesModelo2 = planesFiltradosPeriodo.filter(p => p.tipo_modelo === 'multigrado_eje')
 
+  const totalGlobal = proyectosInterdisciplinares.length + planificacionesPiloto.length + planificacionesRegulares.length
+
   return (
     <div className="space-y-6 pb-12 selection:bg-[#4b4c99] selection:text-white font-sans">
       
@@ -363,7 +399,7 @@ export default function DashboardDocentePage() {
             Panel Docente • Centro de Planificaciones
           </span>
           <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
-            Mis Planificaciones y Archivo Histórico
+            Mis Planificaciones y Proyectos
           </h1>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
             Docente: <strong className="text-slate-800">{docente?.nombres} {docente?.apellidos}</strong> • {institucion?.nombre_institucion || 'Unidad Educativa'}
@@ -371,6 +407,13 @@ export default function DashboardDocentePage() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => router.push('/docente/proyecto-interdisciplinar')}
+            style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
+            className="px-4 py-2.5 font-bold text-xs rounded-xl shadow-sm hover:opacity-95 transition cursor-pointer"
+          >
+            + Nuevo Proyecto Interdisciplinar
+          </button>
           <button
             onClick={() => router.push('/docente/planificadorpiloto')}
             style={{ backgroundColor: '#4b4c99' }}
@@ -384,56 +427,142 @@ export default function DashboardDocentePage() {
           >
             + Nueva (Regular)
           </button>
-          <button
-            onClick={() => router.push('/docente/planificador/imprimir')}
-            className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition shadow-2xs cursor-pointer"
-          >
-            Imprimir Reporte
-          </button>
         </div>
       </div>
 
-      {/* SELECTOR SUPERIOR DE PESTAÑAS PRINCIPALES */}
-      <div className="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-2">
+      {/* SELECTOR SUPERIOR DE PESTAÑAS */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-2 overflow-x-auto">
+        <button
+          onClick={() => setPestañaTipo('proyectos')}
+          className={`py-2.5 px-4 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer ${
+            pestañaTipo === 'proyectos'
+              ? 'bg-[#4b4c99] text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Proyectos Interdisciplinares ({proyectosInterdisciplinares.length})
+        </button>
         <button
           onClick={() => setPestañaTipo('piloto')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer ${
+          className={`py-2.5 px-4 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer ${
             pestañaTipo === 'piloto'
               ? 'bg-[#4b4c99] text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-        Piloto Zona 6 por Competencias ({planificacionesPiloto.length})
+          Piloto Zona 6 por Materia ({planificacionesPiloto.length})
         </button>
         <button
           onClick={() => setPestañaTipo('regular')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer ${
+          className={`py-2.5 px-4 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer ${
             pestañaTipo === 'regular'
               ? 'bg-[#4b4c99] text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-        Planificador Regular por Año Lectivo ({planificacionesRegulares.length})
+          Planificador Regular ({planificacionesRegulares.length})
         </button>
         <button
           onClick={() => setPestañaTipo('todos')}
-          className={`py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer ${
+          className={`py-2.5 px-4 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer ${
             pestañaTipo === 'todos'
               ? 'bg-[#4b4c99] text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          Ver Todos ({planificacionesPiloto.length + planificacionesRegulares.length})
+          Ver Todos ({totalGlobal})
         </button>
       </div>
 
-      {/* ================= CONTENIDO 1: PLANIFICADOR PILOTO ZONA 6 ================= */}
-      {(pestañaTipo === 'piloto' || pestañaTipo === 'todos') && (
+      {/* ================= PESTAÑA 1: PROYECTOS INTERDISCIPLINARES ================= */}
+      {(pestañaTipo === 'proyectos' || pestañaTipo === 'todos') && (
         <div className="space-y-4">
           <div className="border-b border-slate-200 pb-2.5 flex items-center justify-between">
             <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-500"></span>
+              Proyectos Interdisciplinares (Evaluación Sumativa CNC)
+            </h2>
+            <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 shadow-2xs">
+              {proyectosInterdisciplinares.length} Proyectos Registrados
+            </span>
+          </div>
+
+          {proyectosInterdisciplinares.length === 0 ? (
+            <div className="bg-white p-10 text-center rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+              <p className="text-slate-500 font-medium text-xs">
+                No tienes proyectos interdisciplinares guardados todavía.
+              </p>
+              <button
+                onClick={() => router.push('/docente/proyecto-interdisciplinar')}
+                style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
+                className="px-4 py-2 font-bold text-xs rounded-xl transition cursor-pointer shadow-2xs"
+              >
+                + Crear primer proyecto interdisciplinar
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {proyectosInterdisciplinares.map((proy) => (
+                <div
+                  key={proy.id}
+                  className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between space-y-4"
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-[10px] font-mono text-slate-400 font-bold">
+                        {institucion?.anio_lectivo_activo || '2026-2027'}
+                      </span>
+                      <span className="bg-teal-50 text-teal-800 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wide border border-teal-200">
+                        Trimestre {proy.trimestre || '1'}
+                      </span>
+                    </div>
+
+                    <h3 className="font-bold text-slate-900 text-xs mb-1 line-clamp-2 uppercase">
+                      “{proy.titulo_sia || 'Proyecto Interdisciplinar'}”
+                    </h3>
+
+                    <p className="text-[11px] text-slate-600 font-medium mt-1">
+                      Curso: <strong className="text-slate-900">{proy.grado_curso} "{proy.paralelo || 'A'}"</strong> ({proy.no_semanas || 2} Semanas)
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-medium mt-0.5 line-clamp-1">
+                      Materias: {proy.asignaturas_conexion || 'Interdisciplinar'}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-2 font-mono">
+                      Creado: {new Date(proy.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex gap-2">
+                    {/* REDIRECCIÓN DIRECTA A LA VISTA EXCLUSIVA DE PROYECTO */}
+                    <button
+                      onClick={() => router.push(`/docente/proyecto-interdisciplinar/ver?id=${proy.id}`)}
+                      style={{ backgroundColor: '#4b4c99' }}
+                      className="flex-1 py-2 text-white text-xs font-bold rounded-xl transition text-center cursor-pointer shadow-2xs hover:opacity-95"
+                    >
+                      Ver y Editar
+                    </button>
+                    <button
+                      onClick={() => handleEliminarProyecto(proy.id)}
+                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition cursor-pointer border border-rose-200 shadow-2xs"
+                      title="Eliminar"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================= PESTAÑA 2: PILOTO ZONA 6 (MATERIAS REGULARES) ================= */}
+      {(pestañaTipo === 'piloto' || pestañaTipo === 'todos') && (
+        <div className="space-y-4 pt-2">
+          <div className="border-b border-slate-200 pb-2.5 flex items-center justify-between">
+            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
-              Planificaciones por Competencias (Piloto Zona 6 - DUA / ERCA)
+              Planificaciones por Materia (Piloto Zona 6 - DUA / ERCA)
             </h2>
             <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 shadow-2xs">
               {planificacionesPiloto.length} Guardadas
@@ -441,17 +570,10 @@ export default function DashboardDocentePage() {
           </div>
 
           {planificacionesPiloto.length === 0 ? (
-            <div className="bg-white p-10 text-center rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+            <div className="bg-white p-8 text-center rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
               <p className="text-slate-500 font-medium text-xs">
-                No tienes planificaciones creadas en el nuevo formato Piloto Zona 6.
+                No tienes planificaciones creadas en el formato Piloto Zona 6.
               </p>
-              <button
-                onClick={() => router.push('/docente/planificadorpiloto/nuevo')}
-                style={{ backgroundColor: '#4b4c99' }}
-                className="px-4 py-2 text-white text-xs font-bold rounded-xl transition cursor-pointer"
-              >
-                + Crear primera planificación piloto
-              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -480,12 +602,10 @@ export default function DashboardDocentePage() {
                     <p className="text-[11px] text-slate-500 font-medium">
                       Curso: {plan.grado_curso} (Paralelo {plan.paralelo}) • {plan.no_semanas} semanas
                     </p>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Creado el: {new Date(plan.created_at).toLocaleDateString()}
-                    </p>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
+                  <div className="pt-3 border-t border-slate-100 flex gap-2">
+                    {/* REDIRECCIÓN DIRECTA AL VISOR PILOTO */}
                     <button
                       onClick={() => router.push(`/docente/planificadorpiloto/ver?id=${plan.id}&formato=oficial`)}
                       className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition text-center cursor-pointer shadow-2xs"
@@ -493,8 +613,8 @@ export default function DashboardDocentePage() {
                       Ver y Editar
                     </button>
                     <button
-                      onClick={() => router.push(`/docente/planificadorpiloto/nuevo?id=${plan.id}`)}
-                      className="flex-1 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold rounded-xl transition text-center border border-amber-200 cursor-pointer shadow-2xs"
+                      onClick={() => handleEliminarPlanPiloto(plan.id)}
+                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition cursor-pointer border border-rose-200 shadow-2xs"
                     >
                       Eliminar
                     </button>
@@ -506,407 +626,99 @@ export default function DashboardDocentePage() {
         </div>
       )}
 
-      {/* ================= CONTENIDO 2: PLANIFICADOR REGULAR (MODELOS 1 Y 2) ================= */}
+      {/* ================= PESTAÑA 3: PLANIFICADOR REGULAR ================= */}
       {(pestañaTipo === 'regular' || pestañaTipo === 'todos') && (
-        <div className="space-y-6 pt-4">
-          
-          {/* CARPETAS / PESTAÑAS DE AÑOS LECTIVOS */}
+        <div className="space-y-6 pt-2">
           <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-2.5 overflow-x-auto">
             <span className="text-xs font-bold text-slate-500 uppercase mr-2 shrink-0">Carpetas Lectivas:</span>
-            {periodosDisponibles.length === 0 ? (
-              <span className="text-xs font-bold text-amber-700 italic">Sin años lectivos configurados</span>
-            ) : (
-              periodosDisponibles.map((periodo) => {
-                const esActivo = periodo === (institucion?.anio_lectivo_activo || '')
-                const esCerrado = anosCerrados.includes(periodo)
-                const seleccionado = periodo === anioLectivoFiltro
-
-                return (
-                  <button
-                    key={periodo}
-                    onClick={() => setAnioLectivoFiltro(periodo)}
-                    style={seleccionado ? { backgroundColor: '#4b4c99' } : {}}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer shadow-2xs ${
-                      seleccionado
-                        ? 'text-white'
-                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300'
-                    }`}
-                  >
-                    <span>Periodo {periodo}</span>
-                    {esActivo && <span className="bg-emerald-500 text-white text-[9px] px-2 py-0.5 rounded-lg font-bold">Actual</span>}
-                    {esCerrado && <span>🔒</span>}
-                  </button>
-                )
-              })
-            )}
+            {periodosDisponibles.map((periodo) => {
+              const seleccionado = periodo === anioLectivoFiltro
+              return (
+                <button
+                  key={periodo}
+                  onClick={() => setAnioLectivoFiltro(periodo)}
+                  style={seleccionado ? { backgroundColor: '#4b4c99' } : {}}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer shadow-2xs ${
+                    seleccionado ? 'text-white' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300'
+                  }`}
+                >
+                  <span>Periodo {periodo}</span>
+                </button>
+              )
+            })}
           </div>
 
-          {esAnioCerradoActual && anioLectivoFiltro && (
-            <div 
-              style={{ backgroundColor: 'rgba(222, 88, 96, 0.08)', borderColor: 'rgba(222, 88, 96, 0.3)', color: '#9b2c2c' }}
-              className="border p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-2xs"
-            >
-              <span>Carpeta del año lectivo {anioLectivoFiltro} (Cerrado por la Dirección en modo solo lectura).</span>
-              <span className="bg-rose-200/80 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-900">Histórico</span>
-            </div>
-          )}
+          <div className="space-y-4">
+            {materiasDisponibles.map((materia) => {
+              const planesMateria = planificacionesRegulares.filter((p) => p.asignatura === materia && (p.anio_lectivo || anioLectivoFiltro) === anioLectivoFiltro)
+              if (planesMateria.length === 0) return null
 
-          {planesFiltradosPeriodo.length === 0 ? (
-            <div className="bg-white p-12 text-center rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
-              <p className="text-slate-500 font-medium text-xs">
-                No hay planificaciones regulares registradas en el periodo {anioLectivoFiltro}.
-              </p>
-              {!esAnioCerradoActual && (
-                <button
-                  onClick={() => router.push('/docente/planificador/nuevo')}
-                  style={{ backgroundColor: '#4b4c99' }}
-                  className="px-4 py-2 text-white text-xs font-bold rounded-xl shadow-sm transition cursor-pointer"
-                >
-                  + Crear planificación regular
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-6">
-              
-              {/* MODELO 1: TRIMESTRAL DISCIPLINAR */}
-              <div className="space-y-4">
-                <div className="border-b border-slate-200 pb-2.5 flex items-center justify-between">
-                  <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                    Modelo 1: Trimestral Disciplinar ({anioLectivoFiltro})
-                  </h2>
-                  <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                    {planesModelo1.length} Registros
-                  </span>
-                </div>
+              const keyGrupo = `${materia}-trimestral_disciplinar`
+              const estaAbierto = materiasAbiertas[keyGrupo]
 
-                {planesModelo1.length === 0 ? (
-                  <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs text-center text-xs text-slate-400 font-medium">
-                    No hay planificaciones en el Modelo 1 para este periodo.
+              return (
+                <div key={keyGrupo} className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+                  <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex justify-between items-center">
+                    <span 
+                      style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
+                      className="px-3.5 py-1.5 text-xs font-bold rounded-xl uppercase tracking-wide border shadow-2xs"
+                    >
+                      {materia} ({planesMateria.length})
+                    </span>
+                    <button
+                      onClick={() => toggleGrupo(materia, 'trimestral_disciplinar')}
+                      className="text-xs font-bold text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                    >
+                      {estaAbierto ? 'Ocultar' : 'Mostrar'}
+                    </button>
                   </div>
-                ) : (
-                  materiasDisponibles.map((materia) => {
-                    const planesMateria = planesModelo1.filter((p) => p.asignatura === materia)
-                    if (planesMateria.length === 0) return null
 
-                    const keyGrupo = `${materia}-trimestral_disciplinar`
-                    const estaAbierto = materiasAbiertas[keyGrupo]
-                    const hayBorradores = planesMateria.some(p => p.estado === 'borrador')
-
-                    return (
-                      <div key={keyGrupo} className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-                        <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex justify-between items-center">
-                          <div className="flex items-center gap-3.5">
-                            <span 
-                              style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
-                              className="px-3.5 py-1.5 text-xs font-bold rounded-xl uppercase tracking-wide border shadow-2xs"
-                            >
-                              {materia}
-                            </span>
-                            <span className="text-xs font-bold text-slate-500">
-                              {planesMateria.length} {planesMateria.length === 1 ? 'Planificación' : 'Planificaciones'}
-                            </span>
+                  {estaAbierto && (
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-white">
+                      {planesMateria.map((plan) => (
+                        <div key={plan.id} className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between space-y-4">
+                          <div>
+                            <h3 className="font-bold text-slate-900 text-xs mb-1 line-clamp-2 uppercase">
+                              {plan.titulo_planificación || plan.tema}
+                            </h3>
+                            <p className="text-[11px] text-slate-500 font-medium">{plan.subnivel} • {plan.grado_curso || plan.grado}</p>
+                          </div>
+                          <div className="pt-3 border-t border-slate-100 flex gap-2">
+                            {/* REDIRECCIÓN DIRECTA A EDITAR PLAN REGULAR */}
                             <button
-                              onClick={() => toggleGrupo(materia, 'trimestral_disciplinar')}
-                              className="text-xs font-bold text-slate-400 hover:text-slate-600 transition flex items-center gap-1 cursor-pointer"
+                              onClick={() => router.push(`/docente/planificador/nuevo?id=${plan.id}`)}
+                              style={{ backgroundColor: '#4b4c99' }}
+                              className="w-full py-2 text-white text-xs font-bold rounded-xl transition shadow-2xs cursor-pointer text-center"
                             >
-                              <span>{estaAbierto ? '▲' : '▼'}</span> {estaAbierto ? 'Ocultar' : 'Mostrar'}
+                              Editar Plan
+                            </button>
+                            <button
+                              onClick={() => handleEliminarPlanRegular(plan)}
+                              className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 shadow-2xs cursor-pointer"
+                            >
+                              Eliminar
                             </button>
                           </div>
-
-                          {hayBorradores && !esAnioCerradoActual && (
-                            <button
-                              onClick={() => handleEnviarMateriaARevision(materia, 'trimestral_disciplinar')}
-                              disabled={actualizandoEstado}
-                              className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl border border-amber-200 shadow-2xs transition cursor-pointer"
-                            >
-                              Enviar a revisión
-                            </button>
-                          )}
                         </div>
-
-                        {estaAbierto && (
-                          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-white">
-                            {planesMateria.map((plan) => {
-                              const estado = plan.estado || 'borrador'
-                              const esAprobado = estado === 'aprobado'
-
-                              return (
-                                <div
-                                  key={plan.id}
-                                  className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between space-y-4"
-                                >
-                                  <div>
-                                    <div className="flex justify-between items-start mb-2">
-                                      <span className="text-[10px] font-mono text-slate-400 font-bold">
-                                        ID: {plan.id.slice(0, 6)}...
-                                      </span>
-                                      <span
-                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide shadow-2xs inline-block ${
-                                          esAprobado
-                                            ? 'bg-emerald-100 text-emerald-800'
-                                            : estado === 'enviado_revision'
-                                            ? 'bg-amber-100 text-amber-800'
-                                            : estado === 'rechazado'
-                                            ? 'bg-rose-100 text-rose-800'
-                                            : 'bg-slate-100 text-slate-700'
-                                        }`}
-                                      >
-                                        {esAprobado ? 'Aprobado' : estado === 'enviado_revision' ? 'En revisión' : estado === 'rechazado' ? 'Rechazado' : 'Borrador'}
-                                      </span>
-                                    </div>
-
-                                    <h3 className="font-bold text-slate-900 text-xs mb-1 line-clamp-2 uppercase">
-                                      {plan.titulo_planificación || plan.tema}
-                                    </h3>
-                                    <p className="text-[11px] text-slate-500 font-medium mb-2">
-                                      {plan.subnivel} • {plan.grado_curso || plan.grado}
-                                    </p>
-                                  </div>
-
-                                  <div className="space-y-2 pt-3 border-t border-slate-100">
-                                    {!esAprobado && !esAnioCerradoActual && (estado === 'borrador' || estado === 'rechazado') && (
-                                      <button
-                                        onClick={() => router.push(`/docente/planificador/nuevo?id=${plan.id}`)}
-                                        className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition shadow-2xs cursor-pointer"
-                                      >
-                                        Editar
-                                      </button>
-                                    )}
-
-                                    <button
-                                      onClick={() => setPlanSeleccionado({ ...plan, origen: 'regular' })}
-                                      className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition shadow-2xs cursor-pointer"
-                                    >
-                                      Ver Detalle
-                                    </button>
-
-                                    {!esAprobado && !esAnioCerradoActual ? (
-                                      <button
-                                        onClick={() => handleEliminarPlanRegular(plan)}
-                                        className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition shadow-2xs cursor-pointer"
-                                      >
-                                        Eliminar
-                                      </button>
-                                    ) : (
-                                      <div className="text-center py-2 text-[10px] font-bold text-emerald-800 bg-emerald-50 rounded-xl border border-emerald-200 shadow-2xs">
-                                        Bloqueado ({esAnioCerradoActual ? 'Periodo Cerrado' : 'Aprobado'})
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-
-              {/* MODELO 2: MULTIGRADO POR EJES */}
-              <div className="space-y-4 pt-2">
-                <div className="border-b border-slate-200 pb-2.5 flex items-center justify-between">
-                  <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                    Modelo 2: Multigrado por Ejes Temáticos ({anioLectivoFiltro})
-                  </h2>
-                  <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                    {planesModelo2.length} Registros
-                  </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-
-                {planesModelo2.length === 0 ? (
-                  <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs text-center text-xs text-slate-400 font-medium">
-                    No hay planificaciones en el Modelo 2 para este periodo.
-                  </div>
-                ) : (
-                  materiasDisponibles.map((materia) => {
-                    const planesMateria = planesModelo2.filter((p) => p.asignatura === materia)
-                    if (planesMateria.length === 0) return null
-
-                    const keyGrupo = `${materia}-multigrado_eje`
-                    const estaAbierto = materiasAbiertas[keyGrupo]
-
-                    return (
-                      <div key={keyGrupo} className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-                        <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex justify-between items-center">
-                          <span 
-                            style={{ color: '#4b4c99', backgroundColor: 'rgba(75, 76, 153, 0.08)', borderColor: 'rgba(75, 76, 153, 0.2)' }}
-                            className="px-3.5 py-1.5 text-xs font-bold rounded-xl uppercase tracking-wide border shadow-2xs"
-                          >
-                            {materia}
-                          </span>
-                          <button
-                            onClick={() => toggleGrupo(materia, 'multigrado_eje')}
-                            className="text-xs font-bold text-slate-400 hover:text-slate-600 transition cursor-pointer"
-                          >
-                            <span>{estaAbierto ? '▲' : '▼'}</span> {estaAbierto ? 'Ocultar' : 'Mostrar'}
-                          </button>
-                        </div>
-
-                        {estaAbierto && (
-                          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-white">
-                            {planesMateria.map((plan) => (
-                              <div
-                                key={plan.id}
-                                className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition flex flex-col justify-between space-y-4"
-                              >
-                                <div>
-                                  <h3 className="font-bold text-slate-900 text-xs mb-1 line-clamp-2 uppercase">
-                                    {plan.titulo_planificación || plan.tema}
-                                  </h3>
-                                  <p className="text-[11px] text-slate-500 font-medium">
-                                    Eje: {plan.eje_tematico || 'Eje temático integrado'}
-                                  </p>
-                                </div>
-
-                                <div className="space-y-2 pt-3 border-t border-slate-100">
-                                  <button
-                                    onClick={() => setPlanSeleccionado({ ...plan, origen: 'regular' })}
-                                    className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition shadow-2xs cursor-pointer"
-                                  >
-                                    Ver Detalle
-                                  </button>
-                                  {!esAnioCerradoActual && (
-                                    <button
-                                      onClick={() => handleEliminarPlanRegular(plan)}
-                                      className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition shadow-2xs cursor-pointer"
-                                    >
-                                      Eliminar
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-
-            </div>
-          )}
+              )
+            })}
+          </div>
         </div>
       )}
 
-      {/* ================= MODAL DE VISTA GENERAL (REGULARES Y PILOTO) ================= */}
+      {/* MODAL DETALLE PARA REGULARES */}
       {planSeleccionado && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 md:p-8 space-y-5 shadow-2xl border border-slate-200 font-sans max-h-[90vh] overflow-y-auto">
-            
-            <div className="text-center border-b border-slate-100 pb-4">
-              <h2 className="text-sm font-bold uppercase text-slate-900 tracking-wide">
-                {institucion?.nombre_institucion || 'UNIDAD EDUCATIVA'}
-              </h2>
-              <p className="text-xs text-indigo-700 font-bold uppercase mt-1">
-                {planSeleccionado.bloques_competencias
-                  ? `Planificación Microcurricular Piloto Zona 6 (${planSeleccionado.trimestre})`
-                  : `Planificación (${planSeleccionado.tipo_modelo === 'multigrado_eje' ? 'Multigrado por Ejes' : 'Trimestral Disciplinar'}) - Periodo: ${planSeleccionado.anio_lectivo || 'Actual'}`}
-              </p>
-              <div className="flex justify-between text-[11px] font-semibold text-slate-600 mt-3 pt-3 border-t border-slate-100">
-                <span>Docente: <strong className="text-slate-900">{docente?.nombres} {docente?.apellidos}</strong></span>
-                <span>Asignatura: <strong className="text-slate-900">{planSeleccionado.asignatura}</strong></span>
-                <span>Grado/Curso: <strong className="text-slate-900">{planSeleccionado.grado_curso || planSeleccionado.grado}</strong></span>
-              </div>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <h2 className="text-sm font-bold uppercase text-slate-900">{planSeleccionado.titulo_planificación || planSeleccionado.tema}</h2>
+            <p className="text-xs text-slate-600">{planSeleccionado.objetivos_aprendizaje || planSeleccionado.objetivos || 'Sin objetivos'}</p>
+            <div className="flex justify-end pt-3">
+              <button onClick={() => setPlanSeleccionado(null)} className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl">Cerrar</button>
             </div>
-
-            {/* VISTA PARA PLAN PILOTO ZONA 6 */}
-            {planSeleccionado.bloques_competencias ? (
-              <div className="space-y-4 text-xs text-slate-800">
-                <div>
-                  <strong className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Título de la Situación de Aprendizaje:</strong>
-                  <p className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-bold text-slate-900">{planSeleccionado.titulo_sia || 'S/T'}</p>
-                </div>
-                <div>
-                  <strong className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Descripción:</strong>
-                  <p className="p-3 bg-slate-50 rounded-xl border border-slate-200 leading-relaxed">{planSeleccionado.descripcion_sia || 'S/D'}</p>
-                </div>
-                <div>
-                  <strong className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Competencias Específicas:</strong>
-                  <p className="p-3 bg-slate-50 rounded-xl border border-slate-200 leading-relaxed font-medium">{planSeleccionado.competencia_especifica || 'N/A'}</p>
-                </div>
-                <div>
-                  <strong className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Semanas Planificadas ({planSeleccionado.semanas?.length || 0}):</strong>
-                  <div className="space-y-2 mt-1">
-                    {planSeleccionado.semanas?.map((s: any, idx: number) => (
-                      <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] space-y-1">
-                        <strong className="block text-indigo-700">Semana {s.numero} {s.tema ? `· ${s.tema}` : ''}</strong>
-                        <p><strong>• Inicio:</strong> {s.inicio || 'S/N'}</p>
-                        <p><strong>• Desarrollo:</strong> {s.desarrollo || 'S/N'}</p>
-                        <p>• <strong>Cierre:</strong> {s.cierre || 'S/N'}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* VISTA PARA PLANES REGULARES */
-              <div className="space-y-3.5 text-xs text-slate-800">
-                {planSeleccionado.observaciones_rector && (
-                  <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-900 shadow-2xs">
-                    <strong className="block font-bold uppercase">Observaciones de Autoridad:</strong>
-                    <p className="italic font-medium">{planSeleccionado.observaciones_rector}</p>
-                  </div>
-                )}
-                <div>
-                  <strong className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Tema / Unidad:</strong>
-                  <p className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-semibold">{planSeleccionado.titulo_planificación || planSeleccionado.tema}</p>
-                </div>
-                <div>
-                  <strong className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Objetivos:</strong>
-                  <p className="p-3 bg-slate-50 rounded-xl border border-slate-200">{planSeleccionado.objetivos_aprendizaje || planSeleccionado.objetivos || 'N/A'}</p>
-                </div>
-                <div>
-                  <strong className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Criterios de Evaluación:</strong>
-                  <p className="p-3 bg-slate-50 rounded-xl border border-slate-200">{planSeleccionado.criterios_evaluacion || planSeleccionado.criterios || 'N/A'}</p>
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center pt-4 border-t border-slate-100 gap-2.5">
-              <button
-                onClick={() => setPlanSeleccionado(null)}
-                className="px-4 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-200 transition cursor-pointer"
-              >
-                Cerrar
-              </button>
-
-              <div className="flex gap-2">
-                {planSeleccionado.bloques_competencias ? (
-                  <>
-                    <button
-                      onClick={() => router.push(`/docente/planificadorpiloto/ver?id=${planSeleccionado.id}&formato=oficial`)}
-                      style={{ backgroundColor: '#4b4c99' }}
-                      className="px-4 py-2.5 text-white font-bold text-xs rounded-xl transition cursor-pointer"
-                    >
-                      Abrir Visor Web
-                    </button>
-                    <button
-                      onClick={() => descargarPlanPilotoPDF(planSeleccionado)}
-                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
-                    >
-                      Descargar PDF
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {!anosCerrados.includes(planSeleccionado.anio_lectivo || '') && planSeleccionado.estado !== 'aprobado' && (
-                      <button
-                        onClick={() => router.push(`/docente/planificador/nuevo?id=${planSeleccionado.id}`)}
-                        style={{ backgroundColor: '#4b4c99' }}
-                        className="px-4 py-2.5 text-white font-bold text-xs rounded-xl transition cursor-pointer"
-                      >
-                        Editar Plan
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
           </div>
         </div>
       )}

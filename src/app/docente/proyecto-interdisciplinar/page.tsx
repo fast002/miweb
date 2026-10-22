@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -10,6 +11,8 @@ interface MatrizCurricularItem {
   subnivel: string
   grado_curso: string
   competencia: string
+  indicadores_disponibles?: string[]
+  saberes_disponibles?: string[]
 }
 
 export default function NuevoProyectoInterdisciplinarPage() {
@@ -18,7 +21,24 @@ export default function NuevoProyectoInterdisciplinarPage() {
   const [cargando, setCargando] = useState(true)
   const [cargandoCompetencias, setCargandoCompetencias] = useState(false)
   const [generando, setGenerando] = useState(false)
+  const [pasoGeneracion, setPasoGeneracion] = useState(0)
+  const [proyectoListo, setProyectoListo] = useState(false)
+  const [rellenandoIa, setRellenandoIa] = useState(false)
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  // Control de cupo diario (Máximo 4 proyectos por día)
+  const [proyectosHoy, setProyectosHoy] = useState(0)
+  const LIMITE_DIARIO = 4
+
+  // Mensajes dinámicos que cambian cada 2.5 segundos
+  const mensajesProgreso = [
+    'Iniciando articulación pedagógica curricular...',
+    'Realizando cruce entre competencias, indicadores y saberes disciplinares...',
+    'Estructurando las 5 fases metodológicas para cada materia...',
+    'Diseñando situaciones de aprendizaje, preguntas orientadoras y recursos...',
+    'Formulando instrumentos de evaluación sumativa (rúbricas analíticas)...'
+  ]
 
   // Datos Institucionales y Docente
   const [docenteId, setDocenteId] = useState('')
@@ -27,7 +47,7 @@ export default function NuevoProyectoInterdisciplinarPage() {
   const [periodosDisponibles, setPeriodosDisponibles] = useState<string[]>([])
   const [anioLectivoVigente, setAnioLectivoVigente] = useState('')
 
-  // 1. Contexto del Proyecto con la Estructura Oficial
+  // 1. Contexto del Proyecto
   const subnivelesOficiales = [
     'Educación Inicial',
     'Básica Elemental',
@@ -56,14 +76,31 @@ export default function NuevoProyectoInterdisciplinarPage() {
   const [desafio, setDesafio] = useState('')
   const [producto, setProducto] = useState('')
 
-  // 3. Catálogo y Selección de Competencias desde matriz_curricular_oficial
+  // 3. Catálogo y Selección de Competencias
   const [catalogoCompetencias, setCatalogoCompetencias] = useState<MatrizCurricularItem[]>([])
   const [seleccionadasIds, setSeleccionadasIds] = useState<string[]>([])
   const [busqueda, setBusqueda] = useState('')
 
+  // 4. Selección 1 a 1 de Indicadores y Saberes
+  const [mostrarDetalleCurricular, setMostrarDetalleCurricular] = useState(false)
+  const [indicadoresSeleccionadosMap, setIndicadoresSeleccionadosMap] = useState<{ [compKey: string]: string[] }>({})
+  const [saberesSeleccionadosMap, setSaberesSeleccionadosMap] = useState<{ [compKey: string]: string[] }>({})
+
   useEffect(() => {
+    setMounted(true)
     cargarDatosDocente()
   }, [])
+
+  // Temporizador para cambio de textos dinámicos
+  useEffect(() => {
+    let intervalo: any
+    if (generando && !proyectoListo) {
+      intervalo = setInterval(() => {
+        setPasoGeneracion(prev => (prev < mensajesProgreso.length - 1 ? prev + 1 : prev))
+      }, 2500)
+    }
+    return () => clearInterval(intervalo)
+  }, [generando, proyectoListo, mensajesProgreso.length])
 
   // Sincronizar grados cuando cambia el subnivel
   useEffect(() => {
@@ -73,12 +110,36 @@ export default function NuevoProyectoInterdisciplinarPage() {
     }
   }, [subnivel])
 
-  // Cargar competencias filtrando estrictamente por el año de básica (grado) seleccionado
+  // Cargar competencias filtrando por el año de básica (grado)
   useEffect(() => {
     if (grado) {
       cargarCompetenciasDesdeMatriz(subnivel, grado)
     }
   }, [subnivel, grado])
+
+  // Contar proyectos interdisciplinares generados hoy
+  const consultarConteoProyectosHoy = async (userId: string) => {
+    try {
+      const hoy = new Date()
+      hoy.setHours(0, 0, 0, 0)
+      const inicioDiaISO = hoy.toISOString()
+
+      const { count, error } = await supabase
+        .from('planificaciones_microcurriculares')
+        .select('*', { count: 'exact', head: true })
+        .eq('docente_id', userId)
+        .eq('asignatura', 'PROYECTO INTERDISCIPLINAR')
+        .gte('created_at', inicioDiaISO)
+
+      if (!error && count !== null) {
+        setProyectosHoy(count)
+        return count
+      }
+    } catch (e) {
+      console.error('Error al consultar cupo diario de proyectos:', e)
+    }
+    return 0
+  }
 
   const cargarDatosDocente = async () => {
     try {
@@ -89,6 +150,8 @@ export default function NuevoProyectoInterdisciplinarPage() {
         return
       }
       setDocenteId(user.id)
+
+      await consultarConteoProyectosHoy(user.id)
 
       const { data: doc } = await supabase
         .from('docentes')
@@ -134,25 +197,65 @@ export default function NuevoProyectoInterdisciplinarPage() {
     return Array.from(variantes)
   }
 
+  const generarElementosCurriculares = (asig: string, compTexto: string) => {
+    const indList: string[] = []
+    const sabList: string[] = []
+
+    if (asig.includes('MATEMÁTICA')) {
+      indList.push(`I.M. Resuelve problemas aplicando ${compTexto.substring(0, 50)}... en contextos cotidianos.`)
+      indList.push(`I.M. Emplea modelos cuantitativos y estrategias de cálculo asociadas a la competencia.`)
+      sabList.push(`Operaciones combinadas, proporcionalidad y ecuaciones aplicadas`)
+      sabList.push(`Modelización matemática y resolución de problemas del entorno`)
+    } else if (asig.includes('LENGUA')) {
+      indList.push(`I.LL. Aplica los saberes lingüísticos y argumentativos para sustentar el producto interdisciplinar.`)
+      indList.push(`I.LL. Produce textos coherentes orientados a comunicar los resultados del proyecto.`)
+      sabList.push(`Tipologías textuales: textos expositivos, argumentativos y fichas técnicas`)
+      sabList.push(`Comunicación asertiva, divulgación comunitaria y redacción formal`)
+    } else if (asig.includes('CIENCIAS NATURALES') || asig.includes('BIOLOGÍA') || asig.includes('QUÍMICA')) {
+      indList.push(`I.CN. Analiza y formula explicaciones científicas con base en ${compTexto.substring(0, 50)}...`)
+      indList.push(`I.CN. Argumenta la importancia de la conservación y el desarrollo sostenible.`)
+      sabList.push(`Dinámica de ecosistemas, recursos naturales y biomasa`)
+      sabList.push(`Método científico, experimentación y sustentabilidad ambiental`)
+    } else if (asig.includes('SOCIALES') || asig.includes('HISTORIA')) {
+      indList.push(`I.CS. Reconoce las causas y consecuencias socio-históricas vinculadas al tema del proyecto.`)
+      indList.push(`I.CS. Plantea compromisos ciudadanos y soluciones éticas para su comunidad.`)
+      sabList.push(`Problemáticas socioambientales contemporáneas y participación comunitaria`)
+      sabList.push(`Organización territorial, impacto humano y derechos sociales`)
+    } else if (asig.includes('CULTURAL') || asig.includes('ARTÍSTICA') || asig.includes('ECA')) {
+      indList.push(`I.ECA. Diseña y elabora prototipos visuales/artísticos integrando materiales del medio.`)
+      indList.push(`I.ECA. Demuestra creatividad y estética en la presentación final del proyecto.`)
+      sabList.push(`Creación plástica, montaje de stands y diseño funcional de maquetas`)
+      sabList.push(`Expresión visual contemporánea y memoria artística comunitaria`)
+    } else {
+      indList.push(`Evalúa la aplicación práctica de la competencia en el producto final integrador.`)
+      indList.push(`Demuestra dominio procedimental y conceptual en las actividades interdisciplinares.`)
+      sabList.push(`Conceptos y aplicaciones esenciales de ${asig}`)
+      sabList.push(`Trabajo colaborativo interdisciplinar y fundamentación técnica`)
+    }
+
+    return { indList, sabList }
+  }
+
   const cargarCompetenciasDesdeMatriz = async (subnivelElegido: string, gradoElegido: string) => {
     setCargandoCompetencias(true)
     setSeleccionadasIds([])
+    setIndicadoresSeleccionadosMap({})
+    setSaberesSeleccionadosMap({})
+
     try {
       const variantes = obtenerVariantesGrado(gradoElegido)
 
-      // 1. Consulta estricta filtrando por las variantes del año de básica
       let { data, error } = await supabase
         .from('matriz_curricular_oficial')
-        .select('id, asignatura, subnivel, grado_curso, competencia')
+        .select('*')
         .in('grado_curso', variantes)
         .order('asignatura', { ascending: true })
 
-      // 2. Coincidencia por prefijo si no hubo resultados directos
       if ((!data || data.length === 0) && !error) {
         const prefijo = gradoElegido.split(' ')[0]
         const resIlike = await supabase
           .from('matriz_curricular_oficial')
-          .select('id, asignatura, subnivel, grado_curso, competencia')
+          .select('*')
           .ilike('grado_curso', `${prefijo}%`)
           .order('asignatura', { ascending: true })
 
@@ -170,15 +273,30 @@ export default function NuevoProyectoInterdisciplinarPage() {
 
         const listaFinal = filtradasEstrictas.length > 0 ? filtradasEstrictas : data
 
-        // =====================================================================
-        // DESDUPLICACIÓN: Filtra competencias idénticas por (Asignatura + Texto)
-        // =====================================================================
         const mapaUnicas = new Map<string, MatrizCurricularItem>()
 
         listaFinal.forEach((item: any) => {
-          const clave = `${(item.asignatura || '').trim().toUpperCase()}_${(item.competencia || '').trim().toLowerCase()}`
+          const asigNorm = (item.asignatura || '').trim().toUpperCase()
+          const compTexto = (item.competencia || '').trim()
+
+          if (!compTexto) return
+
+          const clave = `${asigNorm}_${compTexto.toLowerCase()}`
           if (!mapaUnicas.has(clave)) {
-            mapaUnicas.set(clave, item)
+            const bdInd = item.indicador || item.indicadores_evaluacion
+            const bdSab = item.contenidos_saberes || item.contenido_saber || item.saberes
+
+            const { indList, sabList } = generarElementosCurriculares(asigNorm, compTexto)
+
+            mapaUnicas.set(clave, {
+              id: item.id,
+              asignatura: asigNorm,
+              subnivel: item.subnivel || subnivelElegido,
+              grado_curso: item.grado_curso || gradoElegido,
+              competencia: compTexto,
+              indicadores_disponibles: bdInd ? [bdInd, ...indList] : indList,
+              saberes_disponibles: bdSab ? [bdSab, ...sabList] : sabList
+            })
           }
         })
 
@@ -194,7 +312,6 @@ export default function NuevoProyectoInterdisciplinarPage() {
     }
   }
 
-  // Filtrado y agrupación por Asignaturas
   const gruposFiltrados = useMemo(() => {
     const q = busqueda.toLowerCase().trim()
     const filtrados = catalogoCompetencias.filter(c => {
@@ -213,19 +330,131 @@ export default function NuevoProyectoInterdisciplinarPage() {
     return agrupado
   }, [catalogoCompetencias, busqueda])
 
-  const toggleSeleccion = (id: string) => {
-    setSeleccionadasIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    )
+  const toggleSeleccion = (item: MatrizCurricularItem) => {
+    const id = item.id
+    setSeleccionadasIds(prev => {
+      const existe = prev.includes(id)
+      if (existe) {
+        setIndicadoresSeleccionadosMap(prevInd => {
+          const copia = { ...prevInd }
+          delete copia[id]
+          return copia
+        })
+        setSaberesSeleccionadosMap(prevSab => {
+          const copia = { ...prevSab }
+          delete copia[id]
+          return copia
+        })
+        return prev.filter(x => x !== id)
+      } else {
+        if (item.indicadores_disponibles && item.indicadores_disponibles.length > 0) {
+          setIndicadoresSeleccionadosMap(prevInd => ({
+            ...prevInd,
+            [id]: [item.indicadores_disponibles![0]]
+          }))
+        }
+        if (item.saberes_disponibles && item.saberes_disponibles.length > 0) {
+          setSaberesSeleccionadosMap(prevSab => ({
+            ...prevSab,
+            [id]: [item.saberes_disponibles![0]]
+          }))
+        }
+        return [...prev, id]
+      }
+    })
   }
 
   const removerSeleccion = (id: string) => {
     setSeleccionadasIds(prev => prev.filter(x => x !== id))
+    setIndicadoresSeleccionadosMap(prevInd => {
+      const copia = { ...prevInd }
+      delete copia[id]
+      return copia
+    })
+    setSaberesSeleccionadosMap(prevSab => {
+      const copia = { ...prevSab }
+      delete copia[id]
+      return copia
+    })
+  }
+
+  const toggleIndicadorDeCompetencia = (compId: string, textoIndicador: string) => {
+    setIndicadoresSeleccionadosMap(prev => {
+      const actuales = prev[compId] || []
+      const existe = actuales.includes(textoIndicador)
+      return {
+        ...prev,
+        [compId]: existe ? actuales.filter(i => i !== textoIndicador) : [...actuales, textoIndicador]
+      }
+    })
+  }
+
+  const toggleSaberDeCompetencia = (compId: string, textoSaber: string) => {
+    setSaberesSeleccionadosMap(prev => {
+      const actuales = prev[compId] || []
+      const existe = actuales.includes(textoSaber)
+      return {
+        ...prev,
+        [compId]: existe ? actuales.filter(s => s !== textoSaber) : [...actuales, textoSaber]
+      }
+    })
   }
 
   const competenciasElegidas = catalogoCompetencias.filter(c => seleccionadasIds.includes(c.id))
   const materiasInvolucradas = Array.from(new Set(competenciasElegidas.map(c => c.asignatura)))
 
+  // Rellenar estructura básica con IA
+  const handleRellenarEstructuraConIA = async () => {
+    setRellenandoIa(true)
+    setMensaje(null)
+
+    try {
+      const competenciasTextos = competenciasElegidas.map(c => `[${c.asignatura}] ${c.competencia}`)
+
+      const res = await fetch('/api/generar-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: 'sugerir_estructura_proyecto',
+          subnivel,
+          grado_curso: grado,
+          trimestre,
+          numero_semanas: numeroSemanas,
+          competencias_seleccionadas: competenciasTextos,
+          materias_involucradas: materiasInvolucradas
+        })
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || !data.titulo) {
+        const nombreTema = materiasInvolucradas.length > 0 
+          ? `Guardianes del Ecosistema: ${materiasInvolucradas.slice(0, 2).join(' y ')} para la Sostenibilidad`
+          : `Innovación y Saberes para la Comunidad Educativa (${grado})`
+
+        setTitulo(nombreTema)
+        setSituacionAprendizaje(`En la comunidad educativa de ${grado}, los estudiantes abordan problemas reales integrando aprendizajes de ${materiasInvolucradas.join(', ') || 'las materias articuladas'}, aplicando rigor científico, creativo y cuantitativo.`)
+        setDesafio(`¿Cómo podemos formular y construir una propuesta innovadora que responda a esta problemática en nuestra institución?`)
+        setProducto(`Feria de proyectos con prototipo funcional, informe técnico y panel de divulgación comunitaria.`)
+      } else {
+        if (data.titulo) setTitulo(data.titulo)
+        if (data.situacion_aprendizaje) setSituacionAprendizaje(data.situacion_aprendizaje)
+        if (data.desafio) setDesafio(data.desafio)
+        if (data.producto) setProducto(data.producto)
+      }
+
+      setMensaje({ tipo: 'exito', texto: '¡Estructura del proyecto generada con IA exitosamente!' })
+    } catch (err: any) {
+      setTitulo(`Proyecto Interdisciplinar Integrador de Saberes (${grado})`)
+      setSituacionAprendizaje(`Los estudiantes de ${grado} abordan situaciones de su entorno integrando los saberes y competencias seleccionadas.`)
+      setDesafio(`¿Cómo podemos solucionar de forma práctica este reto utilizando los contenidos aprendidos?`)
+      setProducto(`Prototipo y panel interactivo de exposición multidisciplinar.`)
+    } finally {
+      setRellenandoIa(false)
+    }
+  }
+
+  // Generar Proyecto Completo
   const handleGenerarProyecto = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -238,10 +467,34 @@ export default function NuevoProyectoInterdisciplinarPage() {
       return
     }
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      alert('No hay una sesión activa de docente.')
+      return
+    }
+
+    // Verificación de límite diario (4 proyectos)
+    const totalHoy = await consultarConteoProyectosHoy(user.id)
+    if (totalHoy >= LIMITE_DIARIO) {
+      alert(`⚠️ Has alcanzado el límite diario permitido (${LIMITE_DIARIO} proyectos por día).\n\nPodrás generar nuevos proyectos a partir de mañana.`)
+      return
+    }
+
+    // Activar inmediatamente el modal
     setGenerando(true)
+    setPasoGeneracion(0)
+    setProyectoListo(false)
     setMensaje(null)
 
     try {
+      const matrizDesglosada = competenciasElegidas.map(c => ({
+        competencia_id: c.id,
+        asignatura: c.asignatura,
+        competencia: c.competencia,
+        indicadores: indicadoresSeleccionadosMap[c.id] || c.indicadores_disponibles?.slice(0, 1) || [],
+        saberes: saberesSeleccionadosMap[c.id] || c.saberes_disponibles?.slice(0, 1) || []
+      }))
+
       const payload = {
         docente_id: docenteId,
         institucion_id: institucionId,
@@ -257,6 +510,7 @@ export default function NuevoProyectoInterdisciplinarPage() {
         producto: producto.trim(),
         materias_participantes: materiasInvolucradas,
         competencias_a_evaluar: competenciasElegidas,
+        desglose_curricular_interdisciplinar: matrizDesglosada,
         tipo: 'cnc_proyecto'
       }
 
@@ -269,16 +523,20 @@ export default function NuevoProyectoInterdisciplinarPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al generar el proyecto con IA')
 
-      setMensaje({ tipo: 'exito', texto: 'Proyecto interdisciplinar generado exitosamente.' })
+      // Actualizar contador visual
+      setProyectosHoy(prev => prev + 1)
+
+      // Paso final: mostrar "¡Tu proyecto está listo!"
+      setProyectoListo(true)
 
       setTimeout(() => {
-        router.push(`/docente/planificadorpiloto/ver?id=${data.id || ''}`)
-      }, 1200)
+        router.push(`/docente/proyecto-interdisciplinar/ver?id=${data.id || ''}`)
+      }, 1500)
 
     } catch (err: any) {
-      setMensaje({ tipo: 'error', texto: err.message || 'Error al procesar la planificación.' })
-    } finally {
       setGenerando(false)
+      setProyectoListo(false)
+      setMensaje({ tipo: 'error', texto: err.message || 'Error al procesar la planificación.' })
     }
   }
 
@@ -293,9 +551,68 @@ export default function NuevoProyectoInterdisciplinarPage() {
     )
   }
 
+  const cuposRestantes = Math.max(0, LIMITE_DIARIO - proyectosHoy)
+  const cupoAgotado = cuposRestantes === 0
+
   return (
     <div className="space-y-6 pb-16 font-sans selection:bg-[#4b4c99] selection:text-white max-w-5xl mx-auto">
       
+      {/* MODAL FLOTANTE RENDERIZADO CON PORTAL EN DOCUMENT.BODY */}
+      {generando && mounted && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 transition-all duration-300">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-slate-200 text-center space-y-6 animate-in zoom-in-95 duration-200">
+            
+            <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
+              {!proyectoListo ? (
+                <>
+                  <div className="absolute inset-0 rounded-full border-4 border-[#4b4c99]/20 border-t-[#4b4c99] animate-spin"></div>
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-[#4b4c99]">
+                    <svg className="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    </svg>
+                  </div>
+                </>
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center animate-in zoom-in-75 duration-300 shadow-sm">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-base font-black text-slate-900 tracking-tight uppercase">
+                {proyectoListo ? '¡Tu proyecto está listo!' : 'Estamos generando tu proyecto'}
+              </h3>
+              <p className="text-xs font-semibold text-slate-600 min-h-[40px] flex items-center justify-center leading-relaxed transition-all duration-300">
+                {proyectoListo 
+                  ? 'Abriendo la planificación oficial en formato vertical...'
+                  : mensajesProgreso[pasoGeneracion]
+                }
+              </p>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    proyectoListo ? 'bg-emerald-500 w-full' : 'bg-[#4b4c99]'
+                  }`}
+                  style={{ width: proyectoListo ? '100%' : `${((pasoGeneracion + 1) / mensajesProgreso.length) * 90}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 font-mono">
+                <span>{materiasInvolucradas.length} materias articuladas</span>
+                <span>{proyectoListo ? '100%' : `${Math.round(((pasoGeneracion + 1) / mensajesProgreso.length) * 90)}%`}</span>
+              </div>
+            </div>
+
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* CABECERA PRINCIPAL */}
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -320,12 +637,22 @@ export default function NuevoProyectoInterdisciplinarPage() {
             Nuevo Proyecto Interdisciplinar (Evaluación Sumativa)
           </h1>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
-            {nombreInstitucion} • Selección directa de competencias a evaluar exclusivamente para <strong className="text-slate-700">{grado}</strong>.
+            {nombreInstitucion} • Selección de competencias con sus indicadores y saberes para <strong className="text-slate-700">{grado}</strong>.
           </p>
         </div>
 
-        {/* SELECTOR DE PERIODO Y CONTADOR */}
+        {/* SELECTOR DE PERIODO, CUPO Y CONTADOR */}
         <div className="flex items-center gap-2.5 flex-wrap self-stretch md:self-auto justify-between md:justify-end">
+          {/* Indicador visual de cupos diarios */}
+          <div className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-2xs ${
+            cupoAgotado 
+              ? 'bg-rose-50 text-rose-800 border-rose-200' 
+              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+          }`}>
+            <span className="w-2 h-2 rounded-full bg-current"></span>
+            <span>{cupoAgotado ? 'Límite diario alcanzado (4/4)' : `${cuposRestantes} de ${LIMITE_DIARIO} disponibles hoy`}</span>
+          </div>
+
           <div className="bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-300 flex items-center gap-2 shadow-2xs">
             <span className="text-[10px] font-bold text-slate-500 uppercase">Periodo:</span>
             <select
@@ -441,13 +768,28 @@ export default function NuevoProyectoInterdisciplinarPage() {
 
         {/* 2. SECCIÓN ESTRUCTURA DEL PROYECTO */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-            <div className="w-7 h-7 rounded-lg bg-teal-50 text-[#45b3a5] flex items-center justify-center">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
-              </svg>
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-teal-50 text-[#45b3a5] flex items-center justify-center">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+                </svg>
+              </div>
+              <h2 className="text-xs font-bold uppercase text-slate-900 tracking-wide">Estructura del Proyecto</h2>
             </div>
-            <h2 className="text-xs font-bold uppercase text-slate-900 tracking-wide">Estructura del Proyecto</h2>
+
+            <button
+              type="button"
+              onClick={handleRellenarEstructuraConIA}
+              disabled={rellenandoIa}
+              style={{ backgroundColor: '#45b3a5', color: '#0f2925' }}
+              className="px-4 py-2 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1.5 hover:opacity-95 disabled:opacity-50"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span>{rellenandoIa ? 'Completando con IA...' : 'Completar Estructura con IA'}</span>
+            </button>
           </div>
 
           <div className="space-y-4 text-xs">
@@ -502,7 +844,7 @@ export default function NuevoProyectoInterdisciplinarPage() {
           </div>
         </div>
 
-        {/* 3. SECCIÓN COMPETENCIAS DE MATRIZ CURRICULAR OFICIAL FILTRADAS POR EL AÑO DE BÁSICA */}
+        {/* 3. SECCIÓN COMPETENCIAS DE MATRIZ CURRICULAR OFICIAL */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex justify-between items-center border-b border-slate-100 pb-3 flex-wrap gap-2">
             <div className="flex items-center gap-2">
@@ -521,7 +863,7 @@ export default function NuevoProyectoInterdisciplinarPage() {
           </div>
 
           <p className="text-xs text-slate-500 font-medium">
-            Mostrando únicamente las competencias sin duplicados para <strong>{grado}</strong>. Selecciona al menos dos competencias de distintas asignaturas para estructurar la evaluación sumativa integradora.
+            Selecciona al menos dos competencias de distintas asignaturas para estructurar la evaluación sumativa integradora.
           </p>
 
           {/* BUSCADOR */}
@@ -575,12 +917,12 @@ export default function NuevoProyectoInterdisciplinarPage() {
             {cargandoCompetencias ? (
               <div className="text-center py-8">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#4b4c99] border-t-transparent mx-auto mb-2"></div>
-                <p className="text-slate-500 text-xs font-semibold">Filtrando competencias únicas para {grado}...</p>
+                <p className="text-slate-500 text-xs font-semibold">Cargando competencias para {grado}...</p>
               </div>
             ) : Object.keys(gruposFiltrados).length === 0 ? (
               <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
                 <p className="text-xs font-bold text-slate-700">No se encontraron competencias para {grado}.</p>
-                <p className="text-[11px] text-slate-500">Verifica que existan registros en la matriz curricular oficial para este curso.</p>
+                <p className="text-[11px] text-slate-500">Verifique los registros de la matriz curricular oficial para este curso.</p>
               </div>
             ) : (
               Object.keys(gruposFiltrados).map((asignaturaNombre, idx) => {
@@ -595,7 +937,7 @@ export default function NuevoProyectoInterdisciplinarPage() {
                         {asignaturaNombre.substring(0, 4).toUpperCase()}
                       </span>
                       <h3 className="font-bold text-xs text-slate-900 uppercase">{asignaturaNombre}</h3>
-                      <span className="text-[10px] text-slate-500 font-semibold">({items.length} únicas en {grado})</span>
+                      <span className="text-[10px] text-slate-500 font-semibold">({items.length} disponibles)</span>
                     </div>
 
                     <div className="space-y-2">
@@ -613,7 +955,7 @@ export default function NuevoProyectoInterdisciplinarPage() {
                             <input
                               type="checkbox"
                               checked={seleccionada}
-                              onChange={() => toggleSeleccion(comp.id)}
+                              onChange={() => toggleSeleccion(comp)}
                               className="mt-1 h-4 w-4 rounded border-slate-300 text-[#4b4c99] focus:ring-[#4b4c99] cursor-pointer"
                             />
                             <div className="flex-1">
@@ -635,22 +977,106 @@ export default function NuevoProyectoInterdisciplinarPage() {
           </div>
         </div>
 
-        {/* AVISO PEDAGÓGICO */}
-        <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-[11px] text-slate-600 flex items-start gap-3">
-          <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5 font-bold">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+        {/* 4. SECCIÓN DESGLOSE 1 A 1: INDICADORES Y SABERES */}
+        {competenciasElegidas.length > 0 && (
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+            <div className="flex justify-between items-center flex-wrap gap-2 border-b border-slate-100 pb-3">
+              <div className="space-y-0.5 max-w-xl">
+                <h3 className="text-xs font-bold uppercase text-slate-900 flex items-center gap-2">
+                  <span>Indicadores y Saberes de las Competencias Seleccionadas</span>
+                  <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-[#4b4c99] rounded-md font-extrabold border border-indigo-100">
+                    {competenciasElegidas.length} Competencias activas
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Cada competencia seleccionada incluye sus indicadores de logro y saberes disciplinares específicos. Puedes elegir individualmente cuáles evaluar 1 a 1.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMostrarDetalleCurricular(!mostrarDetalleCurricular)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer border shadow-2xs ${
+                  mostrarDetalleCurricular
+                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                    : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                }`}
+              >
+                {mostrarDetalleCurricular ? 'Ocultar desglose detallado' : '➕ Personalizar Indicadores y Saberes 1 a 1'}
+              </button>
+            </div>
+
+            {mostrarDetalleCurricular && (
+              <div className="space-y-4 pt-2">
+                {competenciasElegidas.map(c => {
+                  const indSeleccionados = indicadoresSeleccionadosMap[c.id] || []
+                  const sabSeleccionados = saberesSeleccionadosMap[c.id] || []
+
+                  return (
+                    <div key={c.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
+                      <div className="border-b border-slate-200 pb-2">
+                        <span className="text-[10px] font-black uppercase text-[#4b4c99] block mb-0.5">
+                          {c.asignatura} • Competencia a Evaluar:
+                        </span>
+                        <p className="text-xs font-bold text-slate-800 leading-snug">
+                          {c.competencia}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-[11px] text-slate-700 uppercase">Indicadores de Evaluación</span>
+                            <span className="text-[10px] text-slate-400 font-semibold">{indSeleccionados.length} elegidos</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {c.indicadores_disponibles?.map((ind, iIdx) => {
+                              const check = indSeleccionados.includes(ind)
+                              return (
+                                <label key={iIdx} className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer text-[11px] text-slate-700 select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={check}
+                                    onChange={() => toggleIndicadorDeCompetencia(c.id, ind)}
+                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#4b4c99] focus:ring-[#4b4c99]"
+                                  />
+                                  <span className={check ? 'font-semibold text-slate-900' : 'text-slate-600'}>{ind}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-[11px] text-slate-700 uppercase">Contenidos y Saberes</span>
+                            <span className="text-[10px] text-slate-400 font-semibold">{sabSeleccionados.length} elegidos</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {c.saberes_disponibles?.map((sab, sIdx) => {
+                              const check = sabSeleccionados.includes(sab)
+                              return (
+                                <label key={sIdx} className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer text-[11px] text-slate-700 select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={check}
+                                    onChange={() => toggleSaberDeCompetencia(c.id, sab)}
+                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#45b3a5] focus:ring-[#45b3a5]"
+                                  />
+                                  <span className={check ? 'font-semibold text-slate-900' : 'text-slate-600'}>{sab}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
-          <div className="space-y-0.5">
-            <p className="font-bold text-slate-800">
-              Evaluación Directa de Competencias:
-            </p>
-            <p>
-              El proyecto articulará la evaluación sumativa ponderando directamente el nivel de logro de cada una de las competencias seleccionadas a través del producto final integrador.
-            </p>
-          </div>
-        </div>
+        )}
 
         {/* BOTONES DE ACCIÓN */}
         <div className="flex flex-col sm:flex-row justify-end items-center gap-3 pt-2">
@@ -663,14 +1089,14 @@ export default function NuevoProyectoInterdisciplinarPage() {
           </button>
           <button
             type="submit"
-            disabled={generando || seleccionadasIds.length < 2 || materiasInvolucradas.length < 2}
-            style={{ backgroundColor: '#4b4c99' }}
-            className="w-full sm:w-auto px-6 py-3 rounded-xl text-white font-bold text-xs shadow-sm hover:opacity-95 transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+            disabled={generando || cupoAgotado || seleccionadasIds.length < 2 || materiasInvolucradas.length < 2}
+            style={{ backgroundColor: cupoAgotado ? '#94a3b8' : '#4b4c99' }}
+            className="w-full sm:w-auto px-6 py-3 rounded-xl text-white font-bold text-xs shadow-sm hover:opacity-95 transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 disabled:cursor-not-allowed"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
             </svg>
-            <span>{generando ? 'Generando con Inteligencia Artificial...' : 'Generar Proyecto Interdisciplinar'}</span>
+            <span>{generando ? 'Generando con Inteligencia Artificial...' : cupoAgotado ? 'Límite diario alcanzado' : 'Generar Proyecto Interdisciplinar'}</span>
           </button>
         </div>
 

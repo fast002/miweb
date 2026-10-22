@@ -17,6 +17,10 @@ export default function PlanificadorPilotoNuevoPage() {
   const [asignaturasPermitidas, setAsignaturasPermitidas] = useState<string[]>([])
   const [sinAsignacion, setSinAsignacion] = useState(false)
 
+  // Control de cupo diario (Máximo 5 por día)
+  const [planificacionesHoy, setPlanificacionesHoy] = useState(0)
+  const LIMITE_DIARIO = 5
+
   const añosPorSubnivel: Record<string, string[]> = {
     'Básica Elemental': ['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB'],
     'Básica Media': ['5to Grado EGB', '6to Grado EGB', '7mo Grado EGB'],
@@ -88,10 +92,10 @@ export default function PlanificadorPilotoNuevoPage() {
   )
 
   const materiasDisponibles = [
-  'Matemática', 'Lengua y Literatura', 'Ciencias Naturales', 'Estudios Sociales',
-  'Educación Física', 'Educación Cultural y Artística (ECA)', 'Idioma Extranjero (Inglés)',
-  'Biología', 'Física', 'Química', 'Historia y Geografía', 'Educación para la Ciudadanía', 
-  'Filosofía', 'Emprendimiento y Gestión',
+    'Matemática', 'Lengua y Literatura', 'Ciencias Naturales', 'Estudios Sociales',
+    'Educación Física', 'Educación Cultural y Artística (ECA)', 'Idioma Extranjero (Inglés)',
+    'Biología', 'Física', 'Química', 'Historia y Geografía', 'Educación para la Ciudadanía', 
+    'Filosofía', 'Emprendimiento y Gestión',
   ]
 
   const materiasVisibles = asignaturasPermitidas.length > 0
@@ -123,9 +127,35 @@ export default function PlanificadorPilotoNuevoPage() {
     }
   }, [materiaSeleccionada, gradoSeleccionado])
 
+  // Función para contar planificaciones exitosas creadas hoy
+  const consultarConteoDiario = async (userId: string) => {
+    try {
+      const hoy = new Date()
+      hoy.setHours(0, 0, 0, 0)
+      const inicioDiaISO = hoy.toISOString()
+
+      const { count, error } = await supabase
+        .from('planificaciones_microcurriculares')
+        .select('*', { count: 'exact', head: true })
+        .eq('docente_id', userId)
+        .gte('created_at', inicioDiaISO)
+
+      if (!error && count !== null) {
+        setPlanificacionesHoy(count)
+        return count
+      }
+    } catch (e) {
+      console.error('Error al consultar cupo diario:', e)
+    }
+    return 0
+  }
+
   const cargarDatosDocente = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
+    // Consultar conteo de planificaciones de hoy
+    await consultarConteoDiario(user.id)
 
     const { data: doc } = await supabase
       .from('docentes')
@@ -302,6 +332,19 @@ export default function PlanificadorPilotoNuevoPage() {
       return
     }
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      alert('No hay una sesión activa de docente.')
+      return
+    }
+
+    // 1. Verificación previa de cupo en base de datos
+    const totalHoy = await consultarConteoDiario(user.id)
+    if (totalHoy >= LIMITE_DIARIO) {
+      alert(`⚠️ Has alcanzado el límite máximo diario (${LIMITE_DIARIO} planificaciones por día).\n\nPodrás generar nuevas planificaciones a partir de mañana.`)
+      return
+    }
+
     if (generandoIA) return
     setGenerandoIA(true)
 
@@ -339,10 +382,6 @@ export default function PlanificadorPilotoNuevoPage() {
 
       setMensajeEstadoIA('Guardando planificación en tu perfil...')
 
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('No hay usuario autenticado.')
-
-      // Mapeo de tema de clase e indicador extraído por semana
       const semanasGeneradas = data.semanas && Array.isArray(data.semanas) 
         ? data.semanas.map((s: any, idx: number) => ({
             numero: s.numero || (idx + 1),
@@ -374,6 +413,7 @@ export default function PlanificadorPilotoNuevoPage() {
         semanas: semanasGeneradas
       }
 
+      // 2. Inserción en la base de datos (si algo falló antes de aquí, NO se consume cupo)
       let queryRes = null
       if (planId) {
         queryRes = await supabase.from('planificaciones_microcurriculares').update(datosPlan).eq('id', planId).select().single()
@@ -383,16 +423,20 @@ export default function PlanificadorPilotoNuevoPage() {
 
       if (queryRes.error) throw queryRes.error
 
+      // Actualizar contador visual
+      setPlanificacionesHoy(prev => prev + 1)
+
       const nuevoId = queryRes.data.id
       const formatoParam = formatoImpresion === 'piloto_v2' ? 'actualizado' : 'oficial'
       router.push(`/docente/planificadorpiloto/ver?id=${nuevoId}&formato=${formatoParam}`)
 
     } catch (e: any) {
       clearTimeout(timeoutId)
+      // Si existió error, NO se guarda nada y se notifica al usuario
       if (e.name === 'AbortError') {
-        alert('⏱️ La generación tardó más de lo esperado en responder. Por favor, intenta de nuevo.')
+        alert('⏱️ La generación tardó más de lo esperado en responder. Tu intento NO fue consumido; por favor intenta nuevamente.')
       } else {
-        alert('❌ Error al generar planificación: ' + e.message)
+        alert('❌ Error al generar planificación: ' + e.message + '\n\n(Tu cupo diario no fue consumido).')
       }
       setGenerandoIA(false)
     }
@@ -419,6 +463,9 @@ export default function PlanificadorPilotoNuevoPage() {
       </div>
     )
   }
+
+  const cuposRestantes = Math.max(0, LIMITE_DIARIO - planificacionesHoy)
+  const cupoAgotado = cuposRestantes === 0
 
   return (
     <div className="planificador-app bg-slate-100 min-h-screen p-6 font-sans relative selection:bg-[#4b4c99] selection:text-white">
@@ -459,15 +506,25 @@ export default function PlanificadorPilotoNuevoPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Indicador visual de cupo diario */}
+            <div className={`px-4 py-2 rounded-2xl border text-xs font-bold flex items-center gap-2 ${
+              cupoAgotado 
+                ? 'bg-rose-50 text-rose-800 border-rose-200' 
+                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+            }`}>
+              <span className="w-2 h-2 rounded-full bg-current"></span>
+              <span>{cupoAgotado ? 'Límite diario alcanzado (5/5)' : `${cuposRestantes} de ${LIMITE_DIARIO} disponibles hoy`}</span>
+            </div>
+
             <button
               type="button"
               onClick={generarYGuardarPlanificacion}
-              disabled={generandoIA}
-              style={{ backgroundColor: '#4b4c99' }}
-              className="px-7 py-3.5 text-white font-black text-xs rounded-2xl shadow-md hover:opacity-95 transition active:scale-[0.98] uppercase tracking-wider cursor-pointer border-0 flex items-center justify-center gap-2"
+              disabled={generandoIA || cupoAgotado}
+              style={{ backgroundColor: cupoAgotado ? '#94a3b8' : '#4b4c99' }}
+              className="px-7 py-3.5 text-white font-black text-xs rounded-2xl shadow-md hover:opacity-95 transition active:scale-[0.98] uppercase tracking-wider cursor-pointer border-0 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
             >
-              <span></span> {generandoIA ? 'Procesando...' : 'Generar planificación'}
+              <span></span> {generandoIA ? 'Procesando...' : cupoAgotado ? 'Límite alcanzado' : 'Generar planificación'}
             </button>
           </div>
         </div>
@@ -776,11 +833,11 @@ export default function PlanificadorPilotoNuevoPage() {
             <button 
               type="button"
               onClick={generarYGuardarPlanificacion}
-              disabled={generandoIA}
-              style={{ backgroundColor: '#4b4c99' }}
-              className="px-9 py-3.5 text-white font-black text-xs rounded-2xl shadow-lg hover:opacity-95 transition active:scale-[0.98] uppercase tracking-wider cursor-pointer border-0 flex items-center justify-center gap-2"
+              disabled={generandoIA || cupoAgotado}
+              style={{ backgroundColor: cupoAgotado ? '#94a3b8' : '#4b4c99' }}
+              className="px-9 py-3.5 text-white font-black text-xs rounded-2xl shadow-lg hover:opacity-95 transition active:scale-[0.98] uppercase tracking-wider cursor-pointer border-0 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
             >
-              <span></span> {generandoIA ? 'Generando...' : 'Generar planificación'}
+              <span></span> {generandoIA ? 'Generando...' : cupoAgotado ? 'Límite alcanzado' : 'Generar planificación'}
             </button>
           </div>
 
