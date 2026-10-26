@@ -11,8 +11,82 @@ interface MatrizCurricularItem {
   subnivel: string
   grado_curso: string
   competencia: string
-  indicadores_disponibles?: string[]
-  saberes_disponibles?: string[]
+  indicadores_disponibles: string[]
+  declarativos_disponibles: string[]
+  procedimentales_disponibles: string[]
+  actitudinales_disponibles: string[]
+}
+
+// Función robusta para desglosar manteniendo intactas las siglas oficiales del Ministerio
+function extraerItemsCurriculares(
+  texto: string | null | undefined, 
+  tipo: 'indicador' | 'declarativo' | 'procedimental' | 'actitudinal',
+  asignatura?: string
+): string[] {
+  if (!texto || typeof texto !== 'string') return []
+
+  // 1. Separar primero por saltos de línea
+  const lineas = texto.split(/\r?\n+/).map(l => l.trim()).filter(Boolean)
+  const itemsCrudos: string[] = []
+
+  lineas.forEach(linea => {
+    // 2. Patrón que detecta inicios de códigos curriculares oficiales completos:
+    // Ej: "I.CN.4.6.1.", "CN.4.3.d.1.", "I.M.4.1.2.", "M.4.1.p.1.", "I.EFL.4.1.1.", "SC.CE.EFL.4.4."
+    const regexCodigo = /(?:(?:Ref\.\s*)?(?:I\.[A-Z]{1,4}|SC\.CE\.[A-Z]{1,4}|[A-Z]{1,4})\.\d+(?:\.[0-9a-z]+)*\.?\s+)/gi
+
+    // Encontrar todas las posiciones donde arranca un código oficial
+    const indices: number[] = []
+    let match: RegExpExecArray | null
+    while ((match = regexCodigo.exec(linea)) !== null) {
+      indices.push(match.index)
+    }
+
+    if (indices.length > 1) {
+      for (let i = 0; i < indices.length; i++) {
+        const inicio = indices[i]
+        const fin = (i + 1 < indices.length) ? indices[i + 1] : linea.length
+        const parte = linea.substring(inicio, fin).trim()
+        if (parte) itemsCrudos.push(parte)
+      }
+    } else {
+      itemsCrudos.push(linea)
+    }
+  })
+
+  // 3. Normalizar y reparar siglas si vienen incompletas desde la base de datos
+  // Ejemplo: Si viene "N.4.6.1." en Ciencias Naturales, restaurar a "I.CN.4.6.1." o "CN.4.3.d.1."
+  const itemsCorregidos = itemsCrudos.map(item => {
+    let limpio = item.trim()
+
+    // Detectar prefijo esperado según la asignatura
+    const asigUpper = (asignatura || '').toUpperCase()
+    let siglaAsig = 'CN'
+    if (asigUpper.includes('MATEMÁTICA')) siglaAsig = 'M'
+    else if (asigUpper.includes('LENGUA')) siglaAsig = 'LL'
+    else if (asigUpper.includes('SOCIALES') || asigUpper.includes('HISTORIA')) siglaAsig = 'CS'
+    else if (asigUpper.includes('INGLÉS') || asigUpper.includes('ENGLISH') || asigUpper.includes('EXTRANJERO')) siglaAsig = 'EFL'
+    else if (asigUpper.includes('CULTURAL') || asigUpper.includes('ARTÍSTICA') || asigUpper.includes('ECA')) siglaAsig = 'ECA'
+    else if (asigUpper.includes('FÍSICA')) siglaAsig = 'EF'
+
+    if (tipo === 'indicador') {
+      // Si el indicador perdió la "I." o la sigla (ej: "CN.4.6.1." o "N.4.6.1.")
+      if (/^[A-Z]\.\d+\.\d+/i.test(limpio) && !limpio.startsWith('I.')) {
+        limpio = `I.${siglaAsig}.${limpio.replace(/^[A-Z]\./i, '')}`
+      } else if (/^I\.[A-Z]\.\d+/i.test(limpio) && !limpio.startsWith(`I.${siglaAsig}.`)) {
+        limpio = limpio.replace(/^I\.[A-Z]\./i, `I.${siglaAsig}.`)
+      }
+    } else {
+      // Para declarativos, procedimentales y actitudinales
+      // Si empieza con "N.4.3.d.1." restaurar a "CN.4.3.d.1."
+      if (/^[A-Z]\.\d+\.\d+\.[dpa]\.\d+/i.test(limpio) && !limpio.startsWith(`${siglaAsig}.`)) {
+        limpio = `${siglaAsig}.${limpio.replace(/^[A-Z]\./i, '')}`
+      }
+    }
+
+    return limpio
+  })
+
+  return Array.from(new Set(itemsCorregidos.filter(s => s.length > 5)))
 }
 
 export default function NuevoProyectoInterdisciplinarPage() {
@@ -31,7 +105,6 @@ export default function NuevoProyectoInterdisciplinarPage() {
   const [proyectosHoy, setProyectosHoy] = useState(0)
   const LIMITE_DIARIO = 4
 
-  // Mensajes dinámicos que cambian cada 2.5 segundos
   const mensajesProgreso = [
     'Iniciando articulación pedagógica curricular...',
     'Realizando cruce entre competencias, indicadores y saberes disciplinares...',
@@ -81,17 +154,18 @@ export default function NuevoProyectoInterdisciplinarPage() {
   const [seleccionadasIds, setSeleccionadasIds] = useState<string[]>([])
   const [busqueda, setBusqueda] = useState('')
 
-  // 4. Selección 1 a 1 de Indicadores y Saberes
+  // 4. Mapas de selección 1 a 1 de Indicadores y Saberes desglosados
   const [mostrarDetalleCurricular, setMostrarDetalleCurricular] = useState(false)
   const [indicadoresSeleccionadosMap, setIndicadoresSeleccionadosMap] = useState<{ [compKey: string]: string[] }>({})
-  const [saberesSeleccionadosMap, setSaberesSeleccionadosMap] = useState<{ [compKey: string]: string[] }>({})
+  const [declarativosSeleccionadosMap, setDeclarativosSeleccionadosMap] = useState<{ [compKey: string]: string[] }>({})
+  const [procedimentalesSeleccionadosMap, setProcedimentalesSeleccionadosMap] = useState<{ [compKey: string]: string[] }>({})
+  const [actitudinalesSeleccionadosMap, setActitudinalesSeleccionadosMap] = useState<{ [compKey: string]: string[] }>({})
 
   useEffect(() => {
     setMounted(true)
     cargarDatosDocente()
   }, [])
 
-  // Temporizador para cambio de textos dinámicos
   useEffect(() => {
     let intervalo: any
     if (generando && !proyectoListo) {
@@ -102,7 +176,6 @@ export default function NuevoProyectoInterdisciplinarPage() {
     return () => clearInterval(intervalo)
   }, [generando, proyectoListo, mensajesProgreso.length])
 
-  // Sincronizar grados cuando cambia el subnivel
   useEffect(() => {
     const listaGrados = gradosPorSubnivel[subnivel] || []
     if (listaGrados.length > 0 && !listaGrados.includes(grado)) {
@@ -110,14 +183,12 @@ export default function NuevoProyectoInterdisciplinarPage() {
     }
   }, [subnivel])
 
-  // Cargar competencias filtrando por el año de básica (grado)
   useEffect(() => {
     if (grado) {
       cargarCompetenciasDesdeMatriz(subnivel, grado)
     }
   }, [subnivel, grado])
 
-  // Contar proyectos interdisciplinares generados hoy
   const consultarConteoProyectosHoy = async (userId: string) => {
     try {
       const hoy = new Date()
@@ -197,50 +268,13 @@ export default function NuevoProyectoInterdisciplinarPage() {
     return Array.from(variantes)
   }
 
-  const generarElementosCurriculares = (asig: string, compTexto: string) => {
-    const indList: string[] = []
-    const sabList: string[] = []
-
-    if (asig.includes('MATEMÁTICA')) {
-      indList.push(`I.M. Resuelve problemas aplicando ${compTexto.substring(0, 50)}... en contextos cotidianos.`)
-      indList.push(`I.M. Emplea modelos cuantitativos y estrategias de cálculo asociadas a la competencia.`)
-      sabList.push(`Operaciones combinadas, proporcionalidad y ecuaciones aplicadas`)
-      sabList.push(`Modelización matemática y resolución de problemas del entorno`)
-    } else if (asig.includes('LENGUA')) {
-      indList.push(`I.LL. Aplica los saberes lingüísticos y argumentativos para sustentar el producto interdisciplinar.`)
-      indList.push(`I.LL. Produce textos coherentes orientados a comunicar los resultados del proyecto.`)
-      sabList.push(`Tipologías textuales: textos expositivos, argumentativos y fichas técnicas`)
-      sabList.push(`Comunicación asertiva, divulgación comunitaria y redacción formal`)
-    } else if (asig.includes('CIENCIAS NATURALES') || asig.includes('BIOLOGÍA') || asig.includes('QUÍMICA')) {
-      indList.push(`I.CN. Analiza y formula explicaciones científicas con base en ${compTexto.substring(0, 50)}...`)
-      indList.push(`I.CN. Argumenta la importancia de la conservación y el desarrollo sostenible.`)
-      sabList.push(`Dinámica de ecosistemas, recursos naturales y biomasa`)
-      sabList.push(`Método científico, experimentación y sustentabilidad ambiental`)
-    } else if (asig.includes('SOCIALES') || asig.includes('HISTORIA')) {
-      indList.push(`I.CS. Reconoce las causas y consecuencias socio-históricas vinculadas al tema del proyecto.`)
-      indList.push(`I.CS. Plantea compromisos ciudadanos y soluciones éticas para su comunidad.`)
-      sabList.push(`Problemáticas socioambientales contemporáneas y participación comunitaria`)
-      sabList.push(`Organización territorial, impacto humano y derechos sociales`)
-    } else if (asig.includes('CULTURAL') || asig.includes('ARTÍSTICA') || asig.includes('ECA')) {
-      indList.push(`I.ECA. Diseña y elabora prototipos visuales/artísticos integrando materiales del medio.`)
-      indList.push(`I.ECA. Demuestra creatividad y estética en la presentación final del proyecto.`)
-      sabList.push(`Creación plástica, montaje de stands y diseño funcional de maquetas`)
-      sabList.push(`Expresión visual contemporánea y memoria artística comunitaria`)
-    } else {
-      indList.push(`Evalúa la aplicación práctica de la competencia en el producto final integrador.`)
-      indList.push(`Demuestra dominio procedimental y conceptual en las actividades interdisciplinares.`)
-      sabList.push(`Conceptos y aplicaciones esenciales de ${asig}`)
-      sabList.push(`Trabajo colaborativo interdisciplinar y fundamentación técnica`)
-    }
-
-    return { indList, sabList }
-  }
-
   const cargarCompetenciasDesdeMatriz = async (subnivelElegido: string, gradoElegido: string) => {
     setCargandoCompetencias(true)
     setSeleccionadasIds([])
     setIndicadoresSeleccionadosMap({})
-    setSaberesSeleccionadosMap({})
+    setDeclarativosSeleccionadosMap({})
+    setProcedimentalesSeleccionadosMap({})
+    setActitudinalesSeleccionadosMap({})
 
     try {
       const variantes = obtenerVariantesGrado(gradoElegido)
@@ -273,34 +307,55 @@ export default function NuevoProyectoInterdisciplinarPage() {
 
         const listaFinal = filtradasEstrictas.length > 0 ? filtradasEstrictas : data
 
-        const mapaUnicas = new Map<string, MatrizCurricularItem>()
+        const mapaAgrupado = new Map<string, MatrizCurricularItem>()
 
-        listaFinal.forEach((item: any) => {
-          const asigNorm = (item.asignatura || '').trim().toUpperCase()
-          const compTexto = (item.competencia || '').trim()
+        listaFinal.forEach((fila: any) => {
+          const asigNorm = (fila.asignatura || '').trim().toUpperCase()
+          const compTexto = (fila.competencia || '').trim()
 
           if (!compTexto) return
 
-          const clave = `${asigNorm}_${compTexto.toLowerCase()}`
-          if (!mapaUnicas.has(clave)) {
-            const bdInd = item.indicador || item.indicadores_evaluacion
-            const bdSab = item.contenidos_saberes || item.contenido_saber || item.saberes
+          const clave = `${asigNorm}___${compTexto.toLowerCase()}`
 
-            const { indList, sabList } = generarElementosCurriculares(asigNorm, compTexto)
-
-            mapaUnicas.set(clave, {
-              id: item.id,
+          if (!mapaAgrupado.has(clave)) {
+            mapaAgrupado.set(clave, {
+              id: fila.id,
               asignatura: asigNorm,
-              subnivel: item.subnivel || subnivelElegido,
-              grado_curso: item.grado_curso || gradoElegido,
+              subnivel: fila.subnivel || subnivelElegido,
+              grado_curso: fila.grado_curso || gradoElegido,
               competencia: compTexto,
-              indicadores_disponibles: bdInd ? [bdInd, ...indList] : indList,
-              saberes_disponibles: bdSab ? [bdSab, ...sabList] : sabList
+              indicadores_disponibles: [],
+              declarativos_disponibles: [],
+              procedimentales_disponibles: [],
+              actitudinales_disponibles: []
             })
           }
+
+          const item = mapaAgrupado.get(clave)!
+
+          // Extraer ítems preservando las siglas oficiales completas
+          const inds = extraerItemsCurriculares(fila.indicador, 'indicador', asigNorm)
+          inds.forEach(i => {
+            if (!item.indicadores_disponibles.includes(i)) item.indicadores_disponibles.push(i)
+          })
+
+          const decs = extraerItemsCurriculares(fila.declarativo, 'declarativo', asigNorm)
+          decs.forEach(d => {
+            if (!item.declarativos_disponibles.includes(d)) item.declarativos_disponibles.push(d)
+          })
+
+          const procs = extraerItemsCurriculares(fila.procedimental, 'procedimental', asigNorm)
+          procs.forEach(p => {
+            if (!item.procedimentales_disponibles.includes(p)) item.procedimentales_disponibles.push(p)
+          })
+
+          const acts = extraerItemsCurriculares(fila.actitudinal, 'actitudinal', asigNorm)
+          acts.forEach(a => {
+            if (!item.actitudinales_disponibles.includes(a)) item.actitudinales_disponibles.push(a)
+          })
         })
 
-        setCatalogoCompetencias(Array.from(mapaUnicas.values()))
+        setCatalogoCompetencias(Array.from(mapaAgrupado.values()))
       } else {
         setCatalogoCompetencias([])
       }
@@ -335,29 +390,23 @@ export default function NuevoProyectoInterdisciplinarPage() {
     setSeleccionadasIds(prev => {
       const existe = prev.includes(id)
       if (existe) {
-        setIndicadoresSeleccionadosMap(prevInd => {
-          const copia = { ...prevInd }
-          delete copia[id]
-          return copia
-        })
-        setSaberesSeleccionadosMap(prevSab => {
-          const copia = { ...prevSab }
-          delete copia[id]
-          return copia
-        })
+        setIndicadoresSeleccionadosMap(m => { const c = { ...m }; delete c[id]; return c })
+        setDeclarativosSeleccionadosMap(m => { const c = { ...m }; delete c[id]; return c })
+        setProcedimentalesSeleccionadosMap(m => { const c = { ...m }; delete c[id]; return c })
+        setActitudinalesSeleccionadosMap(m => { const c = { ...m }; delete c[id]; return c })
         return prev.filter(x => x !== id)
       } else {
-        if (item.indicadores_disponibles && item.indicadores_disponibles.length > 0) {
-          setIndicadoresSeleccionadosMap(prevInd => ({
-            ...prevInd,
-            [id]: [item.indicadores_disponibles![0]]
-          }))
+        if (item.indicadores_disponibles.length > 0) {
+          setIndicadoresSeleccionadosMap(m => ({ ...m, [id]: [...item.indicadores_disponibles] }))
         }
-        if (item.saberes_disponibles && item.saberes_disponibles.length > 0) {
-          setSaberesSeleccionadosMap(prevSab => ({
-            ...prevSab,
-            [id]: [item.saberes_disponibles![0]]
-          }))
+        if (item.declarativos_disponibles.length > 0) {
+          setDeclarativosSeleccionadosMap(m => ({ ...m, [id]: [...item.declarativos_disponibles] }))
+        }
+        if (item.procedimentales_disponibles.length > 0) {
+          setProcedimentalesSeleccionadosMap(m => ({ ...m, [id]: [...item.procedimentales_disponibles] }))
+        }
+        if (item.actitudinales_disponibles.length > 0) {
+          setActitudinalesSeleccionadosMap(m => ({ ...m, [id]: [...item.actitudinales_disponibles] }))
         }
         return [...prev, id]
       }
@@ -366,44 +415,43 @@ export default function NuevoProyectoInterdisciplinarPage() {
 
   const removerSeleccion = (id: string) => {
     setSeleccionadasIds(prev => prev.filter(x => x !== id))
-    setIndicadoresSeleccionadosMap(prevInd => {
-      const copia = { ...prevInd }
-      delete copia[id]
-      return copia
-    })
-    setSaberesSeleccionadosMap(prevSab => {
-      const copia = { ...prevSab }
-      delete copia[id]
-      return copia
-    })
+    setIndicadoresSeleccionadosMap(m => { const c = { ...m }; delete c[id]; return c })
+    setDeclarativosSeleccionadosMap(m => { const c = { ...m }; delete c[id]; return c })
+    setProcedimentalesSeleccionadosMap(m => { const c = { ...m }; delete c[id]; return c })
+    setActitudinalesSeleccionadosMap(m => { const c = { ...m }; delete c[id]; return c })
   }
 
-  const toggleIndicadorDeCompetencia = (compId: string, textoIndicador: string) => {
-    setIndicadoresSeleccionadosMap(prev => {
+  const toggleItem = (
+    compId: string,
+    valor: string,
+    setter: React.Dispatch<React.SetStateAction<{ [key: string]: string[] }>>
+  ) => {
+    setter(prev => {
       const actuales = prev[compId] || []
-      const existe = actuales.includes(textoIndicador)
+      const existe = actuales.includes(valor)
       return {
         ...prev,
-        [compId]: existe ? actuales.filter(i => i !== textoIndicador) : [...actuales, textoIndicador]
+        [compId]: existe ? actuales.filter(i => i !== valor) : [...actuales, valor]
       }
     })
   }
 
-  const toggleSaberDeCompetencia = (compId: string, textoSaber: string) => {
-    setSaberesSeleccionadosMap(prev => {
-      const actuales = prev[compId] || []
-      const existe = actuales.includes(textoSaber)
-      return {
-        ...prev,
-        [compId]: existe ? actuales.filter(s => s !== textoSaber) : [...actuales, textoSaber]
-      }
-    })
+  const toggleTodosColumna = (
+    compId: string,
+    todosDisponibles: string[],
+    seleccionadosActuales: string[],
+    setter: React.Dispatch<React.SetStateAction<{ [key: string]: string[] }>>
+  ) => {
+    if (seleccionadosActuales.length === todosDisponibles.length) {
+      setter(prev => ({ ...prev, [compId]: [] }))
+    } else {
+      setter(prev => ({ ...prev, [compId]: [...todosDisponibles] }))
+    }
   }
 
   const competenciasElegidas = catalogoCompetencias.filter(c => seleccionadasIds.includes(c.id))
   const materiasInvolucradas = Array.from(new Set(competenciasElegidas.map(c => c.asignatura)))
 
-  // Rellenar estructura básica con IA
   const handleRellenarEstructuraConIA = async () => {
     setRellenandoIa(true)
     setMensaje(null)
@@ -454,7 +502,6 @@ export default function NuevoProyectoInterdisciplinarPage() {
     }
   }
 
-  // Generar Proyecto Completo
   const handleGenerarProyecto = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -473,14 +520,12 @@ export default function NuevoProyectoInterdisciplinarPage() {
       return
     }
 
-    // Verificación de límite diario (4 proyectos)
     const totalHoy = await consultarConteoProyectosHoy(user.id)
     if (totalHoy >= LIMITE_DIARIO) {
       alert(`⚠️ Has alcanzado el límite diario permitido (${LIMITE_DIARIO} proyectos por día).\n\nPodrás generar nuevos proyectos a partir de mañana.`)
       return
     }
 
-    // Activar inmediatamente el modal
     setGenerando(true)
     setPasoGeneracion(0)
     setProyectoListo(false)
@@ -491,8 +536,10 @@ export default function NuevoProyectoInterdisciplinarPage() {
         competencia_id: c.id,
         asignatura: c.asignatura,
         competencia: c.competencia,
-        indicadores: indicadoresSeleccionadosMap[c.id] || c.indicadores_disponibles?.slice(0, 1) || [],
-        saberes: saberesSeleccionadosMap[c.id] || c.saberes_disponibles?.slice(0, 1) || []
+        indicadores: indicadoresSeleccionadosMap[c.id] || c.indicadores_disponibles,
+        declarativos: declarativosSeleccionadosMap[c.id] || c.declarativos_disponibles,
+        procedimentales: procedimentalesSeleccionadosMap[c.id] || c.procedimentales_disponibles,
+        actitudinales: actitudinalesSeleccionadosMap[c.id] || c.actitudinales_disponibles
       }))
 
       const payload = {
@@ -523,10 +570,7 @@ export default function NuevoProyectoInterdisciplinarPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al generar el proyecto con IA')
 
-      // Actualizar contador visual
       setProyectosHoy(prev => prev + 1)
-
-      // Paso final: mostrar "¡Tu proyecto está listo!"
       setProyectoListo(true)
 
       setTimeout(() => {
@@ -555,13 +599,12 @@ export default function NuevoProyectoInterdisciplinarPage() {
   const cupoAgotado = cuposRestantes === 0
 
   return (
-    <div className="space-y-6 pb-16 font-sans selection:bg-[#4b4c99] selection:text-white max-w-5xl mx-auto">
+    <div className="space-y-6 pb-16 font-sans selection:bg-[#4b4c99] selection:text-white max-w-6xl mx-auto">
       
-      {/* MODAL FLOTANTE RENDERIZADO CON PORTAL EN DOCUMENT.BODY */}
+      {/* MODAL FLOTANTE */}
       {generando && mounted && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 transition-all duration-300">
           <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-slate-200 text-center space-y-6 animate-in zoom-in-95 duration-200">
-            
             <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
               {!proyectoListo ? (
                 <>
@@ -607,7 +650,6 @@ export default function NuevoProyectoInterdisciplinarPage() {
                 <span>{proyectoListo ? '100%' : `${Math.round(((pasoGeneracion + 1) / mensajesProgreso.length) * 90)}%`}</span>
               </div>
             </div>
-
           </div>
         </div>,
         document.body
@@ -641,9 +683,7 @@ export default function NuevoProyectoInterdisciplinarPage() {
           </p>
         </div>
 
-        {/* SELECTOR DE PERIODO, CUPO Y CONTADOR */}
         <div className="flex items-center gap-2.5 flex-wrap self-stretch md:self-auto justify-between md:justify-end">
-          {/* Indicador visual de cupos diarios */}
           <div className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 shadow-2xs ${
             cupoAgotado 
               ? 'bg-rose-50 text-rose-800 border-rose-200' 
@@ -866,7 +906,6 @@ export default function NuevoProyectoInterdisciplinarPage() {
             Selecciona al menos dos competencias de distintas asignaturas para estructurar la evaluación sumativa integradora.
           </p>
 
-          {/* BUSCADOR */}
           <div className="relative">
             <input
               type="text"
@@ -977,7 +1016,9 @@ export default function NuevoProyectoInterdisciplinarPage() {
           </div>
         </div>
 
-        {/* 4. SECCIÓN DESGLOSE 1 A 1: INDICADORES Y SABERES */}
+        {/* =========================================================================
+            4. SECCIÓN DESGLOSE 1 A 1 CON INICIALES OFICIALES ÍNTEGRAS
+            ========================================================================= */}
         {competenciasElegidas.length > 0 && (
           <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex justify-between items-center flex-wrap gap-2 border-b border-slate-100 pb-3">
@@ -989,7 +1030,7 @@ export default function NuevoProyectoInterdisciplinarPage() {
                   </span>
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Cada competencia seleccionada incluye sus indicadores de logro y saberes disciplinares específicos. Puedes elegir individualmente cuáles evaluar 1 a 1.
+                  Desglose individual 1 a 1 de cada ítem curricular con sus códigos oficiales. Puedes seleccionar individualmente cuáles evaluar.
                 </p>
               </div>
 
@@ -1007,15 +1048,19 @@ export default function NuevoProyectoInterdisciplinarPage() {
             </div>
 
             {mostrarDetalleCurricular && (
-              <div className="space-y-4 pt-2">
+              <div className="space-y-6 pt-2">
                 {competenciasElegidas.map(c => {
-                  const indSeleccionados = indicadoresSeleccionadosMap[c.id] || []
-                  const sabSeleccionados = saberesSeleccionadosMap[c.id] || []
+                  const indSel = indicadoresSeleccionadosMap[c.id] || []
+                  const decSel = declarativosSeleccionadosMap[c.id] || []
+                  const procSel = procedimentalesSeleccionadosMap[c.id] || []
+                  const actSel = actitudinalesSeleccionadosMap[c.id] || []
 
                   return (
-                    <div key={c.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
-                      <div className="border-b border-slate-200 pb-2">
-                        <span className="text-[10px] font-black uppercase text-[#4b4c99] block mb-0.5">
+                    <div key={c.id} className="p-5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-4">
+                      
+                      {/* TÍTULO DE LA COMPETENCIA */}
+                      <div className="border-b border-slate-200 pb-2.5">
+                        <span className="text-[10px] font-black uppercase text-[#4b4c99] tracking-wider block mb-1">
                           {c.asignatura} • Competencia a Evaluar:
                         </span>
                         <p className="text-xs font-bold text-slate-800 leading-snug">
@@ -1023,52 +1068,181 @@ export default function NuevoProyectoInterdisciplinarPage() {
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                        <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-[11px] text-slate-700 uppercase">Indicadores de Evaluación</span>
-                            <span className="text-[10px] text-slate-400 font-semibold">{indSeleccionados.length} elegidos</span>
-                          </div>
-                          <div className="space-y-1.5">
-                            {c.indicadores_disponibles?.map((ind, iIdx) => {
-                              const check = indSeleccionados.includes(ind)
-                              return (
-                                <label key={iIdx} className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer text-[11px] text-slate-700 select-none">
-                                  <input
-                                    type="checkbox"
-                                    checked={check}
-                                    onChange={() => toggleIndicadorDeCompetencia(c.id, ind)}
-                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#4b4c99] focus:ring-[#4b4c99]"
-                                  />
-                                  <span className={check ? 'font-semibold text-slate-900' : 'text-slate-600'}>{ind}</span>
-                                </label>
-                              )
-                            })}
+                      {/* 4 COLUMNAS CON SELECCIÓN INDIVIDUAL 1 A 1 */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                        
+                        {/* 1. INDICADORES DE EVALUACIÓN */}
+                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+                          <div>
+                            <div className="flex justify-between items-center mb-2 pb-1.5 border-b border-slate-100">
+                              <span className="font-bold text-[10px] uppercase text-indigo-900">Indicadores</span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTodosColumna(c.id, c.indicadores_disponibles, indSel, setIndicadoresSeleccionadosMap)}
+                                  className="text-[9px] font-semibold text-indigo-600 hover:underline cursor-pointer"
+                                >
+                                  {indSel.length === c.indicadores_disponibles.length ? 'Limpiar' : 'Todos'}
+                                </button>
+                                <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">
+                                  {indSel.length}/{c.indicadores_disponibles.length}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                              {c.indicadores_disponibles.length === 0 ? (
+                                <p className="text-[11px] text-slate-400 italic">Sin registros</p>
+                              ) : (
+                                c.indicadores_disponibles.map((ind, iIdx) => {
+                                  const check = indSel.includes(ind)
+                                  return (
+                                    <label key={iIdx} className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 border border-slate-100 cursor-pointer text-[11px] select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={check}
+                                        onChange={() => toggleItem(c.id, ind, setIndicadoresSeleccionadosMap)}
+                                        className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#4b4c99] focus:ring-[#4b4c99] shrink-0"
+                                      />
+                                      <span className={check ? 'font-semibold text-slate-900 leading-snug' : 'text-slate-600 leading-snug'}>
+                                        {ind}
+                                      </span>
+                                    </label>
+                                  )
+                                })
+                              )}
+                            </div>
                           </div>
                         </div>
 
-                        <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-[11px] text-slate-700 uppercase">Contenidos y Saberes</span>
-                            <span className="text-[10px] text-slate-400 font-semibold">{sabSeleccionados.length} elegidos</span>
-                          </div>
-                          <div className="space-y-1.5">
-                            {c.saberes_disponibles?.map((sab, sIdx) => {
-                              const check = sabSeleccionados.includes(sab)
-                              return (
-                                <label key={sIdx} className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer text-[11px] text-slate-700 select-none">
-                                  <input
-                                    type="checkbox"
-                                    checked={check}
-                                    onChange={() => toggleSaberDeCompetencia(c.id, sab)}
-                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#45b3a5] focus:ring-[#45b3a5]"
-                                  />
-                                  <span className={check ? 'font-semibold text-slate-900' : 'text-slate-600'}>{sab}</span>
-                                </label>
-                              )
-                            })}
+                        {/* 2. SABERES DECLARATIVOS */}
+                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+                          <div>
+                            <div className="flex justify-between items-center mb-2 pb-1.5 border-b border-slate-100">
+                              <span className="font-bold text-[10px] uppercase text-amber-900">Saberes Declarativos</span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTodosColumna(c.id, c.declarativos_disponibles, decSel, setDeclarativosSeleccionadosMap)}
+                                  className="text-[9px] font-semibold text-amber-700 hover:underline cursor-pointer"
+                                >
+                                  {decSel.length === c.declarativos_disponibles.length ? 'Limpiar' : 'Todos'}
+                                </button>
+                                <span className="text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded">
+                                  {decSel.length}/{c.declarativos_disponibles.length}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                              {c.declarativos_disponibles.length === 0 ? (
+                                <p className="text-[11px] text-slate-400 italic">Sin registros</p>
+                              ) : (
+                                c.declarativos_disponibles.map((dec, dIdx) => {
+                                  const check = decSel.includes(dec)
+                                  return (
+                                    <label key={dIdx} className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 border border-slate-100 cursor-pointer text-[11px] select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={check}
+                                        onChange={() => toggleItem(c.id, dec, setDeclarativosSeleccionadosMap)}
+                                        className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500 shrink-0"
+                                      />
+                                      <span className={check ? 'font-semibold text-slate-900 leading-snug' : 'text-slate-600 leading-snug'}>
+                                        {dec}
+                                      </span>
+                                    </label>
+                                  )
+                                })
+                              )}
+                            </div>
                           </div>
                         </div>
+
+                        {/* 3. SABERES PROCEDIMENTALES */}
+                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+                          <div>
+                            <div className="flex justify-between items-center mb-2 pb-1.5 border-b border-slate-100">
+                              <span className="font-bold text-[10px] uppercase text-teal-900">Saberes Procedimentales</span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTodosColumna(c.id, c.procedimentales_disponibles, procSel, setProcedimentalesSeleccionadosMap)}
+                                  className="text-[9px] font-semibold text-teal-700 hover:underline cursor-pointer"
+                                >
+                                  {procSel.length === c.procedimentales_disponibles.length ? 'Limpiar' : 'Todos'}
+                                </button>
+                                <span className="text-[9px] font-bold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded">
+                                  {procSel.length}/{c.procedimentales_disponibles.length}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                              {c.procedimentales_disponibles.length === 0 ? (
+                                <p className="text-[11px] text-slate-400 italic">Sin registros</p>
+                              ) : (
+                                c.procedimentales_disponibles.map((proc, pIdx) => {
+                                  const check = procSel.includes(proc)
+                                  return (
+                                    <label key={pIdx} className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 border border-slate-100 cursor-pointer text-[11px] select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={check}
+                                        onChange={() => toggleItem(c.id, proc, setProcedimentalesSeleccionadosMap)}
+                                        className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#45b3a5] focus:ring-[#45b3a5] shrink-0"
+                                      />
+                                      <span className={check ? 'font-semibold text-slate-900 leading-snug' : 'text-slate-600 leading-snug'}>
+                                        {proc}
+                                      </span>
+                                    </label>
+                                  )
+                                })
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 4. SABERES ACTITUDINALES */}
+                        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between">
+                          <div>
+                            <div className="flex justify-between items-center mb-2 pb-1.5 border-b border-slate-100">
+                              <span className="font-bold text-[10px] uppercase text-rose-900">Saberes Actitudinales</span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTodosColumna(c.id, c.actitudinales_disponibles, actSel, setActitudinalesSeleccionadosMap)}
+                                  className="text-[9px] font-semibold text-rose-700 hover:underline cursor-pointer"
+                                >
+                                  {actSel.length === c.actitudinales_disponibles.length ? 'Limpiar' : 'Todos'}
+                                </button>
+                                <span className="text-[9px] font-bold text-rose-800 bg-rose-50 px-1.5 py-0.5 rounded">
+                                  {actSel.length}/{c.actitudinales_disponibles.length}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                              {c.actitudinales_disponibles.length === 0 ? (
+                                <p className="text-[11px] text-slate-400 italic">Sin registros</p>
+                              ) : (
+                                c.actitudinales_disponibles.map((act, aIdx) => {
+                                  const check = actSel.includes(act)
+                                  return (
+                                    <label key={aIdx} className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 border border-slate-100 cursor-pointer text-[11px] select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={check}
+                                        onChange={() => toggleItem(c.id, act, setActitudinalesSeleccionadosMap)}
+                                        className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500 shrink-0"
+                                      />
+                                      <span className={check ? 'font-semibold text-slate-900 leading-snug' : 'text-slate-600 leading-snug'}>
+                                        {act}
+                                      </span>
+                                    </label>
+                                  )
+                                })
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
                       </div>
                     </div>
                   )

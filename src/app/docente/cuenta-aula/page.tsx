@@ -16,6 +16,7 @@ export default function CuentaAulaPage() {
   const [gradosDisponibles, setGradosDisponibles] = useState<string[]>([])
   const [grado, setGrado] = useState('')
   const [paralelo, setParalelo] = useState('A')
+  const [jornada, setJornada] = useState('Matutina')
   const [anioLectivo, setAnioLectivo] = useState('2026-2027')
 
   useEffect(() => {
@@ -32,13 +33,21 @@ export default function CuentaAulaPage() {
 
       const { data: estsData } = await supabase
         .from('estudiantes')
-        .select('grado_curso, paralelo')
+        .select('grado_curso, paralelo, jornada')
         .eq('estado', 'activo')
 
       if (estsData && estsData.length > 0) {
-        const uniqueGrados = Array.from(new Set(estsData.map(d => d.grado_curso))) as string[]
+        const uniqueGrados = Array.from(new Set(estsData.map(d => d.grado_curso).filter(Boolean))) as string[]
         setGradosDisponibles(uniqueGrados)
-        setGrado(uniqueGrados[0])
+        if (uniqueGrados.length > 0) {
+          setGrado(uniqueGrados[0])
+        }
+
+        // Si existen jornadas registradas en los estudiantes, adaptar por defecto
+        const primerEstConJornada = estsData.find(e => e.jornada)
+        if (primerEstConJornada?.jornada) {
+          setJornada(primerEstConJornada.jornada)
+        }
       }
     } catch (err) {
       console.error('Error al inicializar cuenta aula:', err)
@@ -51,18 +60,23 @@ export default function CuentaAulaPage() {
     if (grado) {
       cargarEstudiantesYPagos()
     }
-  }, [grado, paralelo, anioLectivo])
+  }, [grado, paralelo, jornada, anioLectivo])
 
   const cargarEstudiantesYPagos = async () => {
     try {
-      const { data: ests, error } = await supabase
+      let query = supabase
         .from('estudiantes')
-        .select('id, nombres, apellidos')
+        .select('id, nombres, apellidos, jornada')
         .eq('grado_curso', grado)
         .eq('paralelo', paralelo)
         .eq('anio_lectivo', anioLectivo)
         .eq('estado', 'activo')
-        .order('apellidos', { ascending: true })
+
+      if (jornada) {
+        query = query.eq('jornada', jornada)
+      }
+
+      const { data: ests, error } = await query.order('apellidos', { ascending: true })
 
       if (error) throw error
       setEstudiantes(ests || [])
@@ -113,7 +127,7 @@ export default function CuentaAulaPage() {
         actualizado[index] = { ...actualizado[index], monto }
         return actualizado
       } else {
-        return [...prev, { estudiante_id: estudianteId, concepto, monto }]
+        return [...prev, { estudiante_id: estudianteId, concepto, monto, jornada }]
       }
     })
 
@@ -123,6 +137,7 @@ export default function CuentaAulaPage() {
         estudiante_id: estudianteId,
         concepto: concepto,
         monto: monto,
+        jornada: jornada,
         anio_lectivo: anioLectivo
       }, {
         onConflict: 'estudiante_id, concepto, anio_lectivo'
@@ -133,7 +148,6 @@ export default function CuentaAulaPage() {
     }
   }
 
-  // Botón general para confirmar almacenamiento en la base de datos
   const guardarTodoGeneral = async () => {
     setGuardandoGeneral(true)
     try {
@@ -221,8 +235,8 @@ export default function CuentaAulaPage() {
         </div>
       )}
 
-      {/* FILTROS DE CURSO Y PARALELO */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs">
+      {/* FILTROS: CURSO, PARALELO, JORNADA Y PERIODO */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs">
         <div>
           <label className="block text-slate-700 font-bold uppercase mb-1.5">Grado / Curso</label>
           <select 
@@ -241,7 +255,20 @@ export default function CuentaAulaPage() {
             onChange={(e) => setParalelo(e.target.value)} 
             className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs cursor-pointer"
           >
-            {['A', 'B', 'C', 'D'].map(p => <option key={p} value={p} className="text-slate-900 font-bold bg-white">Paralelo {p}</option>)}
+            {['A', 'B', 'C', 'D', 'E', 'F'].map(p => <option key={p} value={p} className="text-slate-900 font-bold bg-white">Paralelo {p}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-slate-700 font-bold uppercase mb-1.5">Jornada</label>
+          <select 
+            value={jornada} 
+            onChange={(e) => setJornada(e.target.value)} 
+            className="w-full p-3 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white outline-none focus:border-[#4b4c99] shadow-2xs cursor-pointer"
+          >
+            <option value="Matutina" className="text-slate-900 font-bold bg-white">Matutina</option>
+            <option value="Vespertina" className="text-slate-900 font-bold bg-white">Vespertina</option>
+            <option value="Nocturna" className="text-slate-900 font-bold bg-white">Nocturna</option>
           </select>
         </div>
 
@@ -260,19 +287,19 @@ export default function CuentaAulaPage() {
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div 
           style={{ backgroundColor: '#4b4c99' }}
-          className="p-4 text-xs font-bold uppercase text-white tracking-wider shadow-2xs flex justify-between items-center"
+          className="p-4 text-xs font-bold uppercase text-white tracking-wider shadow-2xs flex flex-wrap justify-between items-center gap-2"
         >
-          <span>Registro Financiero: {grado} "{paralelo}"</span>
+          <span>Registro Financiero: {grado} "{paralelo}" — Jornada {jornada}</span>
           <span>Total Alumnos: {estudiantes.length}</span>
         </div>
 
         {estudiantes.length === 0 ? (
           <div className="p-12 text-center text-slate-500 font-medium text-xs">
-            No hay estudiantes activos en este curso y paralelo.
+            No hay estudiantes activos en este curso, paralelo y jornada seleccionados.
           </div>
         ) : columnasExtras.length === 0 ? (
           <div className="p-12 text-center text-slate-500 font-medium text-xs space-y-3">
-            <p>No hay columnas de pago creadas todavía.</p>
+            <p>No hay columnas de pago creadas todavía para este grupo.</p>
             <button
               onClick={() => setModalColumnaAbierto(true)}
               style={{ backgroundColor: '#4b4c99' }}

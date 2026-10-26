@@ -9,6 +9,45 @@ export default function LoginPage() {
   const [cargando, setCargando] = useState(false)
   const [mensaje, setMensaje] = useState<string | null>(null)
 
+  // Validador estricto de vigencia de la licencia institucional
+  const validarLicenciaInstitucion = async (institucionId: string | null | undefined): Promise<void> => {
+    if (!institucionId) return
+
+    const { data: inst, error } = await supabase
+      .from('instituciones')
+      .select('nombre_institucion, licencia_activa, licencia_vence_at, fecha_vencimiento_licencia, estado')
+      .eq('id', institucionId)
+      .maybeSingle()
+
+    if (error || !inst) return
+
+    // 1. Verificación de bandera de activación directa o suspensión manual
+    if (inst.licencia_activa === false || inst.estado === 'suspendido' || inst.estado === 'inactivo') {
+      throw new Error(
+        `La licencia de "${inst.nombre_institucion || 'su institución'}" se encuentra inactiva. Para continuar utilizando la plataforma, comuníquese con administración para renovar su plan anual.`
+      )
+    }
+
+    // 2. Verificación de caducidad temporal
+    const fechaVence = inst.licencia_vence_at || inst.fecha_vencimiento_licencia
+    if (fechaVence) {
+      const hoy = new Date()
+      const fechaExpiracion = new Date(fechaVence)
+      fechaExpiracion.setHours(23, 59, 59, 999)
+
+      if (hoy > fechaExpiracion) {
+        const fechaFormateada = new Date(fechaVence).toLocaleDateString('es-EC', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+        throw new Error(
+          `La licencia anual de "${inst.nombre_institucion || 'su institución'}" venció el ${fechaFormateada}. El acceso al sistema se encuentra bloqueado hasta renovar la suscripción por un año más.`
+        )
+      }
+    }
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setMensaje(null)
@@ -18,6 +57,7 @@ export default function LoginPage() {
     const passwordLimpia = password.trim()
 
     try {
+      // 0. Superadministrador: libre de restricciones de licencia institucional
       if (emailLimpio === 'ferchopla002@gmail.com' || emailLimpio === 'ferchoplay002@gmail.com') {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: emailLimpio,
@@ -28,7 +68,7 @@ export default function LoginPage() {
         return
       }
 
-      // 1. Buscar en DOCENTES y validar estado ANTES de autenticar
+      // 1. Buscar en DOCENTES y validar estado + LICENCIA ANTES de autenticar
       const { data: docInfo } = await supabase
         .from('docentes')
         .select('*')
@@ -36,12 +76,13 @@ export default function LoginPage() {
         .maybeSingle()
 
       if (docInfo) {
-        // Si está inactivo por boolean o por texto, bloqueamos el paso inmediatamente
         if (docInfo.activo === false || docInfo.estado === 'inactivo') {
           throw new Error('Tu cuenta se encuentra bloqueada o inactiva. Contacta a tu Rector o Vicerrector para activarla.')
         }
 
-        // Si el Rector ya lo activó en el sistema (activo = true), pero se quedaron pegados los 3 intentos o la fecha de bloqueo en la tabla, los limpiamos
+        // Valida la vigencia antes de intentar login o descontar intentos
+        await validarLicenciaInstitucion(docInfo.institucion_id)
+
         if (docInfo.activo === true && (docInfo.intentos_fallidos >= 3 || docInfo.cuenta_bloqueada_hasta)) {
           await supabase
             .from('docentes')
@@ -52,7 +93,7 @@ export default function LoginPage() {
         }
       }
 
-      // 1.1. Buscar en REPRESENTANTES y validar estado ANTES de autenticar
+      // 1.1. Buscar en REPRESENTANTES y validar estado + LICENCIA ANTES de autenticar
       const { data: repInfo } = await supabase
         .from('estudiante_representantes')
         .select('*')
@@ -63,6 +104,8 @@ export default function LoginPage() {
         if (repInfo.activo === false) {
           throw new Error('Tu cuenta se encuentra bloqueada o inactiva. Contacta a la institución.')
         }
+
+        await validarLicenciaInstitucion(repInfo.institucion_id)
 
         if (repInfo.activo === true && (repInfo.intentos_fallidos >= 3 || repInfo.cuenta_bloqueada_hasta)) {
           await supabase
@@ -81,12 +124,11 @@ export default function LoginPage() {
       })
 
       if (error || !data?.user) {
-        // --- CONTROL DE INTENTOS FALLIDOS ---
+        // Control de intentos fallidos
         if (docInfo) {
           const nuevosIntentos = (docInfo.intentos_fallidos || 0) + 1
           const bloqueado = nuevosIntentos >= 3
 
-          // Actualizamos intentos y, si llegó a 3, pasamos activo a FALSE y estado a 'inactivo'
           await supabase
             .from('docentes')
             .update({ 
@@ -129,7 +171,7 @@ export default function LoginPage() {
 
       const user = data.user
 
-      // 3. Validar si es Docente / Autoridad tras la autenticación de Supabase
+      // 3. Validar perfil y doble candado de licencia tras autenticación
       const { data: docData } = await supabase
         .from('docentes')
         .select('*')
@@ -137,13 +179,18 @@ export default function LoginPage() {
         .maybeSingle()
 
       if (docData) {
-        // Doble candado de seguridad: si está inactivo o tiene 3 intentos fallidos sin limpiar, cerramos la sesión de inmediato
+        try {
+          await validarLicenciaInstitucion(docData.institucion_id)
+        } catch (licErr: any) {
+          await supabase.auth.signOut()
+          throw licErr
+        }
+
         if (docData.activo === false || docData.estado === 'inactivo') {
           await supabase.auth.signOut()
           throw new Error('Tu cuenta se encuentra bloqueada o inactiva. Contacta al administrador o rector.')
         }
 
-        // Si entró con éxito en el 1er o 2do intento, reiniciamos el contador a 0
         if (docData.intentos_fallidos > 0 || docData.cuenta_bloqueada_hasta) {
           await supabase
             .from('docentes')
@@ -176,7 +223,7 @@ export default function LoginPage() {
         return
       }
 
-      // 4. Validar si es Representante / Padre
+      // 4. Validar Representante y doble candado de licencia
       const { data: repData } = await supabase
         .from('estudiante_representantes')
         .select('*')
@@ -184,6 +231,13 @@ export default function LoginPage() {
         .maybeSingle()
 
       if (repData) {
+        try {
+          await validarLicenciaInstitucion(repData.institucion_id)
+        } catch (licErr: any) {
+          await supabase.auth.signOut()
+          throw licErr
+        }
+
         if (repData.activo === false) {
           await supabase.auth.signOut()
           throw new Error('Tu cuenta se encuentra inactiva.')
@@ -235,8 +289,9 @@ export default function LoginPage() {
         </div>
 
         {mensaje && (
-          <div className="p-3.5 mb-5 rounded-2xl text-xs font-bold bg-[#de5860]/15 text-[#de5860] border-2 border-[#de5860]/30 shadow-[inset_0_1px_2px_rgba(255,255,255,0.5)] flex items-center gap-2">
-            <span>{mensaje}</span>
+          <div className="p-3.5 mb-5 rounded-2xl text-xs font-bold bg-[#de5860]/15 text-[#de5860] border-2 border-[#de5860]/30 shadow-[inset_0_1px_2px_rgba(255,255,255,0.5)] flex items-start gap-2">
+            <span className="text-base leading-none mt-0.5">⚠️</span>
+            <span className="leading-snug flex-1">{mensaje}</span>
           </div>
         )}
 
