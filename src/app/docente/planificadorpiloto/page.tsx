@@ -19,7 +19,7 @@ export default function PlanificadorPilotoNuevoPage() {
 
   // Control de cupo diario (Máximo 5 por día)
   const [planificacionesHoy, setPlanificacionesHoy] = useState(0)
-  const LIMITE_DIARIO = 5
+  const LIMITE_DIARIO = 7
 
   const añosPorSubnivel: Record<string, string[]> = {
     'Básica Elemental': ['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB'],
@@ -341,7 +341,7 @@ export default function PlanificadorPilotoNuevoPage() {
     // 1. Verificación previa de cupo en base de datos
     const totalHoy = await consultarConteoDiario(user.id)
     if (totalHoy >= LIMITE_DIARIO) {
-      alert(`⚠️ Has alcanzado el límite máximo diario (${LIMITE_DIARIO} planificaciones por día).\n\nPodrás generar nuevas planificaciones a partir de mañana.`)
+      alert(`Has alcanzado el límite máximo diario (${LIMITE_DIARIO} planificaciones por día).\n\nPodrás generar nuevas planificaciones a partir de mañana.`)
       return
     }
 
@@ -434,7 +434,7 @@ export default function PlanificadorPilotoNuevoPage() {
       clearTimeout(timeoutId)
       // Si existió error, NO se guarda nada y se notifica al usuario
       if (e.name === 'AbortError') {
-        alert('⏱️ La generación tardó más de lo esperado en responder. Tu intento NO fue consumido; por favor intenta nuevamente.')
+        alert('La generación tardó más de lo esperado en responder. Tu intento NO fue consumido; por favor intenta nuevamente.')
       } else {
         alert('❌ Error al generar planificación: ' + e.message + '\n\n(Tu cupo diario no fue consumido).')
       }

@@ -15,7 +15,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || ''
 });
 
-async function generarConIA(promptText: string, maxTokens = 7800): Promise<string> {
+async function generarConIA(promptText: string, maxTokens = 8800): Promise<string> {
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     {
       role: "system",
@@ -894,7 +894,7 @@ JSON exacto con arreglo "semanas" de ${totalSemanas} elementos:
     }
   ]
 }`
-      jsonText = await generarConIA(promptText, 3500)
+      jsonText = await generarConIA(promptText, 5800)
 
     } else if (tipoModelo === 'secuencia_piloto_zona6') {
       const bloques = bloquesManuales || []
@@ -967,7 +967,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
   ]
 }`
 
-      jsonText = await generarConIA(promptText, 3800)
+      jsonText = await generarConIA(promptText, 6500)
 
     } else {
       // 1. Extraer insumos previos proporcionados por el docente (si los hay)
@@ -1021,7 +1021,7 @@ Devuelve EXCLUSIVAMENTE este JSON válido (sin formato markdown, sin comillas ad
   "adaptaciones": "Otorgar tiempo adicional para la entrega, apoyos visuales y tutoría entre pares para la resolución de ejercicios."
 }`
 
-      jsonText = await generarConIA(promptText, 4000)
+      jsonText = await generarConIA(promptText, 5800)
     }
     const jsonLimpio = jsonText.replace(/```json/g, '').replace(/```/g, '').trim()
     const objetoParseado = JSON.parse(jsonLimpio)
