@@ -629,23 +629,43 @@ export default function DashboardDocentePage() {
       {/* ================= PESTAÑA 3: PLANIFICADOR REGULAR ================= */}
       {(pestañaTipo === 'regular' || pestañaTipo === 'todos') && (
         <div className="space-y-6 pt-2">
-          <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex items-center gap-2.5 overflow-x-auto">
-            <span className="text-xs font-bold text-slate-500 uppercase mr-2 shrink-0">Carpetas Lectivas:</span>
-            {periodosDisponibles.map((periodo) => {
-              const seleccionado = periodo === anioLectivoFiltro
-              return (
-                <button
-                  key={periodo}
-                  onClick={() => setAnioLectivoFiltro(periodo)}
-                  style={seleccionado ? { backgroundColor: '#4b4c99' } : {}}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer shadow-2xs ${
-                    seleccionado ? 'text-white' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300'
-                  }`}
-                >
-                  <span>Periodo {periodo}</span>
-                </button>
-              )
-            })}
+          {/* BARRA DE CARPETAS LECTIVAS CON BOTÓN IMPRIMIR */}
+          <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-4 overflow-x-auto">
+            <div className="flex items-center gap-2.5 shrink-0">
+              <span className="text-xs font-bold text-slate-500 uppercase shrink-0">Carpetas Lectivas:</span>
+              
+              {/* BOTÓN IMPRIMIR EXCLUSIVO PARA PLANIFICADOR REGULAR */}
+              <button
+                type="button"
+                onClick={() => router.push('/docente/planificador/imprimir')}
+                className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-[#4b4c99] border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs"
+                title="Imprimir Planificador Regular"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                <span>Imprimir</span>
+              </button>
+
+              {/* SELECTORES DE PERIODOS */}
+              <div className="flex items-center gap-2 shrink-0">
+                {periodosDisponibles.map((periodo) => {
+                  const seleccionado = periodo === anioLectivoFiltro
+                  return (
+                    <button
+                      key={periodo}
+                      onClick={() => setAnioLectivoFiltro(periodo)}
+                      style={seleccionado ? { backgroundColor: '#4b4c99' } : {}}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer shadow-2xs ${
+                        seleccionado ? 'text-white' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300'
+                      }`}
+                    >
+                      <span>Periodo {periodo}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -717,7 +737,7 @@ export default function DashboardDocentePage() {
             <h2 className="text-sm font-bold uppercase text-slate-900">{planSeleccionado.titulo_planificación || planSeleccionado.tema}</h2>
             <p className="text-xs text-slate-600">{planSeleccionado.objetivos_aprendizaje || planSeleccionado.objetivos || 'Sin objetivos'}</p>
             <div className="flex justify-end pt-3">
-              <button onClick={() => setPlanSeleccionado(null)} className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl">Cerrar</button>
+              <button onClick={() => setPlanSeleccionado(null)} className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer">Cerrar</button>
             </div>
           </div>
         </div>

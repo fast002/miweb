@@ -8,18 +8,18 @@ export const dynamic = 'force-dynamic'
 const deepseek = new OpenAI({ 
   apiKey: process.env.DEEPSEEK_API_KEY || '',
   baseURL: 'https://api.deepseek.com',
-  timeout: 45000
+  timeout: 110000
 });
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || ''
 });
 
-async function generarConIA(promptText: string, maxTokens = 4000): Promise<string> {
+async function generarConIA(promptText: string, maxTokens = 7800): Promise<string> {
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     {
       role: "system",
-      content: "Eres un Diseñador Curricular y Asesor Pedagógico del Ministerio de Educación de Ecuador. Tu objetivo es generar planificaciones hiper-específicas, prácticas y detalladas, prohibiendo totalmente frases genéricas. Responde ÚNICAMENTE en JSON válido sin bloques markdown."
+      content: "Eres un Especialista en Diseño Microcurricular del Ministerio de Educación de Ecuador (Distrito 03D01). Tu objetivo es redactar Proyectos Interdisciplinares donde cada asignatura trabaja sus propios saberes declarativos, procedimentales y actitudinales para construir una sección física/tangible de un MISMO Producto Final común. Prohibido usar frases genéricas: nombra las fórmulas, conceptos técnicos, leyes o textos exactos del saber seleccionado y vincula las rúbricas directamente con las tareas realizadas. Responde ÚNICAMENTE en JSON válido sin bloques markdown."
     },
     {
       role: "user",
@@ -34,7 +34,7 @@ async function generarConIA(promptText: string, maxTokens = 4000): Promise<strin
         model: "deepseek-chat",
         messages,
         response_format: { type: "json_object" },
-        temperature: 0.25,
+        temperature: 0.2,
         max_tokens: maxTokens,
       });
 
@@ -43,7 +43,7 @@ async function generarConIA(promptText: string, maxTokens = 4000): Promise<strin
         return contenido;
       }
     } catch (error: any) {
-      console.warn(`⚠️ DeepSeek falló o tardó demasiado (${error.message}). Conmutando a OpenAI...`);
+      console.warn(`⚠️ DeepSeek falló (${error.message}). Conmutando a OpenAI Backup...`);
     }
   }
 
@@ -54,7 +54,7 @@ async function generarConIA(promptText: string, maxTokens = 4000): Promise<strin
         model: "gpt-4o-mini",
         messages,
         response_format: { type: "json_object" },
-        temperature: 0.25,
+        temperature: 0.2,
         max_tokens: maxTokens,
       });
 
@@ -71,286 +71,196 @@ async function generarConIA(promptText: string, maxTokens = 4000): Promise<strin
   throw new Error('No se pudo conectar con ningún proveedor de IA.');
 }
 
-// Generador pedagógico de respaldo de alta especificidad por materia
-function construirActividadesEspecificasPorMateria(asig: string, temaTitulo: string, productoFinal: string) {
+// Limpia el código ministerial inicial (ej. "CN.4.1.d.20. Ecosistemas..." -> "Ecosistemas...") para insertarlo fluidamente en la redacción
+function limpiarCodigoCurricular(texto: string): string {
+  if (!texto) return ''
+  return texto
+    .replace(/^(?:Ref\.\s*)?(?:I\.[A-Z]{1,4}|SC\.CE\.[A-Z]{1,4}|CE\.[A-Z]{1,4}|[A-Z]{1,4})\.\d+(?:\.[0-9a-z]+)*\.?\s*/i, '')
+    .trim()
+}
+
+// Generador de contingencia con el formato exacto de las capturas (2 viñetas con guion por fase)
+function construirActividadesDesdeSaberesReales(
+  asig: string,
+  compTexto: string,
+  decs: string[],
+  procs: string[],
+  acts: string[],
+  tituloProyecto: string,
+  desafioProyecto: string,
+  productoFinal: string
+) {
   const norm = asig.toUpperCase()
+  const esIngles = norm.includes('INGLÉS') || norm.includes('ENGLISH') || norm.includes('EXTRANJERO') || norm.includes('EFL')
 
-  if (norm.includes('NATURALES') || norm.includes('BIOLOGÍA') || norm.includes('QUÍMICA')) {
+  const saberDecRaw = decs[0] || `los contenidos esenciales de ${asig}`
+  const saberDecLimpio = limpiarCodigoCurricular(saberDecRaw) || saberDecRaw
+  const saberProcRaw = procs[0] || `la aplicación práctica de ${asig}`
+  const saberProcLimpio = limpiarCodigoCurricular(saberProcRaw) || saberProcRaw
+  const saberActRaw = acts[0] || `la responsabilidad y honestidad académica`
+  const saberActLimpio = limpiarCodigoCurricular(saberActRaw) || saberActRaw
+
+  if (esIngles) {
     return [
       {
-        fase_titulo: "1. PLANIFICACIÓN (Semana 1)",
-        pregunta_orientadora: "¿De qué manera el descanso, la alimentación equilibrada, la higiene y el tiempo frente a las pantallas afectan a nuestro cerebro, vista y energía para aprender?",
-        actividades: "• Observar infografías y láminas del cuerpo humano (sistema nervioso, ojos, postura y ciclo circadiano) analizando cómo responde el organismo ante la luz azul y el desvelo.\n• Realizar el diálogo guiado 'El semáforo de nuestra energía' donde los estudiantes identifican señales corporales de agotamiento (pesadez ocular, bostezos frecuentes, falta de concentración).\n• Formular en el cuaderno de ciencias dos preguntas de investigación sobre los hábitos de salud del grado.",
-        recursos: "Láminas del cuerpo humano y sistema nervioso.\nInfografías sobre luz azul y calidad del sueño.\nCuaderno de campo y marcadores."
+        fase_titulo: "PLANIFICACIÓN (Semana 1)",
+        pregunta_orientadora: `How can we apply "${saberDecLimpio}" in English to solve our project challenge?`,
+        actividades: `- Present the communicative challenge in teams: analyze "${saberDecLimpio}" within the context of the project "${tituloProyecto}".\n\n- Form working trios and socialize the handwritten or printed presentation criteria for the English section of the "${productoFinal}".`,
+        recursos: "Whiteboard, markers, workbook, physical folder for the product."
       },
       {
-        fase_titulo: "2.- Organización e investigación (Semana 1)",
-        pregunta_orientadora: "¿Cómo investigamos y registramos científicamente las evidencias biológicas del grupo?",
-        actividades: "• Conformar brigadas de investigación científica asignando roles: Observador de descanso, Inspector de hidratación y loncheras, Cronometrador de pantallas y Relator científico.\n• Aplicar durante 3 días la bitácora 'Mi reloj biológico de bienestar', registrando horas efectivas de sueño, litros de agua ingeridos y minutos de exposición a dispositivos.\n• Contrastar los datos obtenidos con la tabla oficial de recomendaciones pediátricas (9 a 10 horas de sueño y menos de 1 hora de recreación digital).",
-        recursos: "Bitácora impresa 'Mi reloj biológico'.\nTabla comparativa de estándares de salud pediátrica.\nFichas de registro de campo."
+        fase_titulo: "2.- Organización o investigación (Semana 1)",
+        pregunta_orientadora: `How do we investigate and organize information using "${saberProcLimpio}"?`,
+        actividades: `- Investigate key vocabulary, grammar structures, and examples related to "${saberDecLimpio}" and "${saberProcLimpio}".\n\n- Distribute roles within the trio (vocabulary verifier, drafter, and illustrator of the physical technical sheet for the "${productoFinal}").`,
+        recursos: "English textbook, bilingual dictionary, perforated sheets."
       },
       {
         fase_titulo: "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-        pregunta_orientadora: "¿Cómo transformamos las evidencias biológicas en aportes para el producto final?",
-        actividades: "• Taller de higiene visual: practicar la regla 20-20-20 (cada 20 minutos mirar a 20 pies de distancia por 20 segundos) y ejercicios de respiración diafragmática para la oxigenación cerebral.\n• Redactar la sección científica de la guía colectiva integrando 3 fichas técnicas: 'Efectos de las pantallas en el cerebro', 'Nutrientes que impulsan el aprendizaje' y 'Guía de posturas ergonómicas para estudiar'.\n• Diseñar diagramas explicativos con recortes y dibujos sobre los órganos protegidos con buenos hábitos.",
-        recursos: "Plantilla para la guía colectiva.\nCartulinas de colores, tijeras, goma y témperas.\nIlustraciones de órganos y hábitos saludables."
+        pregunta_orientadora: `How do we build the English section for the "${productoFinal}"?`,
+        actividades: `- Draft and illustrate step-by-step on a letterhead sheet 3 contextualized communicative proposals applying "${saberProcLimpio}".\n\n- Attach the complete, reviewed, and organized English sheet into the corresponding section of the "${productoFinal}".`,
+        recursos: "Grid/lined resolution sheets, colored markers, physical binder/product."
       },
       {
         fase_titulo: "4. Socialización, presentación y difusión (Semana 2)",
-        pregunta_orientadora: "¿Cómo transmitimos el mensaje de prevención y salud a la comunidad educativa?",
-        actividades: "• Montaje del rincón experimental 'Cuerpo sano, mente despierta' en la feria del proyecto.\n• Exposición oral guiada: los estudiantes demuestran con maquetas o siluetas la diferencia de un cerebro descansado frente a uno fatigado.\n• Guiar al público asistente en una pausa activa de respiración y descanso visual de 2 minutos.",
-        recursos: "Paneles informativos.\nSiluetas anatómicas interactivas.\nGuía colectiva finalizada."
+        pregunta_orientadora: `How do we orally present our English section of the "${productoFinal}"?`,
+        actividades: `- Present and explain verbally in front of the class the English findings and messages during the exhibition of the "${productoFinal}".`,
+        recursos: `Physical "${productoFinal}" in the English section.`
       },
       {
         fase_titulo: "5. Evaluación, reflexión y metacognición",
-        pregunta_orientadora: "¿Qué cambios biológicos observamos en nosotros al modificar nuestros hábitos?",
-        actividades: "• Aplicar la rúbrica disciplinar analítica de Ciencias Naturales evaluando rigor en los registros y sustentación científica.\n• Círculo de la salud: los estudiantes exponen cómo se sintieron físicamente al reducir pantallas y firman el compromiso de desconexión nocturna.",
-        recursos: "Rúbrica analítica disciplinar.\nContrato de compromiso de salud personal."
+        pregunta_orientadora: `Why is "${saberActLimpio}" important when communicating in English?`,
+        actividades: `- Analytical evaluation rubric verifying grammatical accuracy, vocabulary use, and clean presentation in the "${productoFinal}".\n\n- Write a brief reflection in the portfolio/product about the usefulness of "${saberDecLimpio}" and "${saberActLimpio}" in real-life situations.`,
+        recursos: "Evaluation instrument (analytical rubric), self-assessment metacognition sheet."
       }
     ]
   }
 
-  if (norm.includes('MATEMÁTICA')) {
-    return [
-      {
-        fase_titulo: "1. PLANIFICACIÓN (Semana 1)",
-        pregunta_orientadora: "¿Cómo podemos usar los números, las tablas de conteo y la distinción entre necesidades y deseos para conocer cómo distribuimos nuestro tiempo y recursos?",
-        actividades: "• Dialogar sobre las actividades cotidianas que constituyen necesidades básicas (dormir, alimentarse, estudiar) frente a los deseos (horas extra en consolas o compras prescindibles).\n• Analizar un modelo de tabla de conteo en la pizarra para definir qué variables cuantificaremos en el proyecto: horas de sueño, minutos de pantallas y gastos diarios del recreo.",
-        recursos: "Pizarra y marcadores.\nLáminas comparativas 'Necesidad vs. Deseo'.\nReloj didáctico."
-      },
-      {
-        fase_titulo: "2.- Organización e investigación (Semana 1)",
-        pregunta_orientadora: "¿Cómo levantamos y organizamos los datos numéricos con precisión?",
-        actividades: "• Conformar grupos de trabajo asignando roles matemáticos: Encuestador, Registrador de marcas de conteo, Verificador de sumas y Diseñador de tablas.\n• Aplicar un cuestionario cuantitativo rápido de 4 preguntas a los estudiantes del curso para levantar datos sobre hábitos diarios.\n• Totalizar los registros mediante sumas simples sin reagrupación y validar que el total coincida con el universo de encuestados.",
-        recursos: "Fichas de conteo con palotes.\nTablas de frecuencia vacías.\nCalculadoras básicas o material concreto (semillas/tapas)."
-      },
-      {
-        fase_titulo: "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-        pregunta_orientadora: "¿Cómo construimos gráficos estadísticos comprensibles para la comunidad?",
-        actividades: "• Construir un gráfico de barras en cuadrícula (definiendo escala, títulos, categorías en eje horizontal y frecuencia en eje vertical) que ilustre los hábitos del curso.\n• Extraer conclusiones matemáticas: identificar la moda estadística, comparar valores (mayor que, menor que) y calcular cuántas horas se desperdician semanalmente.\n• Redactar la página matemática para la guía colectiva con la tabla de datos, el gráfico coloreado y una meta numérica de ahorro de tiempo.",
-        recursos: "Papel milimetrado o cuadrícula A4.\nReglas, lápices de colores y rotuladores.\nFormato para la guía colectiva."
-      },
-      {
-        fase_titulo: "4. Socialización, presentación y difusión (Semana 2)",
-        pregunta_orientadora: "¿Cómo comunicamos las estadísticas del proyecto con claridad?",
-        actividades: "• Exponer los gráficos de barras en el stand matemático de la feria del proyecto.\n• Explicar con precisión verbal: 'El 65% de nuestro grado duerme menos de 8 horas, por lo que planteamos la meta de recuperar 1 hora diaria de sueño'.\n• Responder preguntas del público demostrando la lectura correcta de los ejes y barras estadísticas.",
-        recursos: "Carteleras con gráficos de barras gigantes.\nGuía colectiva impresa."
-      },
-      {
-        fase_titulo: "5. Evaluación, reflexión y metacognición",
-        pregunta_orientadora: "¿Por qué los números y gráficos nos ayudan a tomar mejores decisiones de vida?",
-        actividades: "• Aplicar la rúbrica disciplinar analítica de Matemática (evaluando recolección, tabulación, diseño gráfico e interpretación de hallazgos).\n• Reflexión individual: ¿Cómo influye el registro exacto de las horas en la mejora de mi disciplina personal?",
-        recursos: "Rúbrica disciplinar analítica de Matemática.\nFicha de autoevaluación cuantitativa."
-      }
-    ]
-  }
-
-  if (norm.includes('LENGUA') || norm.includes('LITERATURA')) {
-    return [
-      {
-        fase_titulo: "1. PLANIFICACIÓN (Semana 1)",
-        pregunta_orientadora: "¿Cómo podemos usar la comunicación oral respetuosa, la escucha activa y la redacción clara para investigar y transformar los hábitos del aula?",
-        actividades: "• Lectura dialógica del cuento 'La noche sin pantallas', reflexionando sobre los personajes que perdieron el sueño y la convivencia por el uso desmedido de dispositivos.\n• Dinámica 'El micrófono de la confianza': cada estudiante expresa en qué momentos de la jornada siente mayor distracción y qué palabras le motivan a mejorar.",
-        recursos: "Cuento impreso.\nMicrófono didáctico.\nTarjetas de intenciones comunicativas."
-      },
-      {
-        fase_titulo: "2.- Organización e investigación (Semana 1)",
-        pregunta_orientadora: "¿Cómo estructuramos una entrevista empática para recoger testimonios reales?",
-        actividades: "• Organizar equipos asignando roles comunicativos: Entrevistador principal, Secretario de notas textuales, Observador de lenguaje no verbal y Vocero.\n• Diseñar un guion de entrevista de 3 preguntas abiertas utilizando apoyos visuales y pictogramas para asegurar la inclusión de todos los compañeros.\n• Ejecutar las entrevistas practicando pautas fundamentales: contacto visual con el interlocutor, escucha atenta sin interrumpir y tono de voz adecuado.",
-        recursos: "Guion de entrevista estructurado.\nFichas con pictogramas de apoyo.\nLibreta de notas del reportero."
-      },
-      {
-        fase_titulo: "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-        pregunta_orientadora: "¿Cómo redactamos textos expositivos y reflexivos con coherencia y cohesión?",
-        actividades: "• Sintetizar los testimonios recolectados y redactar párrafos breves con estructura clara (introducción, desarrollo y recomendación).\n• Crear los mensajes de impacto, frases motivadoras y decálogos que encabezarán cada sección de la guía colectiva 'Pequeños hábitos para sentirnos bien y aprender mejor'.\n• Revisar colectivamente la concordancia, ortografía básica y signos de puntuación de los textos antes de su versión final.",
-        recursos: "Borradores de redacción.\nDiccionarios escolares.\nPáginas de diagramación de la guía colectiva."
-      },
-      {
-        fase_titulo: "4. Socialización, presentación y difusión (Semana 2)",
-        pregunta_orientadora: "¿Cómo cautivamos a la audiencia durante la presentación de nuestra guía?",
-        actividades: "• Ensayo de oratoria: practicar modulación de la voz, pausas expresivas y gesticulación corporal para la presentación oral.\n• Presentar formalmente la guía colectiva ante padres y compañeros, relatando anécdotas del proceso y leyendo con expresividad los consejos de bienestar.",
-        recursos: "Atril de oratoria.\nGuía colectiva encuadernada.\nCarteles de difusión."
-      },
-      {
-        fase_titulo: "5. Evaluación, reflexión y metacognición",
-        pregunta_orientadora: "¿Cómo mejoró mi capacidad de escuchar y expresarme con empatía?",
-        actividades: "• Evaluación con la rúbrica disciplinar de Lengua y Literatura (expresión oral, coherencia textual y escucha activa).\n• Dinámica 'El círculo de la palabra': evaluación entre pares y entrega de cartas de agradecimiento por el trabajo cooperativo.",
-        recursos: "Rúbrica analítica de comunicación.\nTarjetas de coevaluación."
-      }
-    ]
-  }
-
-  if (norm.includes('SOCIALES') || norm.includes('HISTORIA')) {
-    return [
-      {
-        fase_titulo: "1. PLANIFICACIÓN (Semana 1)",
-        pregunta_orientadora: "¿Qué normas de convivencia, deberes y derechos debemos fortalecer en la escuela para garantizar un ambiente armónico y respetuoso de la diversidad?",
-        actividades: "• Analizar a la institución como un espacio compartido de interacción social, identificando cómo las diferencias culturales y familiares enriquecen la vida comunitaria.\n• Mapear los espacios de la escuela (aulas, patios, canchas, biblioteca) señalando dónde se generan mayores tensiones o incumplimiento de acuerdos.",
-        recursos: "Croquis de la institución educativa.\nTexto escolar de Estudios Sociales.\nTarjetas de derechos y deberes."
-      },
-      {
-        fase_titulo: "2.- Organización e investigación (Semana 1)",
-        pregunta_orientadora: "¿Cómo diagnosticamos el cumplimiento de acuerdos en la jornada escolar?",
-        actividades: "• Conformar grupos de observadores ciudadanos: Coordinador cívico, Secretario de actas, Mediador de conflictos y Portavoz.\n• Observar las dinámicas durante los recreos y filas, registrando en un cuadro de doble entrada conductas de 'Se puede' (solidaridad, inclusión) y 'No se puede' (discriminación, irrespeto de turnos).\n• Entrevistar a personal de servicio y docentes sobre los acuerdos indispensables para el buen vivir escolar.",
-        recursos: "Fichas de observación ciudadana.\nCuadro de comportamientos 'Se puede / No se puede'."
-      },
-      {
-        fase_titulo: "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-        pregunta_orientadora: "¿Cómo construimos herramientas tangibles que fortalezcan la paz escolar?",
-        actividades: "• Construir colectivamente el mural 'El Árbol de Nuestra Identidad y Convivencia', donde cada rama represente un valor cultural y cada fruto un compromiso cívico.\n• Fabricar y rotular el 'Ánfora de acuerdos escolares', redactando en tarjetas iris los compromisos del grado para erradicar el maltrato y fomentar la inclusión.\n• Redactar la sección de Convivencia y Ciudadanía para la guía colectiva.",
-        recursos: "Cartulinas iris, tijeras, goma y pinturas.\nCaja para el ánfora decorada.\nMateriales para el mural cívico."
-      },
-      {
-        fase_titulo: "4. Socialización, presentación y difusión (Semana 2)",
-        pregunta_orientadora: "¿Cómo involucramos a toda la escuela en nuestro pacto de convivencia?",
-        actividades: "• Inaugurar el mural de la identidad ante directivos y comités de aula.\n• Realizar una dramatización corta que contraste un aula en conflicto con una que aplica acuerdos participativos.\n• Instalar el ánfora de acuerdos en un lugar visible para que otros grados depositen sus propuestas.",
-        recursos: "Mural escolar.\nÁnfora de acuerdos.\nGuía colectiva."
-      },
-      {
-        fase_titulo: "5. Evaluación, reflexión y metacognición",
-        pregunta_orientadora: "¿Qué significa ser un ciudadano solidario dentro de mi aula?",
-        actividades: "• Aplicar rúbrica de Estudios Sociales sobre normas, identidad y convivencia armónica.\n• Firmar el 'Pacto Escolar por el Respeto y la Diversidad' para el trimestre.",
-        recursos: "Rúbrica disciplinar de Estudios Sociales.\nPergamino del pacto escolar."
-      }
-    ]
-  }
-
-  if (norm.includes('ECA') || norm.includes('ARTÍSTICA') || norm.includes('CULTURAL')) {
-    return [
-      {
-        fase_titulo: "1. PLANIFICACIÓN (Semana 1)",
-        pregunta_orientadora: "¿Cómo podemos representar a través del dibujo, gestos, sonidos y texturas las expresiones de nuestro cuerpo al practicar hábitos que benefician nuestro bienestar y descanso?",
-        actividades: "• Escuchar pistas de paisajes sonoros y música instrumental observando imágenes de posturas corporales asociadas al descanso, la concentración y la fatiga visual.\n• Explorar movimientos corporales libres ante estímulos musicales contrastantes para reconocer cómo se siente el cuerpo en calma, tensión y relajación.",
-        recursos: "Láminas con expresiones y posturas.\nEmoticones ilustrativos.\nPistas de música instrumental y ambiental.\nObras artísticas de referencia."
-      },
-      {
-        fase_titulo: "2.- Organización e investigación (Semana 1)",
-        pregunta_orientadora: "¿Qué materiales sensoriales y texturas del entorno podemos explorar y utilizar?",
-        actividades: "• Conformar colectivos artísticos asignando roles: Diseñador gráfico, Explorador de texturas, Expresor corporal y Vocero de arte.\n• Recolectar y clasificar materiales del entorno con texturas naturales (hojas secas, cortezas, semillas, piedras, tierra) y artificiales (telas, papeles corrugados, plásticos reciclados).\n• Realizar un frotagge táctil sobre papel para registrar las diferentes sensaciones y relieves de los elementos.",
-        recursos: "Hojas secas, semillas, cortezas y piedras.\nRetazos de telas, lanas y papeles con relieve.\nCrayones de cera para frotagge."
-      },
-      {
-        fase_titulo: "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-        pregunta_orientadora: "¿Cómo elaboramos la producción visual y la portada que encabezará la guía colectiva?",
-        actividades: "• Estampado de huellas y siluetas: trazar siluetas de rostros o manos incorporando elementos identitarios (peinados, accesorios, símbolos personales) con dactilopintura y técnicas mixtas.\n• Crear la lámina de hábitos saludables combinando colores cálidos y fríos para representar estados de energía y descanso.\n• Ensamble visual: diagramar artísticamente la portada y los separadores visuales de la guía colectiva utilizando los collages de texturas.",
-        recursos: "Dactilopintura y témperas.\nTierra de color y pinceles gruesos.\nCartulina bristol, goma y tijeras."
-      },
-      {
-        fase_titulo: "4. Socialización, presentación y difusión (Semana 2)",
-        pregunta_orientadora: "¿Cómo transformamos el aula en una galería viva de arte y bienestar?",
-        actividades: "• Montaje de la 'Galería de Expresión Corporal y Texturas': colgar las obras con pinzas de madera en cuerdas tensadas alrededor del aula.\n• Exposición de los creadores: cada alumno explica los materiales seleccionados y cómo su obra refleja un cuerpo relajado y saludable.",
-        recursos: "Cuerdas, pinzas de madera, atriles.\nIluminación focal y música de fondo.\nGuía colectiva ensamblada."
-      },
-      {
-        fase_titulo: "5. Evaluación, reflexión y metacognición",
-        pregunta_orientadora: "¿De qué forma el arte me ayudó a conocerme y expresar mis emociones?",
-        actividades: "• Rúbrica de Educación Cultural y Artística (creatividad plástica, uso de texturas y expresión estética).\n• Reflexión metacognitiva individual sobre el valor del cuerpo como soporte y medio expresivo.",
-        recursos: "Rúbrica analítica de ECA.\nFicha de autovaloración creativa."
-      }
-    ]
-  }
-
-  if (norm.includes('FÍSICA') || norm.includes('DEPORTE')) {
-    return [
-      {
-        fase_titulo: "1. PLANIFICACIÓN (Semana 1)",
-        pregunta_orientadora: "¿Cómo influyen los juegos activos, las pausas en movimiento y el control de nuestras emociones en la energía que tenemos para aprender y sentirnos bien?",
-        actividades: "• Circuito sensorial motriz: realizar juegos de intensidad variable (desplazamientos suaves, carreras de relevos y ejercicios de elongación muscular).\n• Registro de pulsaciones y frecuencia respiratoria antes y después del ejercicio para entender cómo el corazón oxigena el cerebro.\n• Conversatorio en el patio: reflexionar sobre cómo el sedentarismo digital agota la musculatura mientras el juego cooperativo renueva el ánimo.",
-        recursos: "Patio o cancha de uso múltiple.\nCronómetro, conos, pelotas y cuerdas.\nPlantilla de registro de pulso cardíaco."
-      },
-      {
-        fase_titulo: "2.- Organización e investigación (Semana 1)",
-        pregunta_orientadora: "¿Cómo adaptamos los juegos para garantizar la seguridad e inclusión de todos?",
-        actividades: "• Conformar patrullas lúdicas con roles específicos: Líder de juego, Monitor de seguridad y riesgos, Mediador de reglas inclusivas y Cronometrador de pausas.\n• Inspeccionar el área deportiva marcando zonas seguras y libres de obstáculos.\n• Experimentar juegos tradicionales (la rayuela, el elástico, quemadas) identificando qué reglas eliminan a compañeros para diseñar alternativas donde nadie quede fuera.",
-        recursos: "Implementos deportivos.\nTiza para delimitar zonas de juego.\nFicha de detección de riesgos de campo."
-      },
-      {
-        fase_titulo: "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-        pregunta_orientadora: "¿Cómo diseñamos el manual de juegos y pausas activas para la guía colectiva?",
-        actividades: "• Diseñar el 'Juego Inclusivo del Bienestar': redactar paso a paso sus reglas modificadas, puntuaciones colectivas y roles cooperativos.\n• Taller de pausas activas escolares: practicar rutinas de 3 minutos de estiramientos de cuello, muñecas y espalda, combinadas con ejercicios de respiración diafragmática.\n• Redactar la ficha de Educación Física para la guía colectiva ilustrando los pasos de las pausas activas para hacerlas en el aula.",
-        recursos: "Colchonetas y aros.\nPlantillas de diagramación para la guía.\nMarcadores y lápices de colores."
-      },
-      {
-        fase_titulo: "4. Socialización, presentación y difusión (Semana 2)",
-        pregunta_orientadora: "¿Cómo lideramos la recreación activa durante la feria final?",
-        actividades: "• Organizar el 'Festival de Juegos Inclusivos' en el patio central durante la feria del proyecto.\n• Los estudiantes dirigen las estaciones de pausas activas para docentes, familias y compañeros de otros grados, explicando la autorregulación emocional ante la derrota o el error.",
-        recursos: "Estaciones activas señalizadas.\nImplementos deportivos.\nSilbatos y música rítmica."
-      },
-      {
-        fase_titulo: "5. Evaluación, reflexión y metacognición",
-        pregunta_orientadora: "¿Cómo aprendí a autorregular mis emociones y frustraciones durante el juego?",
-        actividades: "• Aplicar rúbrica de Educación Física sobre desempeño motor, cooperación, juego limpio y respeto a la diversidad.\n• Compromiso personal de realizar al menos 30 minutos diarios de juego activo sin pantallas en el hogar.",
-        recursos: "Rúbrica analítica de Educación Física.\nContrato de compromiso deportivo."
-      }
-    ]
-  }
-
-  if (norm.includes('INGLÉS') || norm.includes('ENGLISH') || norm.includes('EFL')) {
-    return [
-      {
-        fase_titulo: "1. PLANIFICACIÓN (Semana 1)",
-        pregunta_orientadora: "Who helps us feel good in our classroom, and how can we talk to them respectfully?",
-        actividades: "• The teacher introduces vocabulary about emotions, physical feelings, and polite classroom expressions using flashcards.\n• In pairs, students practice communicative routines: 'How do you feel today?' -> 'I feel happy/tired', and polite phrases: 'Look at the speaker', 'Listen attentively', 'Can you repeat, please?'.",
-        recursos: "Emotion flashcards.\nConversational cue cards.\nBoard and markers."
-      },
-      {
-        fase_titulo: "2.- Organización e investigación (Semana 1)",
-        pregunta_orientadora: "How do we interview our peers about classroom supporters in English?",
-        actividades: "• Form teams of 4 assigning communicative roles: Leader, Timekeeper, Artist, and Speaker.\n• 'The Helper Search': Students use a mini-checklist to interview peers: 'Who helps you learn?' -> 'My teacher / My team / My friend helps me.'\n• Collect 3 key habits in English: 'Drink water daily', 'Take deep breaths', 'Listen with kindness'.",
-        recursos: "Classroom Supporters Checklist.\nMini interview sheets.\nVisual posters."
-      },
-      {
-        fase_titulo: "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-        pregunta_orientadora: "How do we write and illustrate our English section for the collective guide?",
-        actividades: "• Draft team pages for the collective guide 'Small Habits to Feel Good and Learn Better'.\n• Students illustrate helpers and write captions: 'Habit 1: We listen attentively', 'Habit 2: We ask politely: Can you help me, please?', 'Habit 3: We respect different feelings'.\n• Review spelling and sentence structure with teacher assistance.",
-        recursos: "Template cards for the guide.\nColored pencils and markers.\nEnglish picture dictionary."
-      },
-      {
-        fase_titulo: "4. Socialización, presentación y difusión (Semana 2)",
-        pregunta_orientadora: "How do we present our English habits to visitors?",
-        actividades: "• 'Gallery Walk and Spoken Showcase': Teams display their guide pages on stands.\n• Oral presentation: Each student speaks one habit aloud: 'Our habit is respectful listening. My friend helps me study.' Visitors answer: 'Thank you for sharing!'.",
-        recursos: "Display stands.\nBound Collective Guide in English.\nVisual speaking props."
-      },
-      {
-        fase_titulo: "5. Evaluación, reflexión y metacognición",
-        pregunta_orientadora: "What did we learn about kindness, listening, and English communication?",
-        actividades: "• Students complete a visual rubric with smiley faces evaluating polite words and active listening.\n• Teacher evaluates using the EFL analytical rubric (declarative, procedural, attitudinal, and final product).",
-        recursos: "Visual self-assessment sheet.\nEFL Assessment Rubric."
-      }
-    ]
-  }
-
-  // Fallback genérico estructurado si es una materia atípica
   return [
     {
-      fase_titulo: "1. PLANIFICACIÓN (Semana 1)",
-      pregunta_orientadora: `¿Cómo podemos investigar el impacto del entorno escolar desde los saberes de ${asig}?`,
-      actividades: `• Presentación del reto contextualizado en ${asig}.\n• Lluvia de ideas mediante preguntas generadoras sobre los problemas del aula.\n• Definición de las preguntas clave de investigación grupal.`,
-      recursos: "Láminas didácticas, papelógrafos, cuaderno de notas."
+      fase_titulo: "PLANIFICACIÓN (Semana 1)",
+      pregunta_orientadora: `¿Cómo aplicamos ${saberDecLimpio} desde ${asig} para responder al desafío del proyecto?`,
+      actividades: `- Presentar el desafío disciplinar de ${asig}: analizar casos prácticos aplicando ${saberDecLimpio} en el contexto del proyecto "${tituloProyecto}".\n\n- Formar los tríos de trabajo y socializar los criterios de presentación manuscrita o impresa para la ficha o sección de ${asig} dentro del "${productoFinal}".`,
+      recursos: "Pizarra, marcador, cuaderno de trabajo, carpeta o soporte físico del producto."
     },
     {
-      fase_titulo: "2.- Organización e investigación (Semana 1)",
-      pregunta_orientadora: `¿Qué instrumentos y roles emplearemos en ${asig}?`,
-      actividades: `• Conformar equipos asignando roles: Coordinador, Secretario, Diseñador y Portavoz.\n• Aplicar instrumentos de recolección de información en el plantel vinculados a ${asig}.\n• Tabular y clasificar las evidencias recogidas.`,
-      recursos: "Fichas de registro estructuradas, textos escolares."
+      fase_titulo: "2.- Organización o investigación (Semana 1)",
+      pregunta_orientadora: `¿Cómo indagamos los fundamentos de ${saberDecLimpio} y distribuimos roles en el equipo?`,
+      actividades: `- Investigar los fundamentos teóricos, propiedades o estructura de ${saberDecLimpio} y ${saberProcLimpio}.\n\n- Distribuir roles específicos en el trío (verificador de contenidos/datos, analista práctico y redactor de la ficha técnica física para el "${productoFinal}").`,
+      recursos: `Libros de texto de ${asig}, hojas perforadas, material de consulta escolar.`
     },
     {
       fase_titulo: "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-      pregunta_orientadora: `¿Cómo elaboramos la evidencia tangible de ${asig} para el producto integrador?`,
-      actividades: `• Elaboración de la sección disciplinar para la guía colectiva.\n• Integración de conceptos, gráficos, consejos y reflexiones prácticas de ${asig}.\n• Revisión de calidad y diseño de la propuesta.`,
-      recursos: "Materiales de diseño gráfico, cartulinas, plantillas de la guía."
+      pregunta_orientadora: `¿Cómo elaboramos e integramos el aporte técnico de ${asig} en el "${productoFinal}"?`,
+      actividades: `- Plantear y desarrollar paso a paso en una hoja membretada o formato físico los ejercicios, análisis o registros contextualizados aplicando ${saberProcLimpio}.\n\n- Adjuntar la producción completa, verificada y ordenada en la sección de ${asig} del "${productoFinal}".`,
+      recursos: `Hojas de trabajo a cuadros/líneas, regla, esferográficos, archivador o soporte del "${productoFinal}".`
     },
     {
       fase_titulo: "4. Socialización, presentación y difusión (Semana 2)",
-      pregunta_orientadora: `¿Cómo exponemos los resultados a la comunidad educativa?`,
-      actividades: `• Exposición pública en la feria del proyecto mediante demostraciones prácticas.\n• Explicación de los hallazgos disciplinares y las recomendaciones de mejora.`,
-      recursos: "Stands, paneles expositivos y guía colectiva."
+      pregunta_orientadora: `¿Cómo sustentamos verbalmente los resultados de ${asig} integrados en el producto?`,
+      actividades: `- Presentar y explicar verbalmente ante la clase la solución, análisis o propuesta desarrollada en la sección de ${asig} durante la exhibición del "${productoFinal}".`,
+      recursos: `"${productoFinal}" en la sección correspondiente a ${asig}.`
     },
     {
       fase_titulo: "5. Evaluación, reflexión y metacognición",
-      pregunta_orientadora: `¿Qué aprendizajes aplicaremos a nuestra vida cotidiana desde ${asig}?`,
-      actividades: `• Aplicación de la rúbrica disciplinar analítica.\n• Conversatorio metacognitivo sobre el trabajo en equipo y asunción de compromisos personales.`,
-      recursos: "Rúbrica analítica y ficha de autoevaluación."
+      pregunta_orientadora: `¿De qué manera el aprendizaje de ${saberDecLimpio} aporta a las decisiones reales de nuestro entorno?`,
+      actividades: `- Evaluación con rúbrica analítica de ${asig} para verificar la precisión técnica de ${saberProcLimpio} y la presentación limpia en el "${productoFinal}".\n\n- Redactar una breve reflexión en el "${productoFinal}" sobre la utilidad práctica de ${saberDecLimpio} y la importancia de practicar: ${saberActLimpio}.`,
+      recursos: `Instrumento de evaluación (rúbrica analítica de ${asig}), ficha de metacognición.`
+    }
+  ]
+}
+
+// Generador de contingencia para la Rúbrica Analítica vinculada 100% a las actividades de las 5 fases
+function construirRubricaDisciplinarEspecifica(
+  asig: string,
+  inds: string[],
+  decs: string[],
+  procs: string[],
+  acts: string[],
+  productoFinal: string
+) {
+  const norm = asig.toUpperCase()
+  const esIngles = norm.includes('INGLÉS') || norm.includes('ENGLISH') || norm.includes('EXTRANJERO') || norm.includes('EFL')
+
+  const indPrincipal = limpiarCodigoCurricular(inds[0] || '') || `el indicador de evaluación de ${asig}`
+  const decPrincipal = limpiarCodigoCurricular(decs[0] || '') || `los conceptos de ${asig}`
+  const procPrincipal = limpiarCodigoCurricular(procs[0] || '') || `los procedimientos de ${asig}`
+  const actPrincipal = limpiarCodigoCurricular(acts[0] || '') || `el trabajo cooperativo y ético`
+
+  if (esIngles) {
+    return [
+      {
+        criterio: `1. Research & Conceptual Understanding (${decPrincipal.substring(0, 45)})`,
+        destacado: `Thoroughly investigates and explains "${decPrincipal}" in Fase 1 and Fase 2 without conceptual errors.`,
+        esperado: `Investigates and explains most concepts of "${decPrincipal}" accurately.`,
+        proceso: `Identifies partial information about "${decPrincipal}" with some inaccuracies.`,
+        apoyo: `Requires teacher assistance to understand basic concepts of "${decPrincipal}".`
+      },
+      {
+        criterio: `2. Practical Execution & Accuracy (${procPrincipal.substring(0, 45)})`,
+        destacado: `Develops the 3 contextualized exercises/proposals in Fase 3 applying "${procPrincipal}" with full grammatical and technical precision.`,
+        esperado: `Develops the exercises/proposals applying "${procPrincipal}" with minor errors.`,
+        proceso: `Presents incomplete exercises or frequent errors when applying "${procPrincipal}".`,
+        apoyo: `Needs step-by-step guidance to complete the practical sheet in Fase 3.`
+      },
+      {
+        criterio: `3. Achievement of Indicator (${indPrincipal.substring(0, 42)})`,
+        destacado: `Fully evidences the evaluation indicator "${indPrincipal}" throughout the English section.`,
+        esperado: `Satisfactorily meets the evaluation indicator "${indPrincipal}".`,
+        proceso: `Partially evidences the achievement indicator in the submitted work.`,
+        apoyo: `Does not yet evidence the minimum standard required by the indicator.`
+      },
+      {
+        criterio: `4. Presentation in the "${productoFinal.substring(0, 35)}" & Oral Defense`,
+        destacado: `Attaches a clean, well-organized English section in the "${productoFinal}" and explains it fluently in Fase 4.`,
+        esperado: `Attaches a complete English section in the "${productoFinal}" and explains it clearly.`,
+        proceso: `The attached section in the "${productoFinal}" is disorganized or the oral explanation is hesitant.`,
+        apoyo: `Does not attach the complete section or requires total support during the oral presentation.`
+      },
+      {
+        criterio: `5. Teamwork Roles & Metacognition (${actPrincipal.substring(0, 42)})`,
+        destacado: `Fulfills assigned trio roles responsibly, practices "${actPrincipal}", and writes a deep reflection in Fase 5.`,
+        esperado: `Fulfills trio roles and writes an adequate metacognitive reflection in Fase 5.`,
+        proceso: `Participates inconsistently in the trio or writes a superficial reflection.`,
+        apoyo: `Requires constant supervision to fulfill team roles and complete the reflection.`
+      }
+    ]
+  }
+
+  return [
+    {
+      criterio: `1. Indagación y Dominio Conceptual (${decPrincipal.substring(0, 48)})`,
+      destacado: `Investiga y fundamenta con total rigor las propiedades y conceptos de "${decPrincipal}" en las Fases 1 y 2.`,
+      esperado: `Investiga y comprende adecuadamente los conceptos principales de "${decPrincipal}".`,
+      proceso: `Registra información parcial o con imprecisiones conceptuales sobre "${decPrincipal}".`,
+      apoyo: `Requiere acompañamiento personalizado para identificar los conceptos básicos de ${asig}.`
+    },
+    {
+      criterio: `2. Resolución y Precisión Procedimental (${procPrincipal.substring(0, 45)})`,
+      destacado: `Plantea y desarrolla paso a paso los ejercicios, registros o análisis de la Fase 3 aplicando "${procPrincipal}" sin errores.`,
+      esperado: `Desarrolla correctamente la mayoría de ejercicios o registros aplicando "${procPrincipal}".`,
+      proceso: `Desarrolla de manera incompleta los ejercicios o presenta errores al aplicar "${procPrincipal}".`,
+      apoyo: `Necesita guía permanente para resolver las actividades prácticas de la Fase 3.`
+    },
+    {
+      criterio: `3. Cumplimiento del Indicador (${indPrincipal.substring(0, 45)})`,
+      destacado: `Demuestra de forma sobresaliente el desempeño exigido en el indicador: "${indPrincipal}".`,
+      esperado: `Alcanza satisfactoriamente el desempeño establecido en el indicador de evaluación.`,
+      proceso: `Evidencia un logro parcial del indicador de evaluación en sus producciones.`,
+      apoyo: `Aún no evidencia el nivel mínimo requerido en el indicador de ${asig}.`
+    },
+    {
+      criterio: `4. Calidad de la Sección en "${productoFinal.substring(0, 32)}" y Sustentación`,
+      destacado: `Adjunta la hoja/ficha técnica limpia, ordenada y verificada en la sección de ${asig} del "${productoFinal}" y la explica con solvencia en la Fase 4.`,
+      esperado: `Adjunta la sección completa en el "${productoFinal}" y explica adecuadamente su resolución ante la clase.`,
+      proceso: `Entrega la sección de ${asig} desordenada o presenta dudas al explicarla en la exhibición.`,
+      apoyo: `Requiere apoyo directo para organizar e integrar su sección dentro del "${productoFinal}".`
+    },
+    {
+      criterio: `5. Roles en el Trío y Reflexión Metacognitiva (${actPrincipal.substring(0, 40)})`,
+      destacado: `Cumple con excelencia su rol en el trío de trabajo, evidencia "${actPrincipal}" y redacta con criterio la reflexión de la Fase 5.`,
+      esperado: `Cumple su rol asignado en el trío y redacta la reflexión metacognitiva en el producto.`,
+      proceso: `Participa de forma intermitente en el trío y redacta una reflexión superficial.`,
+      apoyo: `Requiere mediación continua del docente para asumir su rol y completar la autoevaluación.`
     }
   ]
 }
@@ -387,10 +297,12 @@ export async function POST(req: Request) {
       bloquesManuales 
     } = body
 
-    const gradoFinal = grado || grado_curso || '4to Grado EGB'
+    const gradoFinal = grado || grado_curso || '8vo Grado EGB'
     const semanasFinal = Number(numero_semanas || noSemanas || 2)
 
-    // 1. AUTOCOMPLETADO DE ESTRUCTURA
+    // =========================================================================
+    // 1. AUTOCOMPLETADO DE ESTRUCTURA DEL PROYECTO (CONSERVADO INTACTO)
+    // =========================================================================
     if (tipo === 'sugerir_estructura_proyecto') {
       const promptEstructura = `
 Genera una propuesta integradora para la estructura de un Proyecto Interdisciplinar en Ecuador:
@@ -414,182 +326,377 @@ Responde ÚNICAMENTE un JSON con:
       } catch (e) {
         return NextResponse.json({
           titulo: titulo || `Conectados con nuestro Bienestar`,
-          situacion_aprendizaje: situacion_aprendizaje || `En el aula se ha observado que algunos estudiantes presentan dificultades para mantener la atención, organizar su tiempo y concluir actividades en el tiempo previsto.`,
-          desafio: desafio || `¿Cómo podemos investigar nuestros hábitos, interpretar las evidencias obtenidas y diseñar acciones para organizar mejor nuestro tiempo, cuidar nuestro bienestar y mejorar nuestros aprendizajes?`,
-          producto: producto || `Guía colectiva “Pequeños hábitos para sentirnos bien y aprender mejor”`
+          situacion_aprendizaje: situacion_aprendizaje || `En el aula se ha observado la necesidad de integrar saberes para resolver problemáticas del entorno.`,
+          desafio: desafio || `¿Cómo podemos investigar e integrar conocimientos de diferentes asignaturas para proponer soluciones viables?`,
+          producto: producto || `Portafolio Integrado Físico`
         })
       }
     }
 
-    // 2. PROYECTO INTERDISCIPLINAR COMPLETO CON DETALLE POR MATERIA
+    // =========================================================================
+    // 2. PROYECTO INTERDISCIPLINAR COMPLETO (ESTILO OFICIAL DISTRITO 03D01)
+    // =========================================================================
     if (tipo === 'cnc_proyecto' || tipoModelo === 'cnc_proyecto') {
       const materiasLista = (materias_participantes && materias_participantes.length > 0) 
         ? materias_participantes 
-        : ['Ciencias Naturales', 'Matemática', 'Lengua y Literatura', 'Estudios Sociales', 'Educación Cultural y Artística', 'Educación Física', 'Inglés']
+        : ['Matemática', 'Lengua y Literatura', 'Ciencias Naturales', 'Estudios Sociales']
 
-      const promptProyecto = `
-Eres un Diseñador Curricular experto del Ministerio de Educación de Ecuador.
-Diseña la planificación oficial completa del PROYECTO INTERDISCIPLINAR PARA LA EVALUACIÓN SUMATIVA.
+      const desgloseSeguro: any[] = Array.isArray(desglose_curricular_interdisciplinar) && desglose_curricular_interdisciplinar.length > 0
+        ? desglose_curricular_interdisciplinar
+        : materiasLista.map((m: string) => {
+            const compObj = competencias_a_evaluar?.find((c: any) => c.asignatura === m)
+            return {
+              asignatura: m,
+              competencia: compObj?.competencia || `Desarrollar y aplicar destrezas de ${m} orientadas al proyecto.`,
+              indicadores: compObj?.indicadores_disponibles || [],
+              declarativos: compObj?.declarativos_disponibles || [],
+              procedimentales: compObj?.procedimentales_disponibles || [],
+              actitudinales: compObj?.actitudinales_disponibles || []
+            }
+          })
 
-DATOS:
-- Grado: "${gradoFinal}" | Trimestre: "${trimestre || '1'}" | Duración: ${semanasFinal} semanas
-- Título: "${titulo || 'Conectados con nuestro Bienestar'}"
-- Situación: "${situacion_aprendizaje || ''}"
-- Desafío: "${desafio || ''}"
-- Producto: "${producto || ''}"
-- Materias: ${materiasLista.join(', ')}
-- Competencias: ${JSON.stringify(competencias_a_evaluar || [])}
+      // Matriz Curricular Oficial inmutable con los saberes exactos seleccionados 1 a 1
+      const matrizCurricularOficial = materiasLista.map((m: string) => {
+        const itemDesglose = desgloseSeguro.find(d => d.asignatura.toUpperCase() === m.toUpperCase())
+        const itemComp = competencias_a_evaluar?.find((c: any) => c.asignatura.toUpperCase() === m.toUpperCase())
 
-REGLAS ESTRICTAS DE CONTENIDO:
-1. "actividades_por_materia": Genera un elemento por CADA una de las asignaturas (${materiasLista.join(', ')}).
-2. PARA CADA MATERIA debes formular las 5 FASES METODOLÓGICAS con total especificidad:
-   - "pregunta_orientadora": Específica del área disciplinar (ej. cómo influyen las pantallas en el cerebro en CCNN; cómo clasificar necesidades vs deseos en Matemática; qué texturas y gestos usar en ECA).
-   - "actividades": Describe DINÁMICAS ESPECÍFICAS DE AULA, NOMBRA ROLES CONCRETOS EN LA FASE 2 (ej. en ECA: Diseñador gráfico, Explorador de texturas; en Matemática: Encuestador, Registrador de conteo; en CCNN: Observador de descanso, Inspector de hidratación). En la Fase 3 detalla la elaboración manual/cuantitativa/artística de la evidencia del producto.
-   - "recursos": Materiales palpables concretos (témperas, hojas secas, semillas, relojes, tablas de frecuencia, cuerdas, flashcards).
-   - En INGLÉS/EFL todo debe estar redactado en inglés formal.
+        const inds = Array.isArray(itemDesglose?.indicadores) && itemDesglose.indicadores.length > 0 
+          ? itemDesglose.indicadores.join('\n') 
+          : (Array.isArray(itemComp?.indicadores_disponibles) ? itemComp.indicadores_disponibles.join('\n') : (itemComp?.indicador || ''))
 
-Devuelve EXCLUSIVAMENTE este JSON:
+        const decs = Array.isArray(itemDesglose?.declarativos) && itemDesglose.declarativos.length > 0 
+          ? itemDesglose.declarativos.join('\n') 
+          : (Array.isArray(itemComp?.declarativos_disponibles) ? itemComp.declarativos_disponibles.join('\n') : (itemComp?.declarativo || ''))
+
+        const procs = Array.isArray(itemDesglose?.procedimentales) && itemDesglose.procedimentales.length > 0 
+          ? itemDesglose.procedimentales.join('\n') 
+          : (Array.isArray(itemComp?.procedimentales_disponibles) ? itemComp.procedimentales_disponibles.join('\n') : (itemComp?.procedimental || ''))
+
+        const acts = Array.isArray(itemDesglose?.actitudinales) && itemDesglose.actitudinales.length > 0 
+          ? itemDesglose.actitudinales.join('\n') 
+          : (Array.isArray(itemComp?.actitudinales_disponibles) ? itemComp.actitudinales_disponibles.join('\n') : (itemComp?.actitudinal || ''))
+
+        return {
+          asignatura: m,
+          competencias_especificas: itemDesglose?.competencia || itemComp?.competencia || `Competencia oficial de ${m}`,
+          indicadores_evaluacion: inds,
+          saberes_declarativos: decs,
+          saberes_procedimentales: procs,
+          saberes_actitudinales: acts
+        }
+      })
+
+      // Desglose explícito materia por materia para inyectar al prompt
+      const desgloseCurricularDetallado = desgloseSeguro.map((d: any, idx: number) => `
+===================================================================
+MATERIA #${idx + 1}: ${d.asignatura.toUpperCase()}
+===================================================================
+• COMPETENCIA SELECCIONADA: "${d.competencia}"
+• INDICADORES DE EVALUACIÓN SELECCIONADOS:
+  ${Array.isArray(d.indicadores) && d.indicadores.length > 0 ? d.indicadores.join('\n  ') : 'Aplicar indicador oficial de la competencia'}
+• SABERES DECLARATIVOS SELECCIONADOS (Temas/conceptos exactos que DEBEN aparecer en las actividades):
+  ${Array.isArray(d.declarativos) && d.declarativos.length > 0 ? d.declarativos.join('\n  ') : 'Conceptos disciplinares de la materia'}
+• SABERES PROCEDIMENTALES SELECCIONADOS (Acciones técnicas que DEBEN hacer en Fase 2 y Fase 3):
+  ${Array.isArray(d.procedimentales) && d.procedimentales.length > 0 ? d.procedimentales.join('\n  ') : 'Procedimientos prácticos de la materia'}
+• SABERES ACTITUDINALES SELECCIONADOS (Valores a evaluar en Fase 5 y Rúbrica):
+  ${Array.isArray(d.actitudinales) && d.actitudinales.length > 0 ? d.actitudinales.join('\n  ') : 'Trabajo colaborativo y honestidad académica'}
+`).join('\n')
+
+      const productoNombre = producto || 'Portafolio Integrado Físico'
+
+      const promptProyectoArticulado = `
+Actúa como un Especialista en Diseño Microcurricular del Ministerio de Educación del Ecuador (Distrito 03D01 Azogues - Biblián - Déleg).
+Tu tarea es diseñar las ACTIVIDADES POR ASIGNATURA y las RÚBRICAS ANALÍTICAS de un Proyecto Interdisciplinar para la Evaluación Sumativa, cumpliendo con absoluta fidelidad el estilo oficial del Distrito.
+
+===================================================================
+1. EJE RECTOR DEL PROYECTO COMÚN (TODAS LAS MATERIAS CONFLUYEN AQUÍ):
+===================================================================
+- Nivel/Subnivel: "${subnivel || 'Básica Superior'}" | Grado/Curso: "${gradoFinal}"
+- Trimestre: "${trimestre || '1'}" | Duración: ${semanasFinal} semanas
+- TÍTULO DEL PROYECTO: "${titulo || 'Proyecto Interdisciplinar Oficial'}"
+- DESCRIPCIÓN / SITUACIÓN DE APRENDIZAJE: "${situacion_aprendizaje || ''}"
+- DESAFÍO / PREGUNTA RETADORA: "${desafio || ''}"
+- PRODUCTO FINAL COMÚN: "${productoNombre}"
+- ASIGNATURAS PARTICIPANTES (${materiasLista.length}): ${materiasLista.join(', ')}
+
+===================================================================
+2. COMPETENCIAS, INDICADORES Y SABERES SELECCIONADOS POR EL DOCENTE:
+===================================================================
+${desgloseCurricularDetallado}
+
+===================================================================
+3. EJEMPLO EXACTO DEL ESTILO DE REDACCIÓN REQUERIDO (FEW-SHOT MODEL):
+===================================================================
+Observa cómo se redactan las actividades cuando el Producto Final es un "Portafolio Integrado Físico":
+
+Ejemplo en MATEMÁTICA (si su saber declarativo fuera "Ecuaciones de primer grado con valor absoluto |ax+b|=c"):
+- PLANIFICACIÓN (Semana 1):
+  "- Presentar el desafío matemático: resolver casos de tolerancia o margen de error usando ecuaciones con valor absoluto |ax+b|=c en el contexto de materiales y experimentos.\\n\\n- Formar los tríos de trabajo y socializar los criterios de presentación manuscrita o impresa para la ficha de matemática del portafolio."
+  Recursos: "Pizarra, marcador, cuaderno de trabajo, carpeta física del portafolio."
+- 2.- Organización o investigación (Semana 1):
+  "- Investigar las propiedades de la ecuación de primer grado con valor absoluto.\\n\\n- Distribuir roles en el trío (verificador de fórmulas, calculador y redactor de la ficha técnica física)."
+  Recursos: "Libros de texto de Matemática, calculadora, hojas perforadas."
+- 3. Ejecución e integración de saberes para la creación del producto (Semana 2):
+  "- Plantear y resolver paso a paso en una hoja membretada 3 ejercicios contextualizados de ecuaciones de primer grado con valor absoluto.\\n\\n- Adjuntar la resolución completa y ordenada en la sección de Matemática del Portafolio Integrado Físico."
+  Recursos: "Hojas de resolución a cuadros, juego geométrico, archivador físico."
+- 4. Socialización, presentación y difusión (Semana 2):
+  "- Presentar y explicar verbalmente ante la clase la solución de uno de los problemas resueltos durante la exhibición del portafolio físico."
+  Recursos: "Portafolio físico en la sección de Matemática."
+- 5. Evaluación, reflexión y metacognición:
+  "- Rúbrica de evaluación sobre precisión algebraica y presentación limpia en el portafolio.\\n\\n- Redactar una breve reflexión en el portafolio sobre la utilidad del valor absoluto en márgenes de error reales."
+  Recursos: "Instrumento de evaluación, ficha de metacognición."
+
+Ejemplo en EMPRENDIMIENTO Y GESTIÓN (si su saber fuera "Ciclo contable y Libro Diario" para el MISMO proyecto):
+- PLANIFICACIÓN (Semana 1):
+  "- Discutir en el trío la importancia de la contabilidad y el registro de costos para elaborar un proyecto físico.\\n\\n- Definir el presupuesto simulado de materiales para el ensamble del Portafolio Integrado Físico (carpeta, separadores, copias, impresiones)."
+- 2.- Organización o investigación (Semana 1):
+  "- Investigar el orden lógico del ciclo contable básico y el llenado del libro diario.\\n\\n- Asignar en el trío la recolección de comprobantes o notas de venta simuladas de los materiales del portafolio."
+- 3. Ejecución e integración de saberes para la creación del producto (Semana 2):
+  "- Elaborar el registro de transacciones financieras en un formato físico impreso o dibujado a regla en la hoja contable.\\n\\n- Incluir el reporte contable veraz y transparente en la sección de Emprendimiento y Gestión del portafolio."
+
+===================================================================
+4. INSTRUCCIONES OBLIGATORIAS PARA TU GENERACIÓN:
+===================================================================
+1. FORMATO DE ACTIVIDADES EN CADA FASE:
+   - En las Fases 1, 2, 3 y 5 redacta EXACTAMENTE 2 viñetas con guion ("- Viñeta 1...\\n\\n- Viñeta 2...") separadas por doble salto de línea. En la Fase 4 redacta 1 o 2 viñetas directas.
+   - CADA viñeta debe nombrar EXPLÍCITAMENTE el concepto del Saber Declarativo y la acción del Saber Procedimental seleccionados arriba para esa asignatura (NO uses los temas del ejemplo si no fueron seleccionados; usa EXCLUSIVAMENTE los saberes listados en la sección 2 para cada materia).
+   - CADA materia debe construir su propia sección/ficha/componente tangible e integrarlo dentro del Producto Final Común: "${productoNombre}".
+   - Adapta todos los recursos a útiles reales del aula ecuatoriana (pizarra, marcador, cuaderno de trabajo, hojas perforadas, hojas a cuadros, regla, esferográficos, textos del MinEduc, etc.).
+   - Si una materia es Inglés (EFL), redacta sus 5 fases y su rúbrica disciplinar 100% en INGLÉS siguiendo exactamente el mismo formato de guiones.
+
+2. VINCULACIÓN ESTRICTA ENTRE ACTIVIDADES Y RÚBRICAS ("rubricas_disciplinares_por_materia"):
+   - Genera una rúbrica analítica independiente (5 criterios) para CADA materia participante (${materiasLista.join(', ')}).
+   - Los 5 criterios de la rúbrica de una materia DEBEN CALIFICAR EXACTAMENTE lo que el estudiante hizo en las 5 fases de esa materia (Ejemplo: Criterio 1 evalúa la investigación de la Fase 2 sobre el saber declarativo; Criterio 2 evalúa los ejercicios/producciones de la Fase 3 aplicando el saber procedimental; Criterio 3 evalúa el indicador de evaluación seleccionado; Criterio 4 evalúa el orden y presentación de la sección de esa materia dentro de "${productoNombre}" y su defensa en Fase 4; Criterio 5 evalúa los roles en el trío y la reflexión metacognitiva del saber actitudinal en Fase 5).
+
+3. RÚBRICA INTERDISCIPLINAR COMÚN ("rubrica_interdisciplinar"):
+   - Genera UNA SOLA rúbrica interdisciplinar (6 criterios) que evalúe el Producto Final Común ("${productoNombre}") ensamblado con las secciones de todas las asignaturas.
+
+Devuelve EXCLUSIVAMENTE este JSON válido:
 {
-  "titulo": "${titulo || 'Conectados con nuestro Bienestar'}",
-  "objetivo_proyecto": "Objetivo integrador...",
+  "titulo": "${titulo || 'Proyecto Interdisciplinar Oficial'}",
+  "objetivo_proyecto": "Objetivo integrador redactado en infinitivo que articula las materias participantes (${materiasLista.join(', ')}) con el desafío y la creación del producto final (${productoNombre}).",
   "descripcion_proyecto": "${situacion_aprendizaje || ''}",
   "desafio": "${desafio || ''}",
-  "producto": "${producto || ''}",
-  "matriz_curricular": [
-    {
-      "asignatura": "Nombre",
-      "competencias_especificas": "CE...",
-      "indicadores_evaluacion": "I...",
-      "saberes_declarativos": "...",
-      "saberes_procedimentales": "...",
-      "saberes_actitudinales": "..."
-    }
-  ],
+  "producto": "${productoNombre}",
   "fases_proyecto": [
-    { "fase": "1. Planificación", "pregunta_orientadora": "¿Qué vamos a investigar y para qué?", "resultado": "Propósito, desafío y preguntas" },
-    { "fase": "2. Organización o investigación (asignación de roles)", "pregunta_orientadora": "¿Cómo vamos a hacerlo?", "resultado": "Plan de trabajo" },
-    { "fase": "3. Ejecución e integración de saberes para la creación del producto", "pregunta_orientadora": "¿Cómo resolvemos el desafío?", "resultado": "Producto + evidencias" },
-    { "fase": "4. Socialización, presentación y difusión", "pregunta_orientadora": "¿Qué descubrimos y cómo lo comunicamos?", "resultado": "Presentación del producto" },
-    { "fase": "5. Evaluación, reflexión y metacognición", "pregunta_orientadora": "¿Qué aprendimos y qué podemos mejorar?", "resultado": "Metacognición y compromisos" }
+    { "fase": "1. Planificación", "pregunta_orientadora": "¿Qué vamos a investigar y para qué?", "resultado": "Propósito, desafío y acuerdos de presentación" },
+    { "fase": "2. Organización o investigación (asignación de roles)", "pregunta_orientadora": "¿Cómo vamos a hacerlo?", "resultado": "Investigación disciplinar y distribución de roles en tríos/equipos" },
+    { "fase": "3. Ejecución e integración de saberes para la creación del producto", "pregunta_orientadora": "¿Cómo resolvemos el desafío?", "resultado": "Producciones disciplinares integradas en el producto final" },
+    { "fase": "4. Socialización, presentación y difusión", "pregunta_orientadora": "¿Qué descubrimos y cómo lo comunicamos?", "resultado": "Exhibición y sustentación verbal del producto final" },
+    { "fase": "5. Evaluación, reflexión y metacognición", "pregunta_orientadora": "¿Qué aprendimos y qué podemos mejorar?", "resultado": "Evaluación con rúbrica analítica y reflexión metacognitiva" }
   ],
   "actividades_por_materia": [
     {
-      "asignatura": "Ciencias Naturales",
+      "asignatura": "Nombre Exacto de la Materia",
       "fases": [
         {
-          "fase_titulo": "1. PLANIFICACIÓN (Semana 1)",
-          "pregunta_orientadora": "¿De qué manera el descanso, la alimentación y las pantallas afectan a nuestro cerebro y energía?",
-          "actividades": "• Dinámica de sensibilización...\\n• Observación de láminas anatómicas...\\n• Preguntas en cuaderno de campo...",
-          "recursos": "Láminas del sistema nervioso, infografías de luz azul..."
+          "fase_titulo": "PLANIFICACIÓN (Semana 1)",
+          "pregunta_orientadora": "¿Pregunta específica que conecta el saber declarativo de la materia con el producto?",
+          "actividades": "- Presentar el desafío de la materia aplicando [Saber Declarativo exacto] en el contexto de [Título/Situación del proyecto].\\n\\n- Formar los tríos de trabajo y socializar los criterios de presentación para la sección de [Materia] del ${productoNombre}.",
+          "recursos": "Pizarra, marcador, cuaderno de trabajo, carpeta/soporte del ${productoNombre}."
         },
         {
-          "fase_titulo": "2.- Organización e investigación (Semana 1)",
-          "pregunta_orientadora": "...",
-          "actividades": "• Conformar equipos asignando roles: Observador de descanso, Inspector de hidratación, Cronometrador de pantallas...\\n• Bitácora 'Mi reloj biológico'...",
-          "recursos": "..."
+          "fase_titulo": "2.- Organización o investigación (Semana 1)",
+          "pregunta_orientadora": "¿Pregunta específica sobre la indagación y organización del trío?",
+          "actividades": "- Investigar las propiedades/conceptos/estructura de [Saber Declarativo exacto].\\n\\n- Distribuir roles específicos en el trío (rol 1, rol 2 y redactor de la ficha técnica para el ${productoNombre}).",
+          "recursos": "Libros de texto de la materia, hojas perforadas, materiales específicos."
         },
         {
           "fase_titulo": "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-          "pregunta_orientadora": "...",
-          "actividades": "• Taller de higiene visual (regla 20-20-20)...\\n• Redacción de las fichas técnicas para la guía colectiva...",
-          "recursos": "..."
+          "pregunta_orientadora": "¿Pregunta sobre la elaboración concreta de la sección de esta materia?",
+          "actividades": "- Plantear y elaborar paso a paso [tarea concreta usando el Saber Procedimental exacto].\\n\\n- Adjuntar la producción completa y ordenada en la sección de [Materia] del ${productoNombre}.",
+          "recursos": "Hojas de trabajo, instrumentos específicos de la materia, ${productoNombre}."
         },
         {
           "fase_titulo": "4. Socialización, presentación y difusión (Semana 2)",
-          "pregunta_orientadora": "...",
-          "actividades": "• Montaje del rincón 'Cuerpo sano, mente atenta'...\\n• Demostración guiada...",
-          "recursos": "..."
+          "pregunta_orientadora": "¿Pregunta sobre la defensa oral de la sección de esta materia?",
+          "actividades": "- Presentar y explicar verbalmente ante la clase el trabajo resuelto en la sección de [Materia] durante la exhibición del ${productoNombre}.",
+          "recursos": "${productoNombre} en la sección de [Materia]."
         },
         {
           "fase_titulo": "5. Evaluación, reflexión y metacognición",
-          "pregunta_orientadora": "...",
-          "actividades": "• Rúbrica disciplinar analítica...\\n• Contrato de compromiso personal...",
-          "recursos": "..."
+          "pregunta_orientadora": "¿Pregunta reflexiva sobre la utilidad real del saber aprendido?",
+          "actividades": "- Aplicación de rúbrica de evaluación sobre [precisión del Saber Procedimental] y presentación limpia en el ${productoNombre}.\\n\\n- Redactar una breve reflexión en el ${productoNombre} sobre la utilidad de [Saber Declarativo] y [Saber Actitudinal] en situaciones reales.",
+          "recursos": "Rúbrica analítica de evaluación, ficha de metacognición."
         }
       ]
     }
   ],
-  "rubrica_disciplinar": [
-    { "criterio": "Recopila y registra datos", "destacado": "Registra de manera completa y ordenada...", "esperado": "Registra correctamente la mayoría...", "proceso": "Registra parcialmente...", "apoyo": "Requiere acompañamiento..." },
-    { "criterio": "Organiza los datos", "destacado": "Organiza correctamente en tabla...", "esperado": "Organiza la mayoría...", "proceso": "Presenta errores...", "apoyo": "Requiere apoyo..." },
-    { "criterio": "Representa gráficamente la información", "destacado": "Representa con exactitud...", "esperado": "Representa con pocos errores...", "proceso": "Contiene errores...", "apoyo": "Requiere ayuda..." },
-    { "criterio": "Interpreta los resultados", "destacado": "Identifica dos o más hallazgos...", "esperado": "Identifica al menos un hallazgo...", "proceso": "Interpretación parcial...", "apoyo": "Conclusiones sin sustento..." },
-    { "criterio": "Utiliza los datos para responder al desafío", "destacado": "Justifica claramente la acción...", "esperado": "Propone acción relacionada...", "proceso": "Relación poco clara...", "apoyo": "Requiere apoyo..." }
+  "rubricas_disciplinares_por_materia": [
+    {
+      "asignatura": "Nombre Exacto de la Materia",
+      "criterios": [
+        {
+          "criterio": "1. Investigación y dominio de [Saber Declarativo de la materia]",
+          "destacado": "Investiga y comprende con exactitud las propiedades y conceptos de [Saber Declarativo] en la Fase 1 y 2.",
+          "esperado": "Investiga y comprende la mayoría de conceptos de [Saber Declarativo].",
+          "proceso": "Investiga de manera parcial los conceptos con algunas confusiones.",
+          "apoyo": "Requiere acompañamiento docente para comprender los conceptos básicos."
+        },
+        {
+          "criterio": "2. Ejecución práctica de [tarea de la Fase 3 con el Saber Procedimental]",
+          "destacado": "Desarrolla paso a paso y sin errores la actividad práctica de la Fase 3 aplicando [Saber Procedimental].",
+          "esperado": "Desarrolla correctamente la actividad práctica con mínimos errores.",
+          "proceso": "Presenta la actividad práctica incompleta o con imprecisiones.",
+          "apoyo": "Requiere guía constante para resolver la actividad de la Fase 3."
+        },
+        {
+          "criterio": "3. Cumplimiento del indicador [Código y texto breve del Indicador]",
+          "destacado": "Alcanza de manera sobresaliente el desempeño establecido en el indicador de evaluación.",
+          "esperado": "Alcanza satisfactoriamente el indicador de evaluación de la asignatura.",
+          "proceso": "Evidencia un logro parcial del indicador de evaluación.",
+          "apoyo": "No evidencia aún el logro mínimo del indicador."
+        },
+        {
+          "criterio": "4. Presentación en la sección del ${productoNombre} y sustentación oral (Fase 4)",
+          "destacado": "Adjunta la sección de la materia limpia y ordenada en el ${productoNombre} y la explica con total claridad ante la clase.",
+          "esperado": "Adjunta la sección completa en el ${productoNombre} y realiza una explicación clara.",
+          "proceso": "Adjunta la sección con desorden o expone con inseguridad.",
+          "apoyo": "No adjunta la sección completa o requiere apoyo total para exponer."
+        },
+        {
+          "criterio": "5. Trabajo en trío y reflexión metacognitiva ([Saber Actitudinal])",
+          "destacado": "Cumple su rol específico en el trío, practica [Saber Actitudinal] y redacta una reflexión profunda en la Fase 5.",
+          "esperado": "Cumple su rol en el trío y redacta una reflexión adecuada en la Fase 5.",
+          "proceso": "Cumple parcialmente su rol o redacta una reflexión superficial.",
+          "apoyo": "Requiere supervisión continua para integrarse al trío y reflexionar."
+        }
+      ]
+    }
   ],
   "rubrica_interdisciplinar": [
-    { "criterio": "Integración de aprendizajes", "destacado": "Integra de manera clara y coherente...", "esperado": "Relaciona aprendizajes...", "proceso": "Poco relacionados...", "apoyo": "Aislados..." },
-    { "criterio": "Respuesta al desafío", "destacado": "Responde claramente sustentado...", "esperado": "Responde al desafío...", "proceso": "Responde parcialmente...", "apoyo": "No responde..." },
-    { "criterio": "Uso de evidencias", "destacado": "Utiliza datos y observaciones...", "esperado": "Utiliza evidencias pertinentes...", "proceso": "Utiliza pocas evidencias...", "apoyo": "Sin evidencias..." },
-    { "criterio": "Comunicación del producto", "destacado": "Comunica de manera clara y organizada...", "esperado": "Comunica con claridad...", "proceso": "Dificultades de orden...", "apoyo": "Requiere ayuda..." },
-    { "criterio": "Creatividad y pertinencia", "destacado": "Propuestas creativas y realistas...", "esperado": "Propuestas pertinentes...", "proceso": "Propuestas generales...", "apoyo": "Poco viables..." },
-    { "criterio": "Trabajo colaborativo", "destacado": "Todos participan y cumplen roles...", "esperado": "La mayoría cumple...", "proceso": "Participación desigual...", "apoyo": "Requiere apoyo constante..." }
+    { "criterio": "Integración de secciones disciplinares en el producto", "destacado": "El ${productoNombre} integra de manera armónica, completa y coherente las secciones de todas las asignaturas participantes.", "esperado": "El ${productoNombre} integra adecuadamente la mayoría de las secciones disciplinares.", "proceso": "Se observan secciones incompletas o desarticuladas dentro del ${productoNombre}.", "apoyo": "Las producciones aparecen aisladas y sin estructura de producto común." },
+    { "criterio": "Respuesta al desafío del proyecto", "destacado": "El ${productoNombre} responde con total pertinencia, viabilidad y sustento práctico a la pregunta retadora del proyecto.", "esperado": "El producto responde adecuadamente al desafío planteado.", "proceso": "El producto responde de manera parcial o superficial al desafío.", "apoyo": "El producto no logra dar respuesta al desafío del proyecto." },
+    { "criterio": "Rigor técnico y uso de evidencias", "destacado": "Todas las fichas, cálculos, registros y textos incluidos en el ${productoNombre} presentan datos verificados y rigor académico.", "esperado": "La mayoría de los registros y evidencias del producto son correctos y pertinentes.", "proceso": "Algunas evidencias presentan errores de cálculo, redacción o fundamentación.", "apoyo": "Las secciones carecen de evidencias verificables." },
+    { "criterio": "Exhibición y comunicación oral (Fase 4)", "destacado": "El trío/equipo expone y defiende el ${productoNombre} con fluidez, dominio técnico de todas las materias y excelente organización.", "esperado": "El equipo comunica con claridad los resultados del producto final.", "proceso": "La exposición presenta dificultades de orden o lectura mecánica.", "apoyo": "El equipo requiere guía constante del docente para explicar su producto." },
+    { "criterio": "Presentación formal, orden y creatividad", "destacado": "El ${productoNombre} destaca por su pulcritud, diseño organizado por secciones, hojas membretadas limpias y creatividad.", "esperado": "El producto cumple con las normas de presentación y orden acordadas.", "proceso": "El producto presenta descuidos de orden, limpieza o estructura.", "apoyo": "El producto se entrega incompleto y sin el formato acordado." },
+    { "criterio": "Trabajo cooperativo y cumplimiento de roles", "destacado": "Todos los integrantes del trío/equipo asumen sus roles específicos, colaboran activamente y cumplen los tiempos previstos.", "esperado": "La mayoría de los integrantes cumple sus responsabilidades en el equipo.", "proceso": "La distribución del trabajo en el trío/equipo es desigual.", "apoyo": "El equipo requiere intervención constante para trabajar de forma conjunta." }
   ]
 }`
 
       let objetoProyecto: any = null
 
       try {
-        const respuestaIa = await generarConIA(promptProyecto, 4000)
+        const respuestaIa = await generarConIA(promptProyectoArticulado, 7800)
         const jsonLimpio = respuestaIa.replace(/```json/g, '').replace(/```/g, '').trim()
         objetoProyecto = JSON.parse(jsonLimpio)
 
-        // Validación estricta: si la IA devolvió actividades_por_materia vacías o genéricas, inyectamos el detalle curricular
-        if (!objetoProyecto.actividades_por_materia || objetoProyecto.actividades_por_materia.length === 0) {
-          objetoProyecto.actividades_por_materia = materiasLista.map((m: string) => ({
+        // Asignar la matriz curricular oficial inmutable con los saberes seleccionados 1 a 1
+        objetoProyecto.matriz_curricular = matrizCurricularOficial
+
+        // Verificar que todas las materias tengan sus 5 fases completas y vinculadas
+        const actividadesExistentes = Array.isArray(objetoProyecto.actividades_por_materia)
+          ? objetoProyecto.actividades_por_materia
+          : []
+
+        objetoProyecto.actividades_por_materia = materiasLista.map((m: string) => {
+          const encontrada = actividadesExistentes.find(
+            (a: any) => (a.asignatura || '').toUpperCase().trim() === m.toUpperCase().trim()
+          )
+          if (encontrada && Array.isArray(encontrada.fases) && encontrada.fases.length >= 5) {
+            return encontrada
+          }
+          const d = desgloseSeguro.find(item => item.asignatura.toUpperCase() === m.toUpperCase())
+          return {
             asignatura: m,
-            fases: construirActividadesEspecificasPorMateria(m, objetoProyecto.titulo, objetoProyecto.producto)
-          }))
-        }
+            fases: construirActividadesDesdeSaberesReales(
+              m, 
+              d?.competencia || '', 
+              d?.declarativos || [], 
+              d?.procedimentales || [], 
+              d?.actitudinales || [], 
+              titulo || 'Proyecto Interdisciplinar',
+              desafio || 'Desafío del proyecto',
+              productoNombre
+            )
+          }
+        })
+
+        // Garantizar que CADA materia tenga su propia rúbrica analítica disciplinar vinculada a sus actividades
+        const rubricasExistentes = Array.isArray(objetoProyecto.rubricas_disciplinares_por_materia)
+          ? objetoProyecto.rubricas_disciplinares_por_materia
+          : []
+
+        objetoProyecto.rubricas_disciplinares_por_materia = materiasLista.map((m: string) => {
+          const encontrada = rubricasExistentes.find(
+            (r: any) => (r.asignatura || '').toUpperCase().trim() === m.toUpperCase().trim()
+          )
+          if (encontrada && Array.isArray(encontrada.criterios) && encontrada.criterios.length > 0) {
+            return encontrada
+          }
+          const d = desgloseSeguro.find(item => item.asignatura.toUpperCase() === m.toUpperCase())
+          return {
+            asignatura: m,
+            criterios: construirRubricaDisciplinarEspecifica(
+              m,
+              d?.indicadores || [],
+              d?.declarativos || [],
+              d?.procedimentales || [],
+              d?.actitudinales || [],
+              productoNombre
+            )
+          }
+        })
+
       } catch (errorIa: any) {
-        console.warn('⚠️ IA en timeout o error de parsing, activando motor pedagógico estructurado:', errorIa.message)
+        console.warn('⚠️ IA en timeout o error de parsing, activando motor estructurado Distrito 03D01:', errorIa.message)
         
         objetoProyecto = {
-          titulo: titulo || 'Conectados con nuestro Bienestar',
-          objetivo_proyecto: `Investigar hábitos y factores que pueden influir en el bienestar y el aprendizaje de los estudiantes en ${gradoFinal}, mediante la observación, la recopilación e interpretación de información y el análisis desde diferentes asignaturas, para proponer acciones sencillas que contribuyan al cuidado personal, la organización del tiempo, la convivencia y el aprendizaje.`,
-          descripcion_proyecto: situacion_aprendizaje || `En el aula se ha observado que algunos estudiantes presentan dificultades para mantener la atención, organizar su tiempo y concluir determinadas actividades en el tiempo previsto. Sin embargo, no se conocen con certeza los factores relacionados con esta situación. A través del proyecto, los estudiantes investigarán hábitos cotidianos y diseñarán propuestas aplicables.`,
-          desafio: desafio || `¿Cómo podemos investigar nuestros hábitos, interpretar las evidencias obtenidas y diseñar acciones para organizar mejor nuestro tiempo, cuidar nuestro bienestar, fortalecer nuestra convivencia y mejorar nuestros aprendizajes?`,
-          producto: producto || `Guía colectiva “Pequeños hábitos para sentirnos bien y aprender mejor”, elaborada con resultados de la investigación del grupo, tablas o gráficos sencillos, textos breves, ilustraciones, mensajes y propuestas de acciones.`,
-          matriz_curricular: materiasLista.map((asig: string) => {
-            const itemComp = competencias_a_evaluar?.find((c: any) => c.asignatura === asig)
+          titulo: titulo || 'Proyecto Interdisciplinar Oficial',
+          objetivo_proyecto: `Articular los saberes disciplinares de ${materiasLista.join(', ')} en ${gradoFinal}, mediante la resolución práctica y el trabajo cooperativo en tríos, para elaborar y sustentar el producto común: ${productoNombre}.`,
+          descripcion_proyecto: situacion_aprendizaje || `En la institución educativa se aborda la necesidad de integrar los saberes teóricos y prácticos de cada asignatura en un producto tangible aplicado a situaciones reales del entorno.`,
+          desafio: desafio || `¿Cómo podemos integrar los conocimientos de nuestras asignaturas para elaborar y sustentar ${productoNombre}?`,
+          producto: productoNombre,
+          matriz_curricular: matrizCurricularOficial,
+          fases_proyecto: [
+            { fase: "1. Planificación", pregunta_orientadora: "¿Qué vamos a investigar y para qué?", resultado: "Propósito, desafío y criterios de presentación" },
+            { fase: "2. Organización o investigación (asignación de roles)", pregunta_orientadora: "¿Cómo vamos a hacerlo?", resultado: "Indagación disciplinar y distribución de roles en el trío" },
+            { fase: "3. Ejecución e integración de saberes para la creación del producto", pregunta_orientadora: "¿Cómo resolvemos el desafío?", resultado: "Secciones disciplinares integradas en el producto final" },
+            { fase: "4. Socialización, presentación y difusión", pregunta_orientadora: "¿Qué descubrimos y cómo lo comunicamos?", resultado: "Exhibición y sustentación oral del producto" },
+            { fase: "5. Evaluación, reflexión y metacognición", pregunta_orientadora: "¿Qué aprendimos y qué podemos mejorar?", resultado: "Evaluación con rúbrica analítica y reflexión en el producto" }
+          ],
+          actividades_por_materia: materiasLista.map((m: string) => {
+            const d = desgloseSeguro.find(item => item.asignatura.toUpperCase() === m.toUpperCase())
             return {
-              asignatura: asig,
-              competencias_especificas: itemComp?.competencia || `Desarrollar y aplicar saberes y destrezas de ${asig} orientados a la solución del desafío del proyecto.`,
-              indicadores_evaluacion: `Aplica los contenidos y destrezas de ${asig} en la elaboración de evidencias para el producto integrador.`,
-              saberes_declarativos: `Conceptos fundamentales y terminología esencial de ${asig}.`,
-              saberes_procedimentales: `Recopilar, organizar e interpretar información aplicada a la vida cotidiana.`,
-              saberes_actitudinales: `Demostrar responsabilidad, apertura al diálogo, empatía y trabajo colaborativo.`
+              asignatura: m,
+              fases: construirActividadesDesdeSaberesReales(
+                m, 
+                d?.competencia || '', 
+                d?.declarativos || [], 
+                d?.procedimentales || [], 
+                d?.actitudinales || [], 
+                titulo || 'Proyecto Interdisciplinar',
+                desafio || 'Desafío del proyecto',
+                productoNombre
+              )
             }
           }),
-          fases_proyecto: [
-            { fase: "1. Planificación", pregunta_orientadora: "¿Qué vamos a investigar y para qué?", resultado: "Propósito, desafío y preguntas" },
-            { fase: "2. Organización o investigación (asignación de roles)", pregunta_orientadora: "¿Cómo vamos a hacerlo?", resultado: "Plan de trabajo" },
-            { fase: "3. Ejecución e integración de saberes para la creación del producto", pregunta_orientadora: "¿Cómo resolvemos el desafío?", resultado: "Producto + evidencias" },
-            { fase: "4. Socialización, presentación y difusión", pregunta_orientadora: "¿Qué descubrimos y cómo lo comunicamos?", resultado: "Presentación del producto" },
-            { fase: "5. Evaluación, reflexión y metacognición", pregunta_orientadora: "¿Qué aprendimos y qué podemos mejorar?", resultado: "Metacognición y compromisos" }
-          ],
-          actividades_por_materia: materiasLista.map((m: string) => ({
-            asignatura: m,
-            fases: construirActividadesEspecificasPorMateria(m, titulo || 'Conectados con nuestro Bienestar', producto || 'Guía colectiva')
-          })),
-          rubrica_disciplinar: [
-            { criterio: "Recopila y registra datos", destacado: "Registra de manera completa y ordenada los datos obtenidos, sin alterar la información.", esperado: "Registra correctamente la mayoría de los datos obtenidos.", proceso: "Registra los datos de manera parcial o presenta algunas inconsistencias.", apoyo: "Requiere acompañamiento para registrar los datos obtenidos." },
-            { criterio: "Organiza los datos", destacado: "Organiza correctamente todos los datos en una tabla y facilita su lectura y comparación.", esperado: "Organiza correctamente la mayoría de los datos en una tabla.", proceso: "Organiza parcialmente los datos y presenta errores que dificultan su lectura.", apoyo: "Requiere apoyo para organizar los datos." },
-            { criterio: "Representa gráficamente la información", destacado: "Representa correctamente los datos y utiliza de manera adecuada título, categorías y valores.", esperado: "Representa los datos de forma comprensible con pocos errores.", proceso: "La representación contiene varios errores o elementos incompletos.", apoyo: "Requiere acompañamiento para construir la representación gráfica." },
-            { criterio: "Interpreta los resultados", destacado: "Compara los datos e identifica correctamente dos o más hallazgos relevantes sobre los hábitos investigados.", esperado: "Identifica al menos un hallazgo correcto a partir de los datos.", proceso: "Realiza interpretaciones parciales o poco relacionadas con los datos.", apoyo: "Presenta conclusiones que no se sustentan todavía en los datos obtenidos." },
-            { criterio: "Utiliza los datos para responder al desafío", destacado: "Utiliza los resultados para justificar claramente una acción o recomendación relacionada con el bienestar.", esperado: "Propone una acción o recomendación relacionada con los resultados obtenidos.", proceso: "Propone una acción, pero establece una relación poco clara con los datos.", apoyo: "Requiere apoyo para relacionar los resultados con una propuesta." }
-          ],
+          rubricas_disciplinares_por_materia: materiasLista.map((m: string) => {
+            const d = desgloseSeguro.find(item => item.asignatura.toUpperCase() === m.toUpperCase())
+            return {
+              asignatura: m,
+              criterios: construirRubricaDisciplinarEspecifica(
+                m,
+                d?.indicadores || [],
+                d?.declarativos || [],
+                d?.procedimentales || [],
+                d?.actitudinales || [],
+                productoNombre
+              )
+            }
+          }),
           rubrica_interdisciplinar: [
-            { criterio: "Integración de aprendizajes", destacado: "La guía integra de manera clara y coherente aprendizajes de varias asignaturas para comprender la problemática.", esperado: "La guía relaciona aprendizajes de varias asignaturas de manera adecuada.", proceso: "Se observan aportes de distintas asignaturas, pero aparecen poco relacionados entre sí.", apoyo: "Los aportes aparecen aislados y todavía no evidencian integración." },
-            { criterio: "Respuesta al desafío", destacado: "Las propuestas responden claramente al desafío y están sustentadas en los datos e información investigados.", esperado: "Las propuestas responden al desafío y se relacionan con los principales hallazgos.", proceso: "Las propuestas responden parcialmente al desafío o presentan poca relación con la investigación.", apoyo: "Las propuestas no responden claramente al desafío planteado." },
-            { criterio: "Uso de evidencias", destacado: "Utiliza datos, textos, observaciones y otras evidencias del proyecto para explicar y justificar sus conclusiones.", esperado: "Utiliza evidencias pertinentes para sustentar la mayoría de sus conclusiones.", proceso: "Utiliza algunas evidencias, pero no siempre las relaciona con sus conclusiones.", apoyo: "Presenta conclusiones sin utilizar suficientemente las evidencias recogidas." },
-            { criterio: "Comunicación del producto", destacado: "Comunica los hallazgos y propuestas de manera clara, organizada y comprensible mediante recursos escritos, gráficos u orales.", esperado: "Comunica de manera clara los principales hallazgos y propuestas.", proceso: "La comunicación presenta dificultades de organización o claridad.", apoyo: "Requiere acompañamiento para comunicar los principales hallazgos del proyecto." },
-            { criterio: "Creatividad y pertinencia", destacado: "Presenta acciones creativas, realistas y posibles de aplicar en la vida cotidiana de los estudiantes.", esperado: "Presenta acciones pertinentes y posibles de aplicar.", proceso: "Presenta acciones generales o poco contextualizadas.", apoyo: "Las acciones propuestas son poco viables o no guardan relación suficiente con la problemática." },
-            { criterio: "Trabajo colaborativo", destacado: "Todos los integrantes participan, asumen responsabilidades, escuchan y contribuyen al producto común.", esperado: "La mayoría participa y cumple las responsabilidades acordadas.", proceso: "La participación y distribución de responsabilidades es desigual.", apoyo: "El equipo requiere acompañamiento constante para organizarse y trabajar conjuntamente." }
+            { criterio: "Integración de secciones disciplinares", destacado: `El "${productoNombre}" integra de manera armónica, completa y coherente las secciones de todas las materias participantes.`, esperado: `El "${productoNombre}" relaciona adecuadamente las secciones de las asignaturas.`, proceso: "Se aprecian aportes aislados o incompletos entre asignaturas.", apoyo: "Los trabajos no evidencian integración en el producto común." },
+            { criterio: "Respuesta al desafío", destacado: "Las resoluciones y evidencias del producto responden con rigor y viabilidad al desafío planteado.", esperado: "El producto responde satisfactoriamente al desafío.", proceso: "El producto responde de forma superficial al reto.", apoyo: "El producto no responde al desafío del proyecto." },
+            { criterio: "Uso de evidencias y rigurosidad", destacado: "Utiliza cálculos, registros, fichas técnicas y producciones verificadas sin errores.", esperado: "Sustenta sus secciones con evidencias adecuadas.", proceso: "Utiliza pocas evidencias o presenta imprecisiones.", apoyo: "Presenta trabajos sin sustento ni verificación." },
+            { criterio: "Sustentación oral en la exhibición (Fase 4)", destacado: "Explica verbalmente ante la clase las soluciones y secciones del producto con solvencia y claridad.", esperado: "Comunica de manera organizada los resultados principales.", proceso: "Presenta dificultades de orden o claridad en la exposición.", apoyo: "Requiere acompañamiento total para explicar su sección." },
+            { criterio: "Presentación formal y orden", destacado: `El "${productoNombre}" destaca por su orden, hojas membretadas limpias y excelente estructura.`, esperado: "Presenta el producto limpio y ordenado según los criterios.", proceso: "Presenta descuidos en el orden o formato de entrega.", apoyo: "Entrega el producto incompleto o desorganizado." },
+            { criterio: "Trabajo en trío y cumplimiento de roles", destacado: "Todos los integrantes cumplen con excelencia sus roles asignados en el trío y colaboran activamente.", esperado: "La mayoría cumple sus roles y coopera en el trío.", proceso: "Participación y distribución de responsabilidades desigual.", apoyo: "El trío requiere acompañamiento constante para trabajar." }
           ]
         }
       }
 
-      // 3. GUARDADO EN BASE DE DATOS
+      // Guardado seguro en Supabase
       if (docente_id && institucion_id) {
         const { data: insertData, error: insertError } = await supabase
           .from('planificaciones_microcurriculares')
@@ -606,7 +713,7 @@ Devuelve EXCLUSIVAMENTE este JSON:
             descripcion_sia: objetoProyecto.descripcion_proyecto,
             asignaturas_conexion: materiasLista.join(', '),
             competencia_especifica: objetoProyecto.desafio,
-            bloques_competencias: objetoProyecto.matriz_curricular || competencias_a_evaluar || [],
+            bloques_competencias: matrizCurricularOficial,
             semanas: objetoProyecto.actividades_por_materia || [],
             filas_saberes: objetoProyecto
           })
@@ -628,7 +735,9 @@ Devuelve EXCLUSIVAMENTE este JSON:
       return NextResponse.json(objetoProyecto)
     }
 
-    // 4. MODELOS ANTERIORES INTACTOS
+    // =========================================================================
+    // 3. MODELOS DISCIPLINARIOS PREVIOS (CONSERVADOS 100% INTACTOS)
+    // =========================================================================
     const esIngles = asignatura && (
       asignatura.toLowerCase().includes('inglés') || 
       asignatura.toLowerCase().includes('ingles') || 
@@ -643,23 +752,86 @@ Devuelve EXCLUSIVAMENTE este JSON:
     let jsonText = ''
 
     if (tipoModelo === 'multigrado_eje') {
+      // 1. Detección de grados oficiales según el subnivel
+      let gradosSubnivel = ['5to Grado EGB', '6to Grado EGB', '7mo Grado EGB']
+      const subNorm = (subnivel || '').toUpperCase()
+
+      if (subNorm.includes('ELEMENTAL') || subNorm.includes('2DO') || subNorm.includes('3RO') || subNorm.includes('4TO')) {
+        gradosSubnivel = ['2do Grado EGB', '3ro Grado EGB', '4to Grado EGB']
+      } else if (subNorm.includes('MEDIA') || subNorm.includes('5TO') || subNorm.includes('6TO') || subNorm.includes('7MO')) {
+        gradosSubnivel = ['5to Grado EGB', '6to Grado EGB', '7mo Grado EGB']
+      } else if (subNorm.includes('SUPERIOR') || subNorm.includes('8VO') || subNorm.includes('9NO') || subNorm.includes('10MO')) {
+        gradosSubnivel = ['8vo EGB', '9no EGB', '10mo EGB']
+      } else if (subNorm.includes('BACHILLERATO') || subNorm.includes('BGU')) {
+        gradosSubnivel = ['1er Curso BGU', '2do Curso BGU', '3er Curso BGU']
+      }
+
+      // 2. Comprobar si el docente ya definió insumos previos en el formulario
+      const objetivoDocente = body.objetivos || body.objetivo || ''
+      const destrezasDocente = body.criterios || body.destrezas || ''
+      const indicadoresDocente = body.indicadores || ''
+
+      const contextoInsumosDocente = `
+INSUMOS PREVIOS PROPORCIONADOS POR EL DOCENTE (OBLIGATORIO RESPETAR SI NO ESTÁN VACÍOS):
+- Objetivo de Aprendizaje: ${objetivoDocente ? `"${objetivoDocente}"` : 'NO PROPORCIONADO (Formúlalo alineado al Currículo Priorizado por Competencias de Ecuador)'}
+- Destrezas con Criterios de Desempeño (DCD): ${destrezasDocente ? `"${destrezasDocente}"` : `NO PROPORCIONADO (Selecciona DCD oficiales con su código ministerial, ej: LL.3.3.2, M.3.1.5, correspondientes a ${subnivel || 'Básica Media'})`}
+- Indicadores de Evaluación: ${indicadoresDocente ? `"${indicadoresDocente}"` : `NO PROPORCIONADO (Selecciona indicadores oficiales con su código ministerial, ej: I.LL.3.3.1, I.M.3.1.2)`}
+`
+
       promptText = `
-Genera planificación MULTIGRADO por EJE TEMÁTICO (Currículo por Competencias):
-- Eje: "${ejeTematico || '1. El Yo y la Identidad'}"
-- Subnivel: "${subnivel || 'Básica Media'}"
+Eres un Asesor Pedagógico y Especialista Curricular del Ministerio de Educación del Ecuador.
+Tu tarea es formular la planificación microcurricular MULTIGRADO POR EJE TEMÁTICO estructurada bajo el CURRÍCULO PRIORIZADO POR COMPETENCIAS.
+
+DATOS DEL CURSO Y CONTEXTO:
+- Eje Temático: "${ejeTematico || '1. El Yo y la Identidad'}"
+- Subnivel Educativo: "${subnivel || 'Básica Media'}"
 - Asignatura: "${asignatura || 'Lengua y Literatura'}"
-- Tema: "${tema || 'Comprensión textual'}"
+- Tema / Unidad Didáctica: "${tema || titulo || 'Comprensión y producción textual'}"
+- Grados a articular simultáneamente: ${gradosSubnivel.join(', ')}
 
-JSON exacto:
+${contextoInsumosDocente}
+
+REGLAS PEDAGÓGICAS ESTRICTAS:
+1. DESTREZAS (DCD) E INDICADORES:
+   - Prohibido usar códigos de Criterios (los que inician con "CE."). Usa EXCLUSIVAMENTE Destrezas con Criterio de Desempeño con código oficial (ej: LL.3.1.1, M.3.2.1) e Indicadores de Evaluación (ej: I.LL.3.1.1).
+   - Si el docente proporcionó el Objetivo, DCD o Indicadores, utilízalos como base inamovible. Si no los proporcionó, selecciónalos del Currículo Priorizado por Competencias de Ecuador para el subnivel "${subnivel || 'Básica Media'}".
+   - En el campo "criterios" debes colocar la DCD común integradora o articulada para el subnivel.
+
+2. ORIENTACIONES METODOLÓGICAS (MOMENTOS DE LA CLASE MULTIGRADO):
+   Para CADA UNO de los 3 grados (${gradosSubnivel.join(', ')}), las "orientaciones" DEBEN estructurarse OBLIGATORIAMENTE en 3 momentos pedagógicos secuenciales con enfoque DUA:
+   • ANTICIPACIÓN: Actividades iniciales de motivación, activación de conocimientos previos y planteamiento del desafío común en el aula.
+   • CONSTRUCCIÓN: Trabajo autónomo o colaborativo diferenciado por grado para conceptualizar, experimentar y resolver la destreza según su nivel de complejidad.
+   • CONSOLIDACIÓN: Aplicación del aprendizaje, elaboración del producto/evidencia y puesta en común de los 3 grados.
+
+3. EVALUACIÓN Y ADAPTACIONES:
+   - "evaluacion": Actividades e instrumentos de evaluación (formativa y sumativa) con técnicas concretas (rúbricas, listas de cotejo, fichas de observación).
+   - "grados": Debe contener EXACTAMENTE 3 elementos, uno para cada grado: ${gradosSubnivel.join(', ')}.
+
+Devuelve EXCLUSIVAMENTE este JSON válido (sin markdown, sin texto extra):
 {
-  "objetivos": "...",
-  "criterios": "...",
-  "grados": [{"grado": "5to Grado", "indicadores": "...", "orientaciones": "..."}],
-  "evaluacion": "...",
-  "adaptaciones": "..."
+  "objetivos": "Objetivo de aprendizaje del subnivel...",
+  "criterios": "DCD seleccionada con su código oficial del MinEduc (ej: M.3.1.1. ...)",
+  "evaluacion": "Técnicas e instrumentos de evaluación...",
+  "grados": [
+    {
+      "grado": "${gradosSubnivel[0]}",
+      "indicadores": "Indicador oficial con código para este grado (ej: I.M.3.1.1...)",
+      "orientaciones": "• ANTICIPACIÓN:\\n- Actividad motivadora y lluvia de ideas...\\n\\n• CONSTRUCCIÓN:\\n- Trabajo guiado con material concreto...\\n\\n• CONSOLIDACIÓN:\\n- Ficha de aplicación y socialización..."
+    },
+    {
+      "grado": "${gradosSubnivel[1]}",
+      "indicadores": "Indicador oficial con código para este grado...",
+      "orientaciones": "• ANTICIPACIÓN:\\n- Activación de conocimientos previos y diálogo...\\n\\n• CONSTRUCCIÓN:\\n- Resolución en parejas y análisis en cuaderno...\\n\\n• CONSOLIDACIÓN:\\n- Ejercicios prácticos de aplicación..."
+    },
+    {
+      "grado": "${gradosSubnivel[2]}",
+      "indicadores": "Indicador oficial con código para este grado...",
+      "orientaciones": "• ANTICIPACIÓN:\\n- Preguntas retadoras sobre el tema...\\n\\n• CONSTRUCCIÓN:\\n- Indagación autónoma y desarrollo de ejercicios complejos...\\n\\n• CONSOLIDACIÓN:\\n- Síntesis grupal y sustentación..."
+    }
+  ]
 }`
-      jsonText = await generarConIA(promptText, 1500)
 
+      jsonText = await generarConIA(promptText, 4500)
     } else if (tipoModelo === 'estructura_tematica') {
       const saberesValidos = filasSaberes?.filter((f: any) => f && (f.indicador || f.declarativo || f.procedimental)) || []
       
@@ -798,23 +970,59 @@ Devuelve EXCLUSIVAMENTE este JSON válido:
       jsonText = await generarConIA(promptText, 3800)
 
     } else {
+      // 1. Extraer insumos previos proporcionados por el docente (si los hay)
+      const objetivoDocente = body.objetivos || body.objetivo || ''
+      const destrezaDocente = body.criterios || body.destrezas || body.criterio || ''
+      const indicadorDocente = body.indicadores || body.indicador || ''
+
+      const contextoInsumosDocente = `
+INSUMOS CURRICULARES PROPORCIONADOS POR EL DOCENTE (OBLIGATORIO RESPETAR SI NO ESTÁN VACÍOS):
+- Objetivo de Aprendizaje: ${objetivoDocente ? `"${objetivoDocente}"` : `NO PROPORCIONADO (Formúlalo alineado al Currículo Priorizado por Competencias de Ecuador para ${gradoFinal})`}
+- Destreza con Criterio de Desempeño (DCD): ${destrezaDocente ? `"${destrezaDocente}"` : `NO PROPORCIONADO (Selecciona una DCD oficial con su código ministerial, ej: M.3.1.2., LL.4.3.1., correspondiente a ${asignatura} en ${gradoFinal})`}
+- Indicador de Evaluación: ${indicadorDocente ? `"${indicadorDocente}"` : `NO PROPORCIONADO (Selecciona un indicador oficial con su código ministerial, ej: I.M.3.1.2., I.LL.4.3.1.)`}
+`
+
       promptText = `
-Planificación disciplinar trimestral (Currículo por Competencias):
-- Tema: "${tema || ''}" | Subnivel: "${subnivel || ''}" | Grado: "${gradoFinal}" | Asignatura: "${asignatura || ''}"
+Planificación microcurricular disciplinar (Currículo por Competencias):
+- Modelo seleccionado: Modelo 1: Trimestral Disciplinar
+- Asignatura: "${asignatura || 'Matemática'}"
+- Subnivel Educativo: "${subnivel || 'Básica Media'}"
+- Grado / Curso: "${gradoFinal}"
+- Tema / Unidad Didáctica: "${tema || titulo || 'Desarrollo de aprendizajes disciplinares'}"
 
-JSON exacto:
+${contextoInsumosDocente}
+
+REGLAS PEDAGÓGICAS ESTRICTAS:
+1. DESTREZAS (DCD) E INDICADORES:
+   - Prohibido utilizar Criterios de Evaluación generales (los códigos que inician con "CE."). Usa EXCLUSIVAMENTE Destrezas con Criterio de Desempeño oficiales (ej: LL.3.2.1, M.4.1.3, CN.2.2.1) con su respectivo código ministerial y desagregación si aplica.
+   - Si el docente proporcionó el Objetivo, la DCD o el Indicador, utilízalos como eje rector inamovible. Si no los proporcionó, selecciónalos del Currículo Priorizado por Competencias oficial para ${gradoFinal}.
+   - Devuelve la DCD seleccionada tanto en la clave "destrezas" como en "criterios" para garantizar compatibilidad con la vista del sistema.
+
+2. ESTRATEGIAS METODOLÓGICAS (ANTICIPACIÓN, CONSTRUCCIÓN Y CONSOLIDACIÓN):
+   En el campo "estrategiasDua", DEBES estructurar obligatoriamente las actividades de aprendizaje en los tres momentos pedagógicos del ciclo con enfoque DUA y metodología activa:
+   • ANTICIPACIÓN: Actividades motivadoras, preguntas generadoras, exploración sensorial o activación de conocimientos previos para despertar el interés de los estudiantes.
+   • CONSTRUCCIÓN DEL APRENDIZAJE: Actividades secuenciadas donde los estudiantes experimentan, analizan, resuelven problemas, leen o manipulan material concreto para apropiarse de la destreza.
+   • CONSOLIDACIÓN: Actividades prácticas de aplicación, resolución autónoma o colaborativa, síntesis en el cuaderno/papelógrafo y puesta en común de lo aprendido.
+
+3. RECURSOS Y EVALUACIÓN:
+   - "recursos": Útiles y materiales reales del entorno escolar ecuatoriano (texto escolar del MinEduc, cuaderno de trabajo, material concreto, pizarra, marcadores, etc.).
+   - "evaluacion": Actividades e instrumentos concretos (técnica: ej. observación sistemática, análisis de producciones; instrumento: ej. lista de cotejo, rúbrica analítica, escala valorativa).
+   - "adaptaciones": Sugerencias prácticas para adaptaciones curriculares / NEE no asociadas a la discapacidad en el aula ordinaria.
+
+Devuelve EXCLUSIVAMENTE este JSON válido (sin formato markdown, sin comillas adicionales):
 {
-  "objetivos": "...",
-  "criterios": "...",
-  "indicadores": "...",
-  "estrategiasDua": "...",
-  "recursos": "...",
-  "evaluacion": "...",
-  "adaptaciones": "..."
+  "objetivos": "Objetivo de aprendizaje del currículo priorizado...",
+  "destrezas": "DCD oficial con su código (ej: M.3.1.2. Describir y reproducir...)",
+  "criterios": "DCD oficial con su código (la misma DCD anterior para compatibilidad con la vista)",
+  "indicadores": "Indicador oficial con su código (ej: I.M.3.1.2...)",
+  "estrategiasDua": "• ANTICIPACIÓN:\\n- Actividad motivadora y preguntas exploratorias sobre el tema...\\n\\n• CONSTRUCCIÓN:\\n- Trabajo guiado con el texto del MinEduc y resolución paso a paso de...\\n- Práctica en parejas aplicando el concepto...\\n\\n• CONSOLIDACIÓN:\\n- Ejercicios prácticos en el cuaderno de trabajo y socialización colectiva de dudas...",
+  "recursos": "Texto escolar del Ministerio de Educación, cuaderno de trabajo, material concreto, marcadores, pizarra.",
+  "evaluacion": "Técnica: Análisis del desempeño.\\nInstrumento: Rúbrica de evaluación formativa sobre la precisión en la resolución y participación.",
+  "adaptaciones": "Otorgar tiempo adicional para la entrega, apoyos visuales y tutoría entre pares para la resolución de ejercicios."
 }`
-      jsonText = await generarConIA(promptText, 1500)
-    }
 
+      jsonText = await generarConIA(promptText, 4000)
+    }
     const jsonLimpio = jsonText.replace(/```json/g, '').replace(/```/g, '').trim()
     const objetoParseado = JSON.parse(jsonLimpio)
     

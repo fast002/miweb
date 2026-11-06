@@ -944,7 +944,7 @@ export default function VerPlanificacionPage() {
                     <tr>
                       <td colSpan={2} className="border border-slate-500 p-2 font-bold text-center bg-[#dbea8a]">
                         Competencias específicas
-                      </td>
+              npm run build        </td>
                     </tr>
                     <tr>
                       <td colSpan={2} className="border border-slate-500 p-2 leading-relaxed bg-white">

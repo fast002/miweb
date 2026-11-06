@@ -19,6 +19,64 @@ function ContenidoVerProyecto() {
   const [proyectoRaw, setProyectoRaw] = useState<any>(null)
   const [plan, setPlan] = useState<any>(null)
 
+  const normalizarTexto = (valor: any): string => {
+    if (!valor) return ''
+    if (Array.isArray(valor)) return valor.filter(Boolean).join('\n\n')
+    return String(valor).trim()
+  }
+
+  // Generador de respaldo en cliente por si un proyecto antiguo no tenía rúbricas separadas por materia
+  const construirRubricasPorMateriaFallback = (matriz: any[], productoFinal: string) => {
+    return matriz.map((m: any) => {
+      const asig = m.asignatura || 'Asignatura'
+      const dec = (m.saberes_declarativos || '').split('\n')[0] || `saberes conceptuales de ${asig}`
+      const proc = (m.saberes_procedimentales || '').split('\n')[0] || `procedimientos prácticos de ${asig}`
+      const ind = (m.indicadores_evaluacion || '').split('\n')[0] || `indicador de evaluación de ${asig}`
+      const act = (m.saberes_actitudinales || '').split('\n')[0] || `compromiso y trabajo cooperativo`
+
+      return {
+        asignatura: asig,
+        criterios: [
+          {
+            criterio: `1. Dominio Conceptual (${dec.substring(0, 48)}...)`,
+            destacado: `Comprende y explica con solvencia los conceptos de "${dec}" aplicándolos al desafío.`,
+            esperado: `Comprende y aplica adecuadamente los conceptos principales de "${dec}".`,
+            proceso: `Identifica de forma parcial o con imprecisiones los conceptos de "${dec}".`,
+            apoyo: `Requiere acompañamiento personalizado para comprender los saberes básicos de ${asig}.`
+          },
+          {
+            criterio: `2. Ejecución Procedimental (${proc.substring(0, 48)}...)`,
+            destacado: `Ejecuta de manera autónoma, ordenada y rigurosa las actividades de "${proc}".`,
+            esperado: `Aplica satisfactoriamente los procedimientos de "${proc}" en las fases del proyecto.`,
+            proceso: `Desarrolla parcialmente los procedimientos o presenta errores metodológicos.`,
+            apoyo: `Necesita guía paso a paso para completar las actividades prácticas de ${asig}.`
+          },
+          {
+            criterio: `3. Logro del Indicador (${ind.substring(0, 45)}...)`,
+            destacado: `Evidencia de forma sobresaliente el desempeño establecido en: "${ind}".`,
+            esperado: `Alcanza satisfactoriamente el nivel de logro esperado en el indicador de ${asig}.`,
+            proceso: `Evidencia un avance parcial respecto al indicador de evaluación seleccionado.`,
+            apoyo: `Aún no alcanza el desempeño mínimo requerido por el indicador de ${asig}.`
+          },
+          {
+            criterio: `4. Aporte de ${asig} al Producto Final`,
+            destacado: `El insumo elaborado en ${asig} para "${productoFinal}" destaca por su rigor técnico y claridad.`,
+            esperado: `Entrega el aporte disciplinar de ${asig} completo y articulado al producto común.`,
+            proceso: `El aporte elaborado en ${asig} es básico o poco articulado con el producto final.`,
+            apoyo: `Requiere apoyo directo para elaborar la sección correspondiente de ${asig}.`
+          },
+          {
+            criterio: `5. Desempeño Actitudinal (${act.substring(0, 45)}...)`,
+            destacado: `Demuestra liderazgo, empatía y vivencia constante de: "${act}".`,
+            esperado: `Cumple su rol en el equipo practicando responsablemente: "${act}".`,
+            proceso: `Participa de manera intermitente en las tareas colaborativas del equipo.`,
+            apoyo: `Requiere mediación continua del docente para integrarse al trabajo grupal.`
+          }
+        ]
+      }
+    })
+  }
+
   useEffect(() => {
     async function cargar() {
       if (!proyectoId) {
@@ -55,23 +113,36 @@ function ContenidoVerProyecto() {
           .map((m: string) => m.trim())
           .filter(Boolean)
 
+        const matrizFuente = (Array.isArray(data.bloques_competencias) && data.bloques_competencias.length > 0)
+          ? data.bloques_competencias
+          : (Array.isArray(estructura?.matriz_curricular) ? estructura.matriz_curricular : [])
+
+        const matrizNormalizada = matrizFuente.length > 0
+          ? matrizFuente.map((item: any) => ({
+              asignatura: item.asignatura || 'General',
+              competencias_especificas: normalizarTexto(item.competencias_especificas || item.competencia),
+              indicadores_evaluacion: normalizarTexto(item.indicadores_evaluacion || item.indicador || item.indicadores),
+              saberes_declarativos: normalizarTexto(item.saberes_declarativos || item.declarativo || item.declarativos),
+              saberes_procedimentales: normalizarTexto(item.saberes_procedimentales || item.procedimental || item.procedimentales),
+              saberes_actitudinales: normalizarTexto(item.saberes_actitudinales || item.actitudinal || item.actitudinales)
+            }))
+          : listaMaterias.map((m: string) => ({
+              asignatura: m,
+              competencias_especificas: `Competencias específicas de ${m}`,
+              indicadores_evaluacion: `Indicadores de evaluación de ${m}`,
+              saberes_declarativos: `Saberes declarativos de ${m}`,
+              saberes_procedimentales: `Saberes procedimentales de ${m}`,
+              saberes_actitudinales: `Saberes actitudinales de ${m}`
+            }))
+
         if (!estructura || typeof estructura !== 'object') {
           estructura = {
-            titulo: data.titulo_sia || 'Conectados con nuestro Bienestar',
-            objetivo_proyecto: `Investigar hábitos y factores que pueden influir en el bienestar y el aprendizaje de los estudiantes en ${data.grado_curso}.`,
+            titulo: data.titulo_sia || 'Proyecto Interdisciplinar Oficial',
+            objetivo_proyecto: `Investigar y aplicar saberes en ${data.grado_curso} para resolver el desafío propuesto.`,
             descripcion_proyecto: data.descripcion_sia || '',
-            desafio: data.competencia_especifica || '¿Cómo podemos investigar nuestros hábitos y diseñar acciones para organizar mejor nuestro tiempo y aprender mejor?',
-            producto: 'Guía colectiva “Pequeños hábitos para sentirnos bien y aprender mejor”',
-            matriz_curricular: Array.isArray(data.bloques_competencias) && data.bloques_competencias.length > 0 
-              ? data.bloques_competencias 
-              : listaMaterias.map((m: string) => ({
-                  asignatura: m,
-                  competencias_especificas: `Desarrollar y aplicar saberes de ${m} orientados al bienestar y trabajo cooperativo.`,
-                  indicadores_evaluacion: `Aplica los contenidos y destrezas de ${m} en la construcción del producto integrador.`,
-                  saberes_declarativos: `Conceptos y principios de ${m} aplicados a la vida cotidiana.`,
-                  saberes_procedimentales: `Recolección, registro, análisis y elaboración de producciones en ${m}.`,
-                  saberes_actitudinales: `Demuestra respeto, escucha atenta y trabajo cooperativo.`
-                })),
+            desafio: data.competencia_especifica || '¿Cómo podemos integrar los saberes de las asignaturas para responder al desafío?',
+            producto: 'Guía colectiva o muestra demostrativa integradora',
+            matriz_curricular: matrizNormalizada,
             fases_proyecto: [
               { fase: "1. Planificación", pregunta_orientadora: "¿Qué vamos a investigar y para qué?", resultado: "Propósito, desafío y preguntas" },
               { fase: "2. Organización o investigación (asignación de roles)", pregunta_orientadora: "¿Cómo vamos a hacerlo?", resultado: "Plan de trabajo" },
@@ -79,50 +150,10 @@ function ContenidoVerProyecto() {
               { fase: "4. Socialización, presentación y difusión", pregunta_orientadora: "¿Qué descubrimos y cómo lo comunicamos?", resultado: "Presentación del producto" },
               { fase: "5. Evaluación, reflexión y metacognición", pregunta_orientadora: "¿Qué aprendimos y qué podemos mejorar?", resultado: "Metacognición y compromisos" }
             ],
-            actividades_por_materia: listaMaterias.map((m: string) => ({
-              asignatura: m,
-              fases: [
-                {
-                  fase_titulo: "1. PLANIFICACIÓN (Semana 1)",
-                  pregunta_orientadora: `¿Cómo podemos vincular los aprendizajes de ${m} para identificar hábitos de bienestar?`,
-                  actividades: `Presentación del propósito y desafío desde el área de ${m}. Observación de láminas y diálogo participativo sobre situaciones cotidianas del aula.`,
-                  recursos: "Láminas didácticas, papelógrafo, marcadores y material del entorno."
-                },
-                {
-                  fase_titulo: "2. Organización o investigación (Semana 1)",
-                  pregunta_orientadora: `¿Cómo recolectamos datos y evidencias desde ${m}?`,
-                  actividades: `Conformar equipos colaborativos de 4 integrantes asignando roles específicos. Aplicar fichas de indagación y recolectar información sobre los hábitos del grupo.`,
-                  recursos: "Fichas de registro, instrumentos de observación, texto escolar."
-                },
-                {
-                  fase_titulo: "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-                  pregunta_orientadora: `¿Cómo elaboramos el aporte de ${m} para el producto final?`,
-                  actividades: `Elaborar la sección correspondiente de ${m} para la Guía Colectiva integrando los saberes declarativos, procedimentales y actitudinales acordados.`,
-                  recursos: "Hojas de formato de la guía, materiales plásticos/gráficos, colores."
-                },
-                {
-                  fase_titulo: "4. Socialización, presentación y difusión (Semana 2)",
-                  pregunta_orientadora: `¿Cómo comunicamos nuestros hallazgos en ${m}?`,
-                  actividades: `Exposición oral y demostración práctica de los resultados y propuestas elaboradas en ${m} ante la comunidad educativa.`,
-                  recursos: "Stands, paneles de exposición, Guía Colectiva ensamblada."
-                },
-                {
-                  fase_titulo: "5. Evaluación, reflexión y metacognición",
-                  pregunta_orientadora: "¿Qué aprendimos y qué compromisos asumimos?",
-                  actividades: `Aplicación de rúbrica disciplinar en ${m}. Reflexión metacognitiva individual y firma de compromisos para el bienestar común.`,
-                  recursos: "Rúbrica analítica disciplinar, fichas de autoevaluación."
-                }
-              ]
-            })),
-            rubrica_disciplinar: [
-              { criterio: "Recopila y registra datos", destacado: "Registra de manera completa y ordenada los datos sin inconsistencias.", esperado: "Registra correctamente la mayoría de los datos obtenidos.", proceso: "Registra los datos de manera parcial o con inconsistencias.", apoyo: "Requiere acompañamiento para registrar los datos obtenidos." },
-              { criterio: "Organiza los datos", destacado: "Organiza correctamente todos los datos en una tabla y facilita su lectura.", esperado: "Organiza correctamente la mayoría de los datos en una tabla.", proceso: "Organiza parcialmente los datos y presenta errores.", apoyo: "Requiere apoyo para organizar los datos." },
-              { criterio: "Representa gráficamente la información", destacado: "Representa correctamente los datos utilizando título, categorías y valores.", esperado: "Representa los datos de forma comprensible con pocos errores.", proceso: "La representación contiene varios errores o elementos incompletos.", apoyo: "Requiere acompañamiento para construir la representación." },
-              { criterio: "Interpreta los resultados", destacado: "Compara los datos e identifica correctamente dos o más hallazgos relevantes.", esperado: "Identifica al menos un hallazgo correcto a partir de los datos.", proceso: "Realiza interpretaciones parciales o poco relacionadas.", apoyo: "Presenta conclusiones que no se sustentan en los datos." },
-              { criterio: "Utiliza los datos para responder al desafío", destacado: "Utiliza los resultados para justificar claramente una acción de bienestar.", esperado: "Propone una acción relacionada con los resultados obtenidos.", proceso: "Propone una acción pero con relación poco clara.", apoyo: "Requiere apoyo para relacionar los resultados con una propuesta." }
-            ],
+            actividades_por_materia: Array.isArray(data.semanas) && data.semanas.length > 0 ? data.semanas : [],
+            rubricas_disciplinares_por_materia: construirRubricasPorMateriaFallback(matrizNormalizada, 'Producto integrador'),
             rubrica_interdisciplinar: [
-              { criterio: "Integración de aprendizajes", destacado: "La guía integra de manera clara y coherente aprendizajes de varias asignaturas.", esperado: "La guía relaciona aprendizajes de varias asignaturas de manera adecuada.", proceso: "Aportes de distintas asignaturas poco relacionados entre sí.", apoyo: "Los aportes aparecen aislados y no evidencian integración." },
+              { criterio: "Integración de aprendizajes", destacado: "El producto integra de manera clara y coherente aprendizajes de varias asignaturas.", esperado: "El producto relaciona aprendizajes de varias asignaturas de manera adecuada.", proceso: "Aportes de distintas asignaturas poco relacionados entre sí.", apoyo: "Los aportes aparecen aislados y no evidencian integración." },
               { criterio: "Respuesta al desafío", destacado: "Las propuestas responden claramente al desafío sustentadas en la investigación.", esperado: "Las propuestas responden al desafío y a los principales hallazgos.", proceso: "Las propuestas responden parcialmente o con poca relación.", apoyo: "Las propuestas no responden claramente al desafío planteado." },
               { criterio: "Uso de evidencias", destacado: "Utiliza datos, observaciones y evidencias para explicar y justificar conclusiones.", esperado: "Utiliza evidencias pertinentes para sustentar la mayoría de conclusiones.", proceso: "Utiliza algunas evidencias pero no siempre las relaciona.", apoyo: "Presenta conclusiones sin utilizar evidencias recogidas." },
               { criterio: "Comunicación del producto", destacado: "Comunica hallazgos de manera clara y organizada mediante recursos multimodales.", esperado: "Comunica de manera clara los principales hallazgos y propuestas.", proceso: "La comunicación presenta dificultades de organización o claridad.", apoyo: "Requiere acompañamiento para comunicar los principales hallazgos." },
@@ -130,44 +161,20 @@ function ContenidoVerProyecto() {
               { criterio: "Trabajo colaborativo", destacado: "Todos los integrantes participan, asumen responsabilidades y contribuyen activamente.", esperado: "La mayoría participa y cumple las responsabilidades acordadas.", proceso: "La participación y distribución de responsabilidades es desigual.", apoyo: "El equipo requiere acompañamiento constante para trabajar conjuntamente." }
             ]
           }
+        } else {
+          estructura.matriz_curricular = matrizNormalizada
+
+          // Si el registro no tiene rubricas_disciplinares_por_materia pero sí matriz, las construimos por asignatura
+          if (!Array.isArray(estructura.rubricas_disciplinares_por_materia) || estructura.rubricas_disciplinares_por_materia.length === 0) {
+            estructura.rubricas_disciplinares_por_materia = construirRubricasPorMateriaFallback(
+              matrizNormalizada,
+              estructura.producto || 'Producto final común'
+            )
+          }
         }
 
-        if (!estructura.actividades_por_materia || estructura.actividades_por_materia.length === 0) {
-          estructura.actividades_por_materia = listaMaterias.map((m: string) => ({
-            asignatura: m,
-            fases: [
-              {
-                fase_titulo: "1. PLANIFICACIÓN (Semana 1)",
-                pregunta_orientadora: `¿Cómo investigamos los hábitos de bienestar desde ${m}?`,
-                actividades: `Diálogo y presentación del desafío orientador en ${m}. Identificación de preguntas y propósitos de indagación grupal.`,
-                recursos: "Láminas didácticas, papelógrafos, marcadores y cuadernos."
-              },
-              {
-                fase_titulo: "2. Organización o investigación (Semana 1)",
-                pregunta_orientadora: `¿Cómo nos organizamos para recopilar evidencias en ${m}?`,
-                actividades: `Asignación de roles colaborativos. Levantamiento de información, encuestas breves y registro de observaciones de campo.`,
-                recursos: "Fichas de registro, tablas de conteo y textos escolares."
-              },
-              {
-                fase_titulo: "3. Ejecución e integración de saberes para la creación del producto (Semana 2)",
-                pregunta_orientadora: `¿Cómo resolvemos el desafío y construimos la evidencia en ${m}?`,
-                actividades: `Construcción y redacción de la sección de ${m} para la Guía Colectiva: resolución práctica, gráficos y mensajes de bienestar.`,
-                recursos: "Hojas de diseño para la guía, útiles escolares, cartulina y colores."
-              },
-              {
-                fase_titulo: "4. Socialización, presentación y difusión (Semana 2)",
-                pregunta_orientadora: `¿Cómo comunicamos el producto final de ${m}?`,
-                actividades: `Presentación oral y exposición de la Guía Colectiva en feria escolar o galería comunitaria ante compañeros y padres de familia.`,
-                recursos: "Guía Colectiva, carteleras, espacio expositivo."
-              },
-              {
-                fase_titulo: "5. Evaluación, reflexión y metacognición",
-                pregunta_orientadora: "¿Qué aprendimos y cómo podemos mejorar?",
-                actividades: `Autoevaluación metacognitiva, aplicación de rúbrica disciplinar en ${m} y establecimiento de compromisos individuales.`,
-                recursos: "Rúbricas analíticas y fichas de compromiso."
-              }
-            ]
-          }))
+        if ((!estructura.actividades_por_materia || estructura.actividades_por_materia.length === 0) && Array.isArray(data.semanas) && data.semanas.length > 0) {
+          estructura.actividades_por_materia = data.semanas
         }
 
         setPlan(estructura)
@@ -190,6 +197,8 @@ function ContenidoVerProyecto() {
           titulo_sia: plan.titulo,
           descripcion_sia: plan.descripcion_proyecto,
           competencia_especifica: plan.desafio,
+          bloques_competencias: plan.matriz_curricular,
+          semanas: plan.actividades_por_materia,
           filas_saberes: plan
         })
         .eq('id', proyectoId)
@@ -264,8 +273,8 @@ function ContenidoVerProyecto() {
 
       const matrizRows = (plan.matriz_curricular || []).map((m: any) => [
         m.asignatura || '',
-        m.competencias_especificas || m.competencia || '',
-        m.indicadores_evaluacion || m.indicador || '',
+        m.competencias_especificas || '',
+        m.indicadores_evaluacion || '',
         m.saberes_declarativos || '',
         m.saberes_procedimentales || '',
         m.saberes_actitudinales || ''
@@ -349,8 +358,39 @@ function ContenidoVerProyecto() {
         yActual = (doc as any).lastAutoTable.finalY + 4
       })
 
+      // 1. RÚBRICAS DISCIPLINARES POR CADA ASIGNATURA EN PDF
       doc.setFontSize(8.5)
-      doc.text('Instrumento de Evaluación Interdisciplinar (Producto Final Común)', 12, yActual)
+      doc.text('1. Instrumentos de Evaluación Disciplinar por Asignatura (Rúbricas Analíticas)', 12, yActual)
+      yActual += 2
+
+      ;(plan.rubricas_disciplinares_por_materia || []).forEach((rubAsig: any, rIdx: number) => {
+        const filasCriterios = (rubAsig.criterios || []).map((c: any) => [
+          c.criterio || '',
+          c.destacado || '',
+          c.esperado || '',
+          c.proceso || '',
+          c.apoyo || ''
+        ])
+
+        autoTable(doc, {
+          startY: yActual + 2,
+          theme: 'grid',
+          head: [
+            [{ content: `1.${rIdx + 1}. RÚBRICA ANALÍTICA DISCIPLINAR – ${String(rubAsig.asignatura || '').toUpperCase()} (Puntaje máx: 20 pts)`, colSpan: 5, styles: { fillColor: colorAzulEncabezado, textColor: colorTexto, fontStyle: 'bold', fontSize: 7, halign: 'left' as const } }],
+            ['Criterio Disciplinar (' + rubAsig.asignatura + ')', '4 – Logro destacado', '3 – Logro esperado', '2 – En proceso', '1 – Requiere apoyo']
+          ],
+          body: filasCriterios,
+          headStyles: { fillColor: colorGrisSub, textColor: colorTexto, fontStyle: 'bold', fontSize: 6.5, lineColor: [0, 0, 0], lineWidth: 0.2 },
+          styles: { fontSize: 6, cellPadding: 1.8, textColor: colorTexto, lineColor: [0, 0, 0], lineWidth: 0.2 },
+          columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 37 }, 2: { cellWidth: 37 }, 3: { cellWidth: 37 }, 4: { cellWidth: 37 } }
+        })
+
+        yActual = (doc as any).lastAutoTable.finalY + 3
+      })
+
+      // 2. RÚBRICA INTERDISCIPLINAR ÚNICA EN PDF
+      doc.setFontSize(8.5)
+      doc.text('2. Instrumento de Evaluación Interdisciplinar (Producto Final Común)', 12, yActual + 2)
 
       const rubRows = (plan.rubrica_interdisciplinar || []).map((r: any) => [
         r.criterio,
@@ -361,7 +401,7 @@ function ContenidoVerProyecto() {
       ])
 
       autoTable(doc, {
-        startY: yActual + 2,
+        startY: yActual + 4,
         theme: 'grid',
         head: [['Criterio Interdisciplinar', '4 – Logro destacado', '3 – Logro esperado', '2 – En proceso', '1 – Requiere apoyo']],
         body: rubRows,
@@ -385,7 +425,7 @@ function ContenidoVerProyecto() {
         columnStyles: { 0: { cellWidth: 62 }, 1: { cellWidth: 62 }, 2: { cellWidth: 62 } }
       })
 
-      doc.save(`Proyecto_Interdisciplinar_${proyectoRaw?.grado_curso || '4to_EGB'}.pdf`)
+      doc.save(`Proyecto_Interdisciplinar_${proyectoRaw?.grado_curso || '8vo_EGB'}.pdf`)
     } catch (e) {
       console.error(e)
       alert('Error al generar el PDF del proyecto.')
@@ -439,7 +479,7 @@ function ContenidoVerProyecto() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `Proyecto_Interdisciplinar_${proyectoRaw?.grado_curso || '4to_EGB'}.doc`
+      a.download = `Proyecto_Interdisciplinar_${proyectoRaw?.grado_curso || '8vo_EGB'}.doc`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -492,7 +532,7 @@ function ContenidoVerProyecto() {
           <h1 className="text-base font-bold text-slate-900">
             {plan.titulo || 'Proyecto Interdisciplinar Oficial'}
           </h1>
-          <p className="text-[11px] text-slate-500">Evaluación Sumativa Trimestral (Tablas por Asignatura)</p>
+          <p className="text-[11px] text-slate-500">Evaluación Sumativa Trimestral (Actividades y Rúbricas Analíticas por Asignatura)</p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -524,7 +564,7 @@ function ContenidoVerProyecto() {
             style={{ backgroundColor: '#4b4c99' }}
             className="px-3.5 py-2 text-white font-bold text-xs rounded-xl shadow-2xs hover:opacity-95 transition cursor-pointer flex items-center gap-1.5"
           >
-            <span></span> {generandoPdf ? 'Generando PDF...' : 'PDF'}
+            {generandoPdf ? 'Generando PDF...' : 'PDF'}
           </button>
 
           <button
@@ -533,7 +573,7 @@ function ContenidoVerProyecto() {
             disabled={generandoWord}
             className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer flex items-center gap-1.5"
           >
-            <span></span> {generandoWord ? 'Generando Word...' : 'Descargar Word'}
+            {generandoWord ? 'Generando Word...' : 'Descargar Word'}
           </button>
 
           <button
@@ -541,7 +581,7 @@ function ContenidoVerProyecto() {
             onClick={() => window.print()}
             className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-2xs transition cursor-pointer flex items-center gap-1.5"
           >
-            <span></span> Imprimir
+            Imprimir
           </button>
         </div>
       </div>
@@ -554,9 +594,7 @@ function ContenidoVerProyecto() {
         </div>
       )}
 
-      {/* =========================================================================
-          CONTENEDOR A PANTALLA COMPLETA EN VISOR (A4 ESTRICTO SOLO EN IMPRESIÓN)
-          ========================================================================= */}
+      {/* CONTENEDOR VISUALIZADOR */}
       <div 
         id="imprimible-proyecto"
         className="w-full bg-white p-6 md:p-10 shadow-md border border-slate-200 text-black print:p-0 print:border-none print:shadow-none print:max-w-[186mm] print:mx-auto"
@@ -657,7 +695,7 @@ function ContenidoVerProyecto() {
           </div>
         </div>
 
-        {/* 2. MATRIZ CURRICULAR (6 COLUMNAS) */}
+        {/* 2. MATRIZ CURRICULAR (6 COLUMNAS CON DESGLOSE FIEL 1 A 1) */}
         <div className="font-bold my-2" style={{ fontSize: '9.5pt' }}>
           Planificación del proyecto interdisciplinar
         </div>
@@ -684,7 +722,7 @@ function ContenidoVerProyecto() {
                     {modoEdicion ? (
                       <textarea
                         rows={5}
-                        value={item.competencias_especificas || item.competencia || ''}
+                        value={item.competencias_especificas || ''}
                         onChange={(e) => {
                           const nueva = [...plan.matriz_curricular]
                           nueva[idx] = { ...nueva[idx], competencias_especificas: e.target.value }
@@ -693,14 +731,14 @@ function ContenidoVerProyecto() {
                         className="w-full p-1 border text-[8pt]"
                       />
                     ) : (
-                      item.competencias_especificas || item.competencia
+                      <p className="whitespace-pre-line leading-relaxed">{item.competencias_especificas}</p>
                     )}
                   </td>
                   <td className="border border-black p-1.5 text-justify">
                     {modoEdicion ? (
                       <textarea
                         rows={5}
-                        value={item.indicadores_evaluacion || item.indicador || ''}
+                        value={item.indicadores_evaluacion || ''}
                         onChange={(e) => {
                           const nueva = [...plan.matriz_curricular]
                           nueva[idx] = { ...nueva[idx], indicadores_evaluacion: e.target.value }
@@ -709,7 +747,7 @@ function ContenidoVerProyecto() {
                         className="w-full p-1 border text-[8pt]"
                       />
                     ) : (
-                      item.indicadores_evaluacion || item.indicador
+                      <p className="whitespace-pre-line leading-relaxed">{item.indicadores_evaluacion}</p>
                     )}
                   </td>
                   <td className="border border-black p-1.5">
@@ -725,7 +763,7 @@ function ContenidoVerProyecto() {
                         className="w-full p-1 border text-[8pt]"
                       />
                     ) : (
-                      item.saberes_declarativos
+                      <p className="whitespace-pre-line leading-relaxed">{item.saberes_declarativos}</p>
                     )}
                   </td>
                   <td className="border border-black p-1.5">
@@ -741,7 +779,7 @@ function ContenidoVerProyecto() {
                         className="w-full p-1 border text-[8pt]"
                       />
                     ) : (
-                      item.saberes_procedimentales
+                      <p className="whitespace-pre-line leading-relaxed">{item.saberes_procedimentales}</p>
                     )}
                   </td>
                   <td className="border border-black p-1.5">
@@ -757,7 +795,7 @@ function ContenidoVerProyecto() {
                         className="w-full p-1 border text-[8pt]"
                       />
                     ) : (
-                      item.saberes_actitudinales
+                      <p className="whitespace-pre-line leading-relaxed">{item.saberes_actitudinales}</p>
                     )}
                   </td>
                 </tr>
@@ -789,7 +827,7 @@ function ContenidoVerProyecto() {
           </table>
         </div>
 
-        {/* 4. TABLAS INDIVIDUALES POR ASIGNATURA */}
+        {/* 4. TABLAS INDIVIDUALES DE ACTIVIDADES POR ASIGNATURA */}
         <div className="font-bold my-3" style={{ fontSize: '10pt', textTransform: 'uppercase' }}>
           Planificación por Asignatura (Fases, Actividades y Recursos)
         </div>
@@ -862,47 +900,139 @@ function ContenidoVerProyecto() {
           </div>
         ))}
 
-        {/* 5. RÚBRICA DISCIPLINAR */}
-        <div className="font-bold my-2" style={{ fontSize: '9.5pt' }}>
-          1. Instrumento de evaluación disciplinar (Rúbrica Analítica)
+        {/* =========================================================================
+            5. RÚBRICAS ANALÍTICAS DISCIPLINARES (UNA TABLA POR CADA ASIGNATURA)
+            ========================================================================= */}
+        <div className="font-bold mt-5 mb-2" style={{ fontSize: '10pt', textTransform: 'uppercase' }}>
+          1. Instrumentos de Evaluación Disciplinar por Asignatura (Rúbricas Analíticas)
         </div>
-        <p className="text-[8pt] mb-1">
-          <strong>Proyecto:</strong> {plan.titulo} | <strong>Grado:</strong> {proyectoRaw?.grado_curso} | <strong>Técnica:</strong> Análisis del desempeño | <strong>Instrumento:</strong> Rúbrica analítica.
+        <p className="text-[8pt] mb-3">
+          <strong>Proyecto:</strong> {plan.titulo} | <strong>Grado:</strong> {proyectoRaw?.grado_curso} | <strong>Técnica:</strong> Análisis del desempeño disciplinar | <strong>Instrumento:</strong> Rúbrica analítica específica por materia.
         </p>
-        <div className="w-full overflow-x-auto mb-2">
-          <table className="w-full border-collapse border border-black text-left">
-            <thead>
-              <tr style={{ backgroundColor: '#d9e2f3' }}>
-                <th className="border border-black p-1.5 font-bold text-center" style={{ width: '20%' }}>Criterio disciplinar</th>
-                <th className="border border-black p-1.5 font-bold text-center" style={{ width: '20%' }}>4 – Logro destacado</th>
-                <th className="border border-black p-1.5 font-bold text-center" style={{ width: '20%' }}>3 – Logro esperado</th>
-                <th className="border border-black p-1.5 font-bold text-center" style={{ width: '20%' }}>2 – En proceso</th>
-                <th className="border border-black p-1.5 font-bold text-center" style={{ width: '20%' }}>1 – Requiere apoyo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(plan.rubrica_disciplinar || []).map((r: any, i: number) => (
-                <tr key={i} className="align-top text-[8pt]">
-                  <td className="border border-black p-1.5 font-bold">{r.criterio}</td>
-                  <td className="border border-black p-1.5">{r.destacado}</td>
-                  <td className="border border-black p-1.5">{r.esperado}</td>
-                  <td className="border border-black p-1.5">{r.proceso}</td>
-                  <td className="border border-black p-1.5">{r.apoyo}</td>
+
+        {(plan.rubricas_disciplinares_por_materia || []).map((rubAsig: any, rIdx: number) => (
+          <div key={rIdx} className="mb-4 page-break-inside-avoid w-full overflow-x-auto">
+            <table className="w-full border-collapse border border-black text-left">
+              <thead>
+                <tr>
+                  <th 
+                    colSpan={5} 
+                    className="border border-black p-2 font-bold text-left uppercase"
+                    style={{ backgroundColor: '#d9e2f3', fontSize: '8.5pt' }}
+                  >
+                    1.{rIdx + 1}. RÚBRICA ANALÍTICA DISCIPLINAR: {String(rubAsig.asignatura || '').toUpperCase()} (Puntaje máximo: 20 puntos)
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="border border-black bg-slate-50 p-2 text-[8pt] mb-3">
-          <strong>Puntaje máximo disciplinar:</strong> 20 puntos. Conversión sobre 10: <strong>Calificación disciplinar = (puntaje obtenido ÷ 20) × 10</strong>.
+                <tr style={{ backgroundColor: '#ededed' }}>
+                  <th className="border border-black p-1.5 font-bold text-center" style={{ width: '20%' }}>Criterio disciplinar ({rubAsig.asignatura})</th>
+                  <th className="border border-black p-1.5 font-bold text-center" style={{ width: '20%' }}>4 – Logro destacado</th>
+                  <th className="border border-black p-1.5 font-bold text-center" style={{ width: '20%' }}>3 – Logro esperado</th>
+                  <th className="border border-black p-1.5 font-bold text-center" style={{ width: '20%' }}>2 – En proceso</th>
+                  <th className="border border-black p-1.5 font-bold text-center" style={{ width: '20%' }}>1 – Requiere apoyo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(rubAsig.criterios || []).map((crit: any, cIdx: number) => (
+                  <tr key={cIdx} className="align-top text-[8pt]">
+                    <td className="border border-black p-1.5 font-bold">
+                      {modoEdicion ? (
+                        <textarea
+                          rows={3}
+                          value={crit.criterio || ''}
+                          onChange={(e) => {
+                            const copia = [...plan.rubricas_disciplinares_por_materia]
+                            copia[rIdx].criterios[cIdx].criterio = e.target.value
+                            setPlan({ ...plan, rubricas_disciplinares_por_materia: copia })
+                          }}
+                          className="w-full p-1 border text-[8pt] font-bold"
+                        />
+                      ) : (
+                        crit.criterio
+                      )}
+                    </td>
+                    <td className="border border-black p-1.5">
+                      {modoEdicion ? (
+                        <textarea
+                          rows={3}
+                          value={crit.destacado || ''}
+                          onChange={(e) => {
+                            const copia = [...plan.rubricas_disciplinares_por_materia]
+                            copia[rIdx].criterios[cIdx].destacado = e.target.value
+                            setPlan({ ...plan, rubricas_disciplinares_por_materia: copia })
+                          }}
+                          className="w-full p-1 border text-[8pt]"
+                        />
+                      ) : (
+                        crit.destacado
+                      )}
+                    </td>
+                    <td className="border border-black p-1.5">
+                      {modoEdicion ? (
+                        <textarea
+                          rows={3}
+                          value={crit.esperado || ''}
+                          onChange={(e) => {
+                            const copia = [...plan.rubricas_disciplinares_por_materia]
+                            copia[rIdx].criterios[cIdx].esperado = e.target.value
+                            setPlan({ ...plan, rubricas_disciplinares_por_materia: copia })
+                          }}
+                          className="w-full p-1 border text-[8pt]"
+                        />
+                      ) : (
+                        crit.esperado
+                      )}
+                    </td>
+                    <td className="border border-black p-1.5">
+                      {modoEdicion ? (
+                        <textarea
+                          rows={3}
+                          value={crit.proceso || ''}
+                          onChange={(e) => {
+                            const copia = [...plan.rubricas_disciplinares_por_materia]
+                            copia[rIdx].criterios[cIdx].proceso = e.target.value
+                            setPlan({ ...plan, rubricas_disciplinares_por_materia: copia })
+                          }}
+                          className="w-full p-1 border text-[8pt]"
+                        />
+                      ) : (
+                        crit.proceso
+                      )}
+                    </td>
+                    <td className="border border-black p-1.5">
+                      {modoEdicion ? (
+                        <textarea
+                          rows={3}
+                          value={crit.apoyo || ''}
+                          onChange={(e) => {
+                            const copia = [...plan.rubricas_disciplinares_por_materia]
+                            copia[rIdx].criterios[cIdx].apoyo = e.target.value
+                            setPlan({ ...plan, rubricas_disciplinares_por_materia: copia })
+                          }}
+                          className="w-full p-1 border text-[8pt]"
+                        />
+                      ) : (
+                        crit.apoyo
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+        <div className="border border-black bg-slate-50 p-2 text-[8pt] mb-4">
+          <strong>Puntaje máximo disciplinar en cada asignatura:</strong> 20 puntos (5 criterios × 4 pts). Conversión sobre 10: <strong>Calificación disciplinar = (puntaje obtenido ÷ 20) × 10</strong>.
         </div>
 
-        {/* 6. RÚBRICA INTERDISCIPLINAR (PRODUCTO FINAL COMÚN) */}
-        <div className="font-bold my-2" style={{ fontSize: '9.5pt' }}>
+        {/* =========================================================================
+            6. RÚBRICA INTERDISCIPLINAR ÚNICA (PRODUCTO FINAL COMÚN)
+            ========================================================================= */}
+        <div className="font-bold mt-4 mb-2" style={{ fontSize: '10pt', textTransform: 'uppercase' }}>
           2. Instrumento de evaluación interdisciplinar (Producto Final Común)
         </div>
         <p className="text-[8pt] mb-1">
-          <strong>Producto final:</strong> {plan.producto} | <strong>Técnica:</strong> Análisis del producto | <strong>Instrumento:</strong> Rúbrica interdisciplinar común.
+          <strong>Producto final común:</strong> {plan.producto} | <strong>Técnica:</strong> Análisis del producto integrador | <strong>Instrumento:</strong> Rúbrica interdisciplinar única para todo el proyecto.
         </p>
         <div className="w-full overflow-x-auto mb-2">
           <table className="w-full border-collapse border border-black text-left">
@@ -929,8 +1059,8 @@ function ContenidoVerProyecto() {
           </table>
         </div>
         <div className="border border-black bg-slate-50 p-2 text-[8pt] mb-4">
-          <strong>Puntaje máximo interdisciplinar:</strong> 24 puntos. Conversión sobre 10: <strong>Calificación interdisciplinar = (puntaje obtenido ÷ 24) × 10</strong>.<br />
-          <strong>Cálculo de la Nota Final en cada asignatura:</strong> <strong>Nota Final = (Calificación Disciplinar + Calificación Interdisciplinar) ÷ 2</strong>.
+          <strong>Puntaje máximo interdisciplinar:</strong> 24 puntos (6 criterios × 4 pts). Conversión sobre 10: <strong>Calificación interdisciplinar = (puntaje obtenido ÷ 24) × 10</strong>.<br />
+          <strong>Cálculo de la Nota Final de Evaluación Sumativa en cada asignatura:</strong> <strong>Nota Final = (Calificación Disciplinar de la Materia + Calificación Interdisciplinar del Producto) ÷ 2</strong>.
         </div>
 
         {/* 7. FIRMAS DE RESPONSABILIDAD */}

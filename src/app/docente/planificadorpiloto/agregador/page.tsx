@@ -3,6 +3,50 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
+interface MatrizCurricularItem {
+  id: string
+  asignatura: string
+  subnivel: string
+  grado_curso: string
+  competencia: string
+  indicadores_disponibles: string[]
+  declarativos_disponibles: string[]
+  procedimentales_disponibles: string[]
+  actitudinales_disponibles: string[]
+}
+
+// Función para extraer códigos completos sin mutilar iniciales oficiales
+function extraerItemsCurriculares(texto: string | null | undefined): string[] {
+  if (!texto || typeof texto !== 'string') return []
+
+  const lineas = texto.split(/\r?\n+/).map(l => l.trim()).filter(Boolean)
+  const items: string[] = []
+
+  lineas.forEach(linea => {
+    // Detecta inicios de códigos curriculares oficiales completos (I.CN., CN., I.M., etc.)
+    const regexCodigo = /(?:(?:Ref\.\s*)?(?:I\.[A-Z]{1,4}|SC\.CE\.[A-Z]{1,4}|[A-Z]{1,4})\.\d+(?:\.[0-9a-z]+)*\.?\s+)/gi
+
+    const indices: number[] = []
+    let match: RegExpExecArray | null
+    while ((match = regexCodigo.exec(linea)) !== null) {
+      indices.push(match.index)
+    }
+
+    if (indices.length > 1) {
+      for (let i = 0; i < indices.length; i++) {
+        const inicio = indices[i]
+        const fin = (i + 1 < indices.length) ? indices[i + 1] : linea.length
+        const parte = linea.substring(inicio, fin).trim()
+        if (parte) items.push(parte)
+      }
+    } else {
+      items.push(linea)
+    }
+  })
+
+  return Array.from(new Set(items.map(s => s.trim()).filter(s => s.length > 3)))
+}
+
 export default function CargarMatrizCurricular() {
   const [pestanaActiva, setPestanaActiva] = useState<'formulario' | 'listado'>('formulario')
 
@@ -111,9 +155,9 @@ export default function CargarMatrizCurricular() {
 
     try {
       const registrosAInsertar = indsValidos.map(ind => ({
-        asignatura,
-        subnivel,
-        grado_curso: gradoCurso,
+        asignatura: asignatura.trim(),
+        subnivel: subnivel.trim(),
+        grado_curso: gradoCurso.trim(),
         competencia: competencia.trim(),
         indicador: ind.trim(),
         declarativo: declarativos.filter(d => d.trim() !== '').join('\n'),
@@ -138,16 +182,37 @@ export default function CargarMatrizCurricular() {
     }
   }
 
+  // Carga paginada en bloques de 1000 para obtener el 100% de las filas de la base de datos
   const cargarRegistros = async () => {
     setCargandoListado(true)
     try {
-      const { data, error } = await supabase
-        .from('matriz_curricular_oficial')
-        .select('*')
-        .order('created_at', { ascending: false })
+      let todosLosRegistros: any[] = []
+      let desde = 0
+      const tamanoBloque = 1000
+      let continuar = true
 
-      if (error) throw error
-      setRegistros(data || [])
+      while (continuar) {
+        const { data, error } = await supabase
+          .from('matriz_curricular_oficial')
+          .select('*')
+          .range(desde, desde + tamanoBloque - 1)
+          .order('asignatura', { ascending: true })
+
+        if (error) throw error
+
+        if (data && data.length > 0) {
+          todosLosRegistros = [...todosLosRegistros, ...data]
+          if (data.length < tamanoBloque) {
+            continuar = false
+          } else {
+            desde += tamanoBloque
+          }
+        } else {
+          continuar = false
+        }
+      }
+
+      setRegistros(todosLosRegistros)
     } catch (err: any) {
       alert('Error al cargar registros: ' + err.message)
     } finally {
@@ -161,37 +226,45 @@ export default function CargarMatrizCurricular() {
     }
   }, [pestanaActiva])
 
+  // Agrupador normalizado e insensible a mayúsculas o espacios accidentales
   const bloquesAgrupados = registros.reduce((acc: any[], fila: any) => {
-    const clave = `${fila.asignatura}__${fila.subnivel}__${fila.grado_curso}__${fila.competencia}`
+    const asig = (fila.asignatura || '').trim()
+    const subn = (fila.subnivel || '').trim()
+    const grad = (fila.grado_curso || '').trim()
+    const comp = (fila.competencia || '').trim()
+
+    if (!comp) return acc
+
+    const clave = `${asig.toUpperCase()}__${grad.toUpperCase()}__${comp.toLowerCase()}`
     let bloque = acc.find(b => b.clave === clave)
+
+    const indExtraidos = extraerItemsCurriculares(fila.indicador)
+    const decExtraidos = extraerItemsCurriculares(fila.declarativo)
+    const procExtraidos = extraerItemsCurriculares(fila.procedimental)
+    const actExtraidos = extraerItemsCurriculares(fila.actitudinal)
 
     if (!bloque) {
       bloque = {
         clave,
         ids: [fila.id],
-        asignatura: fila.asignatura,
-        subnivel: fila.subnivel,
-        grado_curso: fila.grado_curso,
-        competencia: fila.competencia,
-        indicadores: fila.indicador ? [fila.indicador] : [],
-        declarativos: fila.declarativo ? fila.declarativo.split(/\r?\n/).filter(Boolean) : [],
-        procedimentales: fila.procedimental ? fila.procedimental.split(/\r?\n/).filter(Boolean) : [],
-        actitudinales: fila.actitudinal ? fila.actitudinal.split(/\r?\n/).filter(Boolean) : []
+        asignatura: asig,
+        subnivel: subn,
+        grado_curso: grad,
+        competencia: comp,
+        indicadores: indExtraidos,
+        declarativos: decExtraidos,
+        procedimentales: procExtraidos,
+        actitudinales: actExtraidos
       }
       acc.push(bloque)
     } else {
-      bloque.ids.push(fila.id)
-      if (fila.indicador && !bloque.indicadores.includes(fila.indicador)) {
-        bloque.indicadores.push(fila.indicador)
+      if (!bloque.ids.includes(fila.id)) {
+        bloque.ids.push(fila.id)
       }
-      const decs = fila.declarativo ? fila.declarativo.split(/\r?\n/).filter(Boolean) : []
-      decs.forEach((d: string) => { if (!bloque.declarativos.includes(d)) bloque.declarativos.push(d) })
-      
-      const procs = fila.procedimental ? fila.procedimental.split(/\r?\n/).filter(Boolean) : []
-      procs.forEach((p: string) => { if (!bloque.procedimentales.includes(p)) bloque.procedimentales.push(p) })
-
-      const acts = fila.actitudinal ? fila.actitudinal.split(/\r?\n/).filter(Boolean) : []
-      acts.forEach((a: string) => { if (!bloque.actitudinales.includes(a)) bloque.actitudinales.push(a) })
+      indExtraidos.forEach(i => { if (!bloque.indicadores.includes(i)) bloque.indicadores.push(i) })
+      decExtraidos.forEach(d => { if (!bloque.declarativos.includes(d)) bloque.declarativos.push(d) })
+      procExtraidos.forEach(p => { if (!bloque.procedimentales.includes(p)) bloque.procedimentales.push(p) })
+      actExtraidos.forEach(a => { if (!bloque.actitudinales.includes(a)) bloque.actitudinales.push(a) })
     }
 
     return acc
@@ -247,9 +320,9 @@ export default function CargarMatrizCurricular() {
       if (deleteError) throw deleteError
 
       const nuevosRegistros = indsValidos.map(ind => ({
-        asignatura: bloqueEdicion.asignatura,
-        subnivel: bloqueEdicion.subnivel,
-        grado_curso: bloqueEdicion.grado_curso,
+        asignatura: bloqueEdicion.asignatura.trim(),
+        subnivel: bloqueEdicion.subnivel.trim(),
+        grado_curso: bloqueEdicion.grado_curso.trim(),
         competencia: bloqueEdicion.competencia.trim(),
         indicador: ind.trim(),
         declarativo: bloqueEdicion.declarativos.filter(d => d.trim() !== '').join('\n'),
@@ -273,13 +346,23 @@ export default function CargarMatrizCurricular() {
     }
   }
 
+  // Filtros aplicados de manera flexible
   const bloquesFiltrados = bloquesAgrupados.filter(b => {
-    const coincideAsignatura = filtroAsignatura === 'Todas' || b.asignatura === filtroAsignatura
-    const coincideSubnivel = filtroSubnivel === 'Todos' || b.subnivel === filtroSubnivel
-    const coincideGrado = filtroGrado === 'Todos' || b.grado_curso === filtroGrado
-    const texto = busquedaTexto.toLowerCase()
-    const coincideTexto = !busquedaTexto || 
+    const coincideAsignatura = filtroAsignatura === 'Todas' || 
+      b.asignatura.toLowerCase() === filtroAsignatura.toLowerCase()
+
+    const coincideSubnivel = filtroSubnivel === 'Todos' || 
+      b.subnivel.toLowerCase() === filtroSubnivel.toLowerCase()
+
+    const coincideGrado = filtroGrado === 'Todos' || 
+      b.grado_curso.toLowerCase() === filtroGrado.toLowerCase() ||
+      b.grado_curso.toLowerCase().includes(filtroGrado.split(' ')[0].toLowerCase())
+
+    const texto = busquedaTexto.toLowerCase().trim()
+    const coincideTexto = !texto || 
       b.competencia?.toLowerCase().includes(texto) ||
+      b.asignatura?.toLowerCase().includes(texto) ||
+      b.grado_curso?.toLowerCase().includes(texto) ||
       b.indicadores?.some((i: string) => i.toLowerCase().includes(texto)) ||
       b.declarativos?.some((d: string) => d.toLowerCase().includes(texto)) ||
       b.procedimentales?.some((p: string) => p.toLowerCase().includes(texto)) ||
@@ -289,7 +372,7 @@ export default function CargarMatrizCurricular() {
   })
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-12 text-slate-900">
+    <div className="max-w-6xl mx-auto space-y-6 pb-12 text-slate-900 font-sans">
       
       {/* ENCABEZADO */}
       <div className="bg-white p-6 rounded-2xl border border-slate-300 shadow-sm flex justify-between items-center flex-wrap gap-4">
@@ -306,7 +389,7 @@ export default function CargarMatrizCurricular() {
           <button
             type="button"
             onClick={() => setPestanaActiva('formulario')}
-            className={`px-4 py-2 rounded-lg transition ${
+            className={`px-4 py-2 rounded-lg transition cursor-pointer ${
               pestanaActiva === 'formulario'
                 ? 'bg-white text-indigo-700 shadow-sm'
                 : 'text-slate-700 hover:text-slate-900'
@@ -317,13 +400,13 @@ export default function CargarMatrizCurricular() {
           <button
             type="button"
             onClick={() => setPestanaActiva('listado')}
-            className={`px-4 py-2 rounded-lg transition ${
+            className={`px-4 py-2 rounded-lg transition cursor-pointer ${
               pestanaActiva === 'listado'
                 ? 'bg-white text-indigo-700 shadow-sm'
                 : 'text-slate-700 hover:text-slate-900'
             }`}
           >
-            Gestor / Ver Registros ({bloquesAgrupados.length})
+            Gestor / Ver Registros ({bloquesAgrupados.length} Competencias / {registros.length} Filas)
           </button>
         </div>
       </div>
@@ -386,7 +469,7 @@ export default function CargarMatrizCurricular() {
                 <button 
                   type="button" 
                   onClick={() => agregarCampo(setIndicadores, indicadores)}
-                  className="px-3 py-1 bg-indigo-600 text-white font-bold text-[10px] rounded-lg shadow hover:bg-indigo-700 transition"
+                  className="px-3 py-1 bg-indigo-600 text-white font-bold text-[10px] rounded-lg shadow hover:bg-indigo-700 transition cursor-pointer"
                 >
                   + Añadir Indicador
                 </button>
@@ -402,7 +485,7 @@ export default function CargarMatrizCurricular() {
                     required 
                   />
                   {indicadores.length > 1 && (
-                    <button type="button" onClick={() => eliminarCampo(setIndicadores, indicadores, index)} className="text-red-600 font-bold text-xs p-2">🗑️</button>
+                    <button type="button" onClick={() => eliminarCampo(setIndicadores, indicadores, index)} className="text-red-600 font-bold text-xs p-2 cursor-pointer">🗑️</button>
                   )}
                 </div>
               ))}
@@ -414,12 +497,12 @@ export default function CargarMatrizCurricular() {
               <div className="space-y-2 p-3 rounded-xl border border-blue-300 bg-blue-50/50">
                 <div className="flex justify-between items-center">
                   <label className="font-bold text-blue-950 uppercase text-[11px]">Declarativos:</label>
-                  <button type="button" onClick={() => agregarCampo(setDeclarativos, declarativos)} className="px-2 py-0.5 bg-blue-700 text-white font-bold text-[10px] rounded shadow">+ Añadir</button>
+                  <button type="button" onClick={() => agregarCampo(setDeclarativos, declarativos)} className="px-2 py-0.5 bg-blue-700 text-white font-bold text-[10px] rounded shadow cursor-pointer">+ Añadir</button>
                 </div>
                 {declarativos.map((item, index) => (
                   <div key={index} className="flex gap-1 items-center">
                     <textarea rows={2} value={item} onChange={e => cambiarCampo(setDeclarativos, declarativos, index, e.target.value)} placeholder="Concepto..." className="w-full p-2 border border-blue-200 rounded bg-white text-slate-900 font-medium text-xs outline-none" />
-                    {declarativos.length > 1 && <button type="button" onClick={() => eliminarCampo(setDeclarativos, declarativos, index)} className="text-red-600 font-bold text-xs">×</button>}
+                    {declarativos.length > 1 && <button type="button" onClick={() => eliminarCampo(setDeclarativos, declarativos, index)} className="text-red-600 font-bold text-xs cursor-pointer">×</button>}
                   </div>
                 ))}
               </div>
@@ -428,12 +511,12 @@ export default function CargarMatrizCurricular() {
               <div className="space-y-2 p-3 rounded-xl border border-emerald-300 bg-emerald-50/50">
                 <div className="flex justify-between items-center">
                   <label className="font-bold text-emerald-950 uppercase text-[11px]">Procedimentales:</label>
-                  <button type="button" onClick={() => agregarCampo(setProcedimentales, procedimentales)} className="px-2 py-0.5 bg-emerald-700 text-white font-bold text-[10px] rounded shadow">+ Añadir</button>
+                  <button type="button" onClick={() => agregarCampo(setProcedimentales, procedimentales)} className="px-2 py-0.5 bg-emerald-700 text-white font-bold text-[10px] rounded shadow cursor-pointer">+ Añadir</button>
                 </div>
                 {procedimentales.map((item, index) => (
                   <div key={index} className="flex gap-1 items-center">
                     <textarea rows={2} value={item} onChange={e => cambiarCampo(setProcedimentales, procedimentales, index, e.target.value)} placeholder="Acción..." className="w-full p-2 border border-emerald-200 rounded bg-white text-slate-900 font-medium text-xs outline-none" />
-                    {procedimentales.length > 1 && <button type="button" onClick={() => eliminarCampo(setProcedimentales, procedimentales, index)} className="text-red-600 font-bold text-xs">×</button>}
+                    {procedimentales.length > 1 && <button type="button" onClick={() => eliminarCampo(setProcedimentales, procedimentales, index)} className="text-red-600 font-bold text-xs cursor-pointer">×</button>}
                   </div>
                 ))}
               </div>
@@ -442,12 +525,12 @@ export default function CargarMatrizCurricular() {
               <div className="space-y-2 p-3 rounded-xl border border-amber-300 bg-amber-50/50">
                 <div className="flex justify-between items-center">
                   <label className="font-bold text-amber-950 uppercase text-[11px]">Actitudinales:</label>
-                  <button type="button" onClick={() => agregarCampo(setActitudinales, actitudinales)} className="px-2 py-0.5 bg-amber-700 text-white font-bold text-[10px] rounded shadow">+ Añadir</button>
+                  <button type="button" onClick={() => agregarCampo(setActitudinales, actitudinales)} className="px-2 py-0.5 bg-amber-700 text-white font-bold text-[10px] rounded shadow cursor-pointer">+ Añadir</button>
                 </div>
                 {actitudinales.map((item, index) => (
                   <div key={index} className="flex gap-1 items-center">
                     <textarea rows={2} value={item} onChange={e => cambiarCampo(setActitudinales, actitudinales, index, e.target.value)} placeholder="Actitud..." className="w-full p-2 border border-amber-200 rounded bg-white text-slate-900 font-medium text-xs outline-none" />
-                    {actitudinales.length > 1 && <button type="button" onClick={() => eliminarCampo(setActitudinales, actitudinales, index)} className="text-red-600 font-bold text-xs">×</button>}
+                    {actitudinales.length > 1 && <button type="button" onClick={() => eliminarCampo(setActitudinales, actitudinales, index)} className="text-red-600 font-bold text-xs cursor-pointer">×</button>}
                   </div>
                 ))}
               </div>
@@ -463,7 +546,7 @@ export default function CargarMatrizCurricular() {
           )}
 
           <div className="flex justify-end">
-            <button type="submit" disabled={cargando} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase rounded-xl shadow transition">
+            <button type="submit" disabled={cargando} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase rounded-xl shadow transition cursor-pointer">
               {cargando ? 'Guardando en Módulos...' : 'Registrar Estructura Modular en BD'}
             </button>
           </div>
@@ -476,18 +559,18 @@ export default function CargarMatrizCurricular() {
           <div className="flex justify-between items-center flex-wrap gap-4 border-b border-slate-200 pb-4">
             <div>
               <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wide">
-                Competencias Registradas en BD ({bloquesFiltrados.length})
+                Competencias Registradas en BD ({bloquesFiltrados.length} Bloques Visibles)
               </h3>
               <p className="text-[11px] text-slate-600 font-semibold">
-                Agrupadas por competencia con edición completa de indicadores y saberes.
+                Agrupadas por competencia única con desglose 1 a 1 de indicadores y saberes. Total registros en base de datos: {registros.length}.
               </p>
             </div>
             <button
               onClick={cargarRegistros}
               disabled={cargandoListado}
-              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold text-xs rounded-xl transition border border-slate-300"
+              className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl transition border border-indigo-200 cursor-pointer shadow-2xs"
             >
-              {cargandoListado ? 'Cargando...' : 'Actualizar Lista'}
+              {cargandoListado ? 'Sincronizando...' : '🔄 Recargar Base de Datos'}
             </button>
           </div>
 
@@ -498,7 +581,7 @@ export default function CargarMatrizCurricular() {
               <select
                 value={filtroAsignatura}
                 onChange={e => setFiltroAsignatura(e.target.value)}
-                className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none"
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none cursor-pointer"
               >
                 <option value="Todas">Todas las Asignaturas</option>
                 {materiasDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
@@ -513,7 +596,7 @@ export default function CargarMatrizCurricular() {
                   setFiltroSubnivel(e.target.value)
                   setFiltroGrado('Todos')
                 }}
-                className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none"
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none cursor-pointer"
               >
                 <option value="Todos">Todos los Subniveles</option>
                 {subnivelesDisponibles.map(s => <option key={s} value={s}>{s}</option>)}
@@ -525,7 +608,7 @@ export default function CargarMatrizCurricular() {
               <select
                 value={filtroGrado}
                 onChange={e => setFiltroGrado(e.target.value)}
-                className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none"
+                className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none cursor-pointer"
               >
                 <option value="Todos">Todos los Grados</option>
                 {filtroSubnivel !== 'Todos'
@@ -541,7 +624,7 @@ export default function CargarMatrizCurricular() {
                 type="text"
                 value={busquedaTexto}
                 onChange={e => setBusquedaTexto(e.target.value)}
-                placeholder="Competencia, saber, indicador..."
+                placeholder="Competencia, saber, código..."
                 className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-medium outline-none"
               />
             </div>
@@ -549,10 +632,14 @@ export default function CargarMatrizCurricular() {
 
           {/* LISTA DE TARJETAS */}
           {cargandoListado ? (
-            <p className="text-center py-8 text-xs text-slate-700 font-bold">Cargando registros desde Supabase...</p>
+            <div className="text-center py-12 space-y-3">
+              <div className="h-7 w-7 animate-spin rounded-full border-3 border-indigo-600 border-t-transparent mx-auto"></div>
+              <p className="text-xs text-slate-700 font-bold uppercase tracking-wider">Cargando la totalidad de registros desde Supabase...</p>
+            </div>
           ) : bloquesFiltrados.length === 0 ? (
-            <div className="text-center py-10 border-2 border-dashed rounded-2xl border-slate-300">
-              <p className="text-xs text-slate-500 font-bold uppercase">No se encontraron bloques con los filtros seleccionados</p>
+            <div className="text-center py-12 border-2 border-dashed rounded-2xl border-slate-300 bg-slate-50 space-y-2">
+              <p className="text-xs text-slate-700 font-bold uppercase">No se encontraron bloques con los filtros seleccionados</p>
+              <p className="text-[11px] text-slate-500">Prueba cambiando la asignatura, subnivel o borrando el término de búsqueda.</p>
             </div>
           ) : (
             <div className="space-y-5">
@@ -560,7 +647,7 @@ export default function CargarMatrizCurricular() {
                 <div key={idx} className="p-5 rounded-2xl border border-indigo-200 bg-white space-y-4 shadow-sm">
                   <div className="flex justify-between items-start flex-wrap gap-2 border-b border-slate-100 pb-3">
                     <div className="flex gap-2 items-center flex-wrap">
-                      <span className="px-3 py-1 bg-indigo-700 text-white text-xs font-black rounded-lg uppercase">
+                      <span className="px-3 py-1 bg-[#4b4c99] text-white text-xs font-black rounded-lg uppercase tracking-wide">
                         {bloque.asignatura}
                       </span>
                       <span className="px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded-lg uppercase">
@@ -569,18 +656,21 @@ export default function CargarMatrizCurricular() {
                       <span className="px-2.5 py-1 bg-emerald-100 text-emerald-950 border border-emerald-300 text-xs font-bold rounded-lg">
                         {bloque.indicadores.length} Indicador(es)
                       </span>
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-mono rounded-md">
+                        {bloque.ids.length} fila(s) BD
+                      </span>
                     </div>
 
                     <div className="flex gap-2">
                       <button
                         onClick={() => abrirModalEdicionBloque(bloque)}
-                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition"
+                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer"
                       >
-                        Editar Bloque Completo
+                        Editar Bloque
                       </button>
                       <button
                         onClick={() => eliminarBloqueCompleto(bloque.ids)}
-                        className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow transition"
+                        className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer"
                       >
                         Eliminar
                       </button>
@@ -595,7 +685,7 @@ export default function CargarMatrizCurricular() {
                     </p>
                   </div>
 
-                  {/* Saberes e Indicadores */}
+                  {/* Saberes e Indicadores desglosados en 4 columnas */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
                     
                     <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-200 space-y-1">
@@ -653,7 +743,7 @@ export default function CargarMatrizCurricular() {
               </div>
               <button
                 onClick={() => setBloqueEdicion(null)}
-                className="text-slate-500 hover:text-slate-900 font-black text-xl px-2"
+                className="text-slate-500 hover:text-slate-900 font-black text-xl px-2 cursor-pointer"
               >
                 ✕
               </button>
@@ -667,7 +757,7 @@ export default function CargarMatrizCurricular() {
                   <select
                     value={bloqueEdicion.asignatura}
                     onChange={e => setBloqueEdicion({ ...bloqueEdicion, asignatura: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none cursor-pointer"
                   >
                     {materiasDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
@@ -686,7 +776,7 @@ export default function CargarMatrizCurricular() {
                         grado_curso: opciones[0] || bloqueEdicion.grado_curso
                       })
                     }}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none cursor-pointer"
                   >
                     {subnivelesDisponibles.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -697,7 +787,7 @@ export default function CargarMatrizCurricular() {
                   <select
                     value={bloqueEdicion.grado_curso}
                     onChange={e => setBloqueEdicion({ ...bloqueEdicion, grado_curso: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-bold outline-none cursor-pointer"
                   >
                     {(gradosPorSubnivel[bloqueEdicion.subnivel] || []).map(g => <option key={g} value={g}>{g}</option>)}
                   </select>
@@ -722,7 +812,7 @@ export default function CargarMatrizCurricular() {
                   <button 
                     type="button" 
                     onClick={() => agregarCampoEdicion('indicadores')}
-                    className="px-3 py-1 bg-indigo-600 text-white font-bold text-xs rounded-lg shadow hover:bg-indigo-700 transition"
+                    className="px-3 py-1 bg-indigo-600 text-white font-bold text-xs rounded-lg shadow hover:bg-indigo-700 transition cursor-pointer"
                   >
                     + Añadir Indicador
                   </button>
@@ -738,7 +828,7 @@ export default function CargarMatrizCurricular() {
                       required 
                     />
                     {bloqueEdicion.indicadores.length > 1 && (
-                      <button type="button" onClick={() => eliminarCampoEdicion('indicadores', index)} className="text-red-600 font-bold text-sm px-2">🗑️</button>
+                      <button type="button" onClick={() => eliminarCampoEdicion('indicadores', index)} className="text-red-600 font-bold text-sm px-2 cursor-pointer">🗑️</button>
                     )}
                   </div>
                 ))}
@@ -751,12 +841,12 @@ export default function CargarMatrizCurricular() {
                 <div className="space-y-2 p-3 rounded-xl border border-blue-300 bg-blue-50/60">
                   <div className="flex justify-between items-center">
                     <label className="font-bold text-blue-950 uppercase text-[11px]">Declarativos:</label>
-                    <button type="button" onClick={() => agregarCampoEdicion('declarativos')} className="px-2 py-0.5 bg-blue-700 text-white font-bold text-[10px] rounded shadow">+ Añadir</button>
+                    <button type="button" onClick={() => agregarCampoEdicion('declarativos')} className="px-2 py-0.5 bg-blue-700 text-white font-bold text-[10px] rounded shadow cursor-pointer">+ Añadir</button>
                   </div>
                   {bloqueEdicion.declarativos.map((item, index) => (
                     <div key={index} className="flex gap-1 items-center">
                       <textarea rows={2} value={item} onChange={e => cambiarCampoEdicion('declarativos', index, e.target.value)} placeholder="Concepto..." className="w-full p-2 border border-blue-300 rounded bg-white text-slate-900 font-medium text-xs outline-none" />
-                      {bloqueEdicion.declarativos.length > 1 && <button type="button" onClick={() => eliminarCampoEdicion('declarativos', index)} className="text-red-600 font-bold text-xs">×</button>}
+                      {bloqueEdicion.declarativos.length > 1 && <button type="button" onClick={() => eliminarCampoEdicion('declarativos', index)} className="text-red-600 font-bold text-xs cursor-pointer">×</button>}
                     </div>
                   ))}
                 </div>
@@ -765,12 +855,12 @@ export default function CargarMatrizCurricular() {
                 <div className="space-y-2 p-3 rounded-xl border border-emerald-300 bg-emerald-50/60">
                   <div className="flex justify-between items-center">
                     <label className="font-bold text-emerald-950 uppercase text-[11px]">Procedimentales:</label>
-                    <button type="button" onClick={() => agregarCampoEdicion('procedimentales')} className="px-2 py-0.5 bg-emerald-700 text-white font-bold text-[10px] rounded shadow">+ Añadir</button>
+                    <button type="button" onClick={() => agregarCampoEdicion('procedimentales')} className="px-2 py-0.5 bg-emerald-700 text-white font-bold text-[10px] rounded shadow cursor-pointer">+ Añadir</button>
                   </div>
                   {bloqueEdicion.procedimentales.map((item, index) => (
                     <div key={index} className="flex gap-1 items-center">
                       <textarea rows={2} value={item} onChange={e => cambiarCampoEdicion('procedimentales', index, e.target.value)} placeholder="Acción..." className="w-full p-2 border border-emerald-300 rounded bg-white text-slate-900 font-medium text-xs outline-none" />
-                      {bloqueEdicion.procedimentales.length > 1 && <button type="button" onClick={() => eliminarCampoEdicion('procedimentales', index)} className="text-red-600 font-bold text-xs">×</button>}
+                      {bloqueEdicion.procedimentales.length > 1 && <button type="button" onClick={() => eliminarCampoEdicion('procedimentales', index)} className="text-red-600 font-bold text-xs cursor-pointer">×</button>}
                     </div>
                   ))}
                 </div>
@@ -779,12 +869,12 @@ export default function CargarMatrizCurricular() {
                 <div className="space-y-2 p-3 rounded-xl border border-amber-300 bg-amber-50/60">
                   <div className="flex justify-between items-center">
                     <label className="font-bold text-amber-950 uppercase text-[11px]">Actitudinales:</label>
-                    <button type="button" onClick={() => agregarCampoEdicion('actitudinales')} className="px-2 py-0.5 bg-amber-700 text-white font-bold text-[10px] rounded shadow">+ Añadir</button>
+                    <button type="button" onClick={() => agregarCampoEdicion('actitudinales')} className="px-2 py-0.5 bg-amber-700 text-white font-bold text-[10px] rounded shadow cursor-pointer">+ Añadir</button>
                   </div>
                   {bloqueEdicion.actitudinales.map((item, index) => (
                     <div key={index} className="flex gap-1 items-center">
                       <textarea rows={2} value={item} onChange={e => cambiarCampoEdicion('actitudinales', index, e.target.value)} placeholder="Actitud..." className="w-full p-2 border border-amber-300 rounded bg-white text-slate-900 font-medium text-xs outline-none" />
-                      {bloqueEdicion.actitudinales.length > 1 && <button type="button" onClick={() => eliminarCampoEdicion('actitudinales', index)} className="text-red-600 font-bold text-xs">×</button>}
+                      {bloqueEdicion.actitudinales.length > 1 && <button type="button" onClick={() => eliminarCampoEdicion('actitudinales', index)} className="text-red-600 font-bold text-xs cursor-pointer">×</button>}
                     </div>
                   ))}
                 </div>
@@ -795,14 +885,14 @@ export default function CargarMatrizCurricular() {
                 <button
                   type="button"
                   onClick={() => setBloqueEdicion(null)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl transition"
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={guardandoEdicion}
-                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow transition"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow transition cursor-pointer"
                 >
                   {guardandoEdicion ? 'Guardando...' : '💾 Guardar Todo el Bloque'}
                 </button>

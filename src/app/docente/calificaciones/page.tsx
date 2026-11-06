@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-type CategoriaInsumo = 'Deberes / Indiv.' | 'Tareas en Clase' | 'Actividades Grupales' | 'Lecciones'
+type CategoriaInsumo = 'Deberes / Indiv.' | 'Tareas en Clase' | 'Actividades Grupales' | 'Lecciones' | 'Refuerzo Pedagógico'
 
 interface ColumnaInsumo {
   id: string
@@ -45,7 +45,7 @@ export default function RegistroCalificacionesPage() {
 
   const [estudiantes, setEstudiantes] = useState<any[]>([])
   const [notasMap, setNotasMap] = useState<{ [estudianteId: string]: { [insumoId: string]: number } }>({})
-  const [sumativasMap, setSumativasMap] = useState<{ [estudianteId: string]: { refuerzo_pedagogico: number; proyecto_interdisciplinar: number; evaluacion_estructurada: number } }>({})
+  const [sumativasMap, setSumativasMap] = useState<{ [estudianteId: string]: { proyecto_interdisciplinar: number; evaluacion_estructurada: number } }>({})
   const [nombresDocente, setNombresDocente] = useState('')
 
   useEffect(() => {
@@ -237,7 +237,6 @@ export default function RegistroCalificacionesPage() {
 
           const regSum = calResumen.find(r => r.estudiante_id === est.id)
           mapaSum[est.id] = {
-            refuerzo_pedagogico: regSum ? Number(regSum.refuerzo_pedagogico || 0) : 0,
             proyecto_interdisciplinar: regSum ? Number(regSum.proyecto_interdisciplinar || 0) : 0,
             evaluacion_estructurada: regSum ? Number(regSum.evaluacion_estructurada || 0) : 0
           }
@@ -268,13 +267,13 @@ export default function RegistroCalificacionesPage() {
     }))
   }
 
-  const handleNotaSumativaChange = (estudianteId: string, campo: 'refuerzo_pedagogico' | 'proyecto_interdisciplinar' | 'evaluacion_estructurada', valor: string) => {
+  const handleNotaSumativaChange = (estudianteId: string, campo: 'proyecto_interdisciplinar' | 'evaluacion_estructurada', valor: string) => {
     if (esAnioCerrado) return
     const num = Math.min(10, Math.max(0, parseFloat(valor) || 0))
     setSumativasMap(prev => ({
       ...prev,
       [estudianteId]: {
-        ...(prev[estudianteId] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }),
+        ...(prev[estudianteId] || { proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }),
         [campo]: num
       }
     }))
@@ -349,7 +348,7 @@ export default function RegistroCalificacionesPage() {
     }
   }
 
-  const ordenCategorias: CategoriaInsumo[] = ['Deberes / Indiv.', 'Tareas en Clase', 'Actividades Grupales', 'Lecciones']
+  const ordenCategorias: CategoriaInsumo[] = ['Deberes / Indiv.', 'Tareas en Clase', 'Actividades Grupales', 'Lecciones', 'Refuerzo Pedagógico']
 
   const columnasOrdenadas = [...columnasInsumos].sort((a, b) => {
     const idxA = ordenCategorias.indexOf(a.categoria)
@@ -368,60 +367,71 @@ export default function RegistroCalificacionesPage() {
   }).filter(g => g.count > 0)
 
   // =========================================================================
-  // CALCULO DE PROMEDIO: TAREAS NO PRESENTADAS / EN BLANCO SE PROMEDIAN CON 0.00
+  // CALCULO DE PROMEDIO: 
+  // - Sin sumativas: refleja el 70% ganado (PromFormativo * 0.70)
+  // - Con sumativas: suma el 30% ganado completando el 100% de la escala
   // =========================================================================
   const calcularNotaFinal = (estId: string) => {
     const notasIns = notasMap[estId] || {}
-    const sum = sumativasMap[estId] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
+    const sum = sumativasMap[estId] || { proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
 
-    // 1. Verificar si el alumno tiene al menos una actividad calificada (> 0)
     const tieneAlgunaNotaInsumos = columnasInsumos.some(col => (notasIns[col.id] || 0) > 0)
-    const tieneAlgunaNotaSumativa = (sum.refuerzo_pedagogico > 0) || (sum.proyecto_interdisciplinar > 0) || (sum.evaluacion_estructurada > 0)
+    const tieneAlgunaNotaSumativa = (sum.proyecto_interdisciplinar > 0) || (sum.evaluacion_estructurada > 0)
 
-    // Si todas las celdas del estudiante están vacías en el trimestre, se mantiene en 0.00
     if (!tieneAlgunaNotaInsumos && !tieneAlgunaNotaSumativa) {
       return 0
     }
 
-    // 2. Extraer notas de todos los insumos creados: los casilleros en blanco computan con 0.00
-    let valoresInsumos: number[] = columnasInsumos.map(col => Number(notasIns[col.id] || 0))
+    // 1. INSUMOS FORMATIVOS (Incluye todos los insumos y refuerzos pedagógicos creados)
+    // Las casillas no calificadas o vacías computan como 0.00
+    const valoresInsumos: number[] = columnasInsumos.map(col => Number(notasIns[col.id] || 0))
 
-    // 3. Aplicar Refuerzo Pedagógico (si existe, reemplaza la nota formativa más baja)
-    if (sum.refuerzo_pedagogico > 0 && valoresInsumos.length > 0) {
-      const minNota = Math.min(...valoresInsumos)
-      if (sum.refuerzo_pedagogico > minNota) {
-        const minIndex = valoresInsumos.indexOf(minNota)
-        valoresInsumos[minIndex] = sum.refuerzo_pedagogico
-      }
+    // 2. APORTES SUMATIVOS
+    const notasSumativasReales: number[] = []
+    if (Number(sum.proyecto_interdisciplinar || 0) > 0) {
+      notasSumativasReales.push(Number(sum.proyecto_interdisciplinar))
+    }
+    if (Number(sum.evaluacion_estructurada || 0) > 0) {
+      notasSumativasReales.push(Number(sum.evaluacion_estructurada))
     }
 
-    // 4. Modalidad Básica Elemental (Promedio simple de todas las actividades e insumos)
+    // Modalidad Básica Elemental (Promedio ponderado simple de actividades)
     if (subnivel === 'Básica Elemental') {
-      const todas = [...valoresInsumos]
-      todas.push(Number(sum.proyecto_interdisciplinar || 0))
-      todas.push(Number(sum.evaluacion_estructurada || 0))
-
+      const todas = [...valoresInsumos, ...notasSumativasReales]
       if (todas.length === 0) return 0
       const suma = todas.reduce((a, b) => a + b, 0)
       return parseFloat((suma / todas.length).toFixed(2))
     }
 
-    // 5. Modalidad Básica Media, Superior y Bachillerato (70% Formativo + 30% Sumativo)
+    // Modalidad Básica Media, Superior y Bachillerato
     const promFormativo = valoresInsumos.length > 0
       ? valoresInsumos.reduce((a, b) => a + b, 0) / valoresInsumos.length
       : 0
+
     const aporte70 = promFormativo * 0.70
 
-    // Evaluaciones sumativas fijas (Proyecto Interdisciplinar + Evaluación Estructurada)
-    const notaProy = Number(sum.proyecto_interdisciplinar || 0)
-    const notaEv = Number(sum.evaluacion_estructurada || 0)
-    const promSumativo = (notaProy + notaEv) / 2
+    // Si aún no se han registrado notas sumativas, se muestra exclusivamente el 70% obtenido
+    if (notasSumativasReales.length === 0) {
+      return parseFloat(aporte70.toFixed(2))
+    }
+
+    // En cuanto se registra al menos una nota sumativa, se añade su 30% reflejando el 100% de la escala
+    const promSumativo = notasSumativasReales.reduce((a, b) => a + b, 0) / notasSumativasReales.length
     const aporte30 = promSumativo * 0.30
 
     return parseFloat((aporte70 + aporte30).toFixed(2))
   }
 
-  const obtenerEscalaCualitativa = (prom: number) => {
+  const obtenerEscalaCualitativa = (prom: number, tieneSumativas: boolean) => {
+    // Si no tiene sumativas y se visualiza sobre 7.00 puntos (70%)
+    if (!tieneSumativas) {
+      if (prom >= 6.30) return { label: 'DAR (70%)', color: 'bg-emerald-100 text-emerald-800 border border-emerald-200' }
+      if (prom >= 4.90) return { label: 'AAR (70%)', color: 'bg-blue-100 text-blue-800 border border-blue-200' }
+      if (prom >= 2.80) return { label: 'PA (70%)', color: 'bg-amber-100 text-amber-800 border border-amber-200' }
+      return { label: 'NA (70%)', color: 'bg-rose-100 text-rose-800 border border-rose-200' }
+    }
+
+    // Escala nacional regular sobre 10.00 puntos (100%)
     if (prom >= 9.00) return { label: 'DAR', color: 'bg-emerald-100 text-emerald-800 border border-emerald-200' }
     if (prom >= 7.00) return { label: 'AAR', color: 'bg-blue-100 text-blue-800 border border-blue-200' }
     if (prom >= 4.01) return { label: 'PA', color: 'bg-amber-100 text-amber-800 border border-amber-200' }
@@ -434,6 +444,7 @@ export default function RegistroCalificacionesPage() {
       case 'Tareas en Clase': return 'bg-indigo-700 text-white'
       case 'Actividades Grupales': return 'bg-[#45b3a5] text-slate-950'
       case 'Lecciones': return 'bg-teal-700 text-white'
+      case 'Refuerzo Pedagógico': return 'bg-amber-600 text-white'
       default: return 'bg-slate-800 text-white'
     }
   }
@@ -470,9 +481,10 @@ export default function RegistroCalificacionesPage() {
       }
 
       const payloadResumen = estudiantes.map(est => {
+        const sum = sumativasMap[est.id] || { proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
+        const tieneSumativas = (sum.proyecto_interdisciplinar > 0) || (sum.evaluacion_estructurada > 0)
         const promFinal = calcularNotaFinal(est.id)
-        const cuali = obtenerEscalaCualitativa(promFinal).label
-        const sum = sumativasMap[est.id] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
+        const cuali = obtenerEscalaCualitativa(promFinal, tieneSumativas).label
 
         const ins1 = columnasInsumos[0] ? (notasMap[est.id]?.[columnasInsumos[0].id] || 0) : 0
         const ins2 = columnasInsumos[1] ? (notasMap[est.id]?.[columnasInsumos[1].id] || 0) : 0
@@ -490,7 +502,7 @@ export default function RegistroCalificacionesPage() {
           insumo_2: ins2,
           insumo_3: ins3,
           insumo_4: ins4,
-          refuerzo_pedagogico: sum.refuerzo_pedagogico,
+          refuerzo_pedagogico: 0,
           proyecto_interdisciplinar: sum.proyecto_interdisciplinar,
           evaluacion_estructurada: sum.evaluacion_estructurada,
           promedio_parcial: promFinal,
@@ -590,18 +602,18 @@ export default function RegistroCalificacionesPage() {
       const headersTabla = [
         '#',
         'Apellidos y Nombres',
-        ...columnasOrdenadas.map(c => `${c.descripcion.substring(0, 14)} (${c.categoria.substring(0, 4)})`),
-        'Ref. Ped.',
+        ...columnasOrdenadas.map(c => `${c.descripcion.substring(0, 14)} (${c.categoria === 'Refuerzo Pedagógico' ? 'Ref.' : c.categoria.substring(0, 4)})`),
         'Proy. Inter.',
         'Ev. Estruct.',
-        'Prom. Final',
+        'Prom. Actual',
         'Escala'
       ]
 
       const filasTabla = estudiantes.map((est, index) => {
+        const sum = sumativasMap[est.id] || { proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
+        const tieneSumativas = (sum.proyecto_interdisciplinar > 0) || (sum.evaluacion_estructurada > 0)
         const promFinal = calcularNotaFinal(est.id)
-        const cuali = obtenerEscalaCualitativa(promFinal)
-        const sum = sumativasMap[est.id] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
+        const cuali = obtenerEscalaCualitativa(promFinal, tieneSumativas)
 
         const filaValores: any = [
           index + 1,
@@ -613,10 +625,9 @@ export default function RegistroCalificacionesPage() {
           filaValores.push(val > 0 ? val.toFixed(2) : '0.00')
         })
 
-        filaValores.push(sum.refuerzo_pedagogico > 0 ? sum.refuerzo_pedagogico.toFixed(2) : '-')
-        filaValores.push(sum.proyecto_interdisciplinar > 0 ? sum.proyecto_interdisciplinar.toFixed(2) : '0.00')
-        filaValores.push(sum.evaluacion_estructurada > 0 ? sum.evaluacion_estructurada.toFixed(2) : '0.00')
-        filaValores.push(promFinal.toFixed(2))
+        filaValores.push(sum.proyecto_interdisciplinar > 0 ? sum.proyecto_interdisciplinar.toFixed(2) : '-')
+        filaValores.push(sum.evaluacion_estructurada > 0 ? sum.evaluacion_estructurada.toFixed(2) : '-')
+        filaValores.push(promFinal.toFixed(2) + (!tieneSumativas && subnivel !== 'Básica Elemental' ? ' (70%)' : ''))
         filaValores.push(cuali.label)
 
         return filaValores
@@ -687,7 +698,7 @@ export default function RegistroCalificacionesPage() {
             Registro de Calificaciones
           </h1>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">
-            {nombreInstitucion} • Ordenamiento por categorías de insumos
+            {nombreInstitucion} • Ordenamiento por categorías de insumos (70% Formativo / 30% Sumativo)
           </p>
         </div>
 
@@ -847,20 +858,19 @@ export default function RegistroCalificacionesPage() {
                       className={`p-2 text-center border border-slate-200 text-xs font-bold uppercase ${getHeaderColor(g.categoria)}`}
                       colSpan={g.count}
                     >
-                      {g.categoria}
+                      {g.categoria} {g.categoria === 'Refuerzo Pedagógico' && '(Form.)'}
                     </th>
                   ))
                 )}
-
-                <th className="p-2 text-center bg-amber-50 text-amber-900 border border-slate-200 font-bold" rowSpan={2}>
-                  Refuerzo Pedag.
-                </th>
 
                 <th className="p-2 text-center bg-[#4b4c99] text-white border border-slate-200 font-bold" colSpan={2}>
                   APORTES SUMATIVOS {subnivel !== 'Básica Elemental' && '(30% - ' + trimestre + ')'}
                 </th>
 
-                <th className="p-3 text-center w-24 bg-slate-100 border border-slate-200 font-bold" rowSpan={2}>Prom. Final</th>
+                <th className="p-3 text-center w-28 bg-slate-100 border border-slate-200 font-bold" rowSpan={2}>
+                  Prom. Final
+                  <span className="block text-[8px] font-normal text-slate-500 lowercase">(70% parcial o 100% total)</span>
+                </th>
                 <th className="p-3 text-center w-20 bg-slate-100 border border-slate-200 font-bold" rowSpan={2}>Escala</th>
               </tr>
 
@@ -874,7 +884,7 @@ export default function RegistroCalificacionesPage() {
                         {col.descripcion}
                       </span>
                       <span className="block text-[8px] font-medium text-slate-500">
-                        {col.categoria} #{col.numero}
+                        {col.categoria === 'Refuerzo Pedagógico' ? 'Refuerzo' : col.categoria} #{col.numero}
                       </span>
                       {!esAnioCerrado && (
                         <button
@@ -896,9 +906,10 @@ export default function RegistroCalificacionesPage() {
 
             <tbody className="divide-y divide-slate-200">
               {estudiantes.map((est, idx) => {
+                const sum = sumativasMap[est.id] || { proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
+                const tieneSumativas = (sum.proyecto_interdisciplinar > 0) || (sum.evaluacion_estructurada > 0)
                 const promFinal = calcularNotaFinal(est.id)
-                const cuali = obtenerEscalaCualitativa(promFinal)
-                const sum = sumativasMap[est.id] || { refuerzo_pedagogico: 0, proyecto_interdisciplinar: 0, evaluacion_estructurada: 0 }
+                const cuali = obtenerEscalaCualitativa(promFinal, tieneSumativas)
 
                 return (
                   <tr key={est.id} className="hover:bg-slate-50/80 transition-colors">
@@ -911,7 +922,7 @@ export default function RegistroCalificacionesPage() {
                       <td className="p-2 text-center text-slate-300 border border-slate-200">-</td>
                     ) : (
                       columnasOrdenadas.map((col) => (
-                        <td key={col.id} className="p-1 text-center border border-slate-200">
+                        <td key={col.id} className={`p-1 text-center border border-slate-200 ${col.categoria === 'Refuerzo Pedagógico' ? 'bg-amber-50/30' : ''}`}>
                           <input
                             type="number"
                             step="0.01"
@@ -927,20 +938,7 @@ export default function RegistroCalificacionesPage() {
                       ))
                     )}
 
-                    <td className="p-1 text-center bg-amber-50/20 border border-slate-200">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="10"
-                        disabled={esAnioCerrado}
-                        value={sum.refuerzo_pedagogico > 0 ? sum.refuerzo_pedagogico : ''}
-                        onChange={(e) => handleNotaSumativaChange(est.id, 'refuerzo_pedagogico', e.target.value)}
-                        placeholder="Opt."
-                        className="w-14 p-1 text-center border border-amber-300 rounded-lg font-semibold text-amber-900 outline-none focus:ring-1 focus:ring-amber-500 bg-white disabled:bg-slate-100 shadow-2xs"
-                      />
-                    </td>
-
+                    {/* PROYECTO INTERDISCIPLINAR */}
                     <td className="p-1 text-center bg-indigo-50/20 border border-slate-200">
                       <input
                         type="number"
@@ -955,6 +953,7 @@ export default function RegistroCalificacionesPage() {
                       />
                     </td>
 
+                    {/* EVALUACIÓN DE BASE ESTRUCTURADA */}
                     <td className="p-1 text-center bg-indigo-50/20 border border-slate-200">
                       <input
                         type="number"
@@ -970,7 +969,12 @@ export default function RegistroCalificacionesPage() {
                     </td>
 
                     <td className="p-2 text-center bg-slate-50 font-bold text-sm text-slate-900 border border-slate-200">
-                      {promFinal.toFixed(2)}
+                      <span className="block">{promFinal.toFixed(2)}</span>
+                      {!tieneSumativas && subnivel !== 'Básica Elemental' && promFinal > 0 && (
+                        <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 px-1 py-0.2 rounded border border-amber-200 inline-block">
+                          Aporte 70%
+                        </span>
+                      )}
                     </td>
 
                     <td className="p-2 text-center bg-slate-50 border border-slate-200">
@@ -986,7 +990,7 @@ export default function RegistroCalificacionesPage() {
         )}
       </div>
 
-      {/* MODAL NUEVO INSUMO */}
+      {/* MODAL NUEVO INSUMO (INCLUYE REFUERZO PEDAGÓGICO) */}
       {mostrarModalNuevaColumna && !esAnioCerrado && (
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
@@ -1007,6 +1011,7 @@ export default function RegistroCalificacionesPage() {
                   <option value="Tareas en Clase">Tareas en Clase</option>
                   <option value="Actividades Grupales">Actividades Grupales</option>
                   <option value="Lecciones">Lecciones</option>
+                  <option value="Refuerzo Pedagógico">Refuerzo Pedagógico (Nivelación)</option>
                 </select>
               </div>
 
@@ -1016,7 +1021,7 @@ export default function RegistroCalificacionesPage() {
                   type="text"
                   value={nuevaDesc}
                   onChange={(e) => setNuevaDesc(e.target.value)}
-                  placeholder="Ej: Taller 1 - Ecuaciones de 1er grado"
+                  placeholder="Ej: Refuerzo 1 - Taller de Nivelación"
                   className="w-full p-3 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 bg-white outline-none shadow-2xs"
                 />
               </div>
